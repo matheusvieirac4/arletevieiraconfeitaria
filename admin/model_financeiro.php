@@ -62,6 +62,53 @@ function financeiro_extrair_lista($resp): array
     return is_array($resp) ? $resp : [];
 }
 
+/** Normaliza um nome de empresa para comparação (maiúsculas, sem acento/pontuação/termos societários). */
+function financeiro_normalizar_nome(string $s): string
+{
+    $s = mb_strtoupper($s, 'UTF-8');
+    $s = strtr($s, ['Á'=>'A','À'=>'A','Ã'=>'A','Â'=>'A','É'=>'E','Ê'=>'E','Í'=>'I','Ó'=>'O','Ô'=>'O','Õ'=>'O','Ú'=>'U','Ç'=>'C']);
+    $s = preg_replace('/[^A-Z0-9 ]/', ' ', $s);
+    $stop = ['LTDA','ME','EPP','EIRELI','SA','S','A','COM','COMERCIO','COMERCIAL','DE','DA','DO','DOS','DAS','E','P','PROD','PRODUTOS','PARA','CIA','IND','INDUSTRIA','DISTRIBUIDORA','DIST'];
+    $tokens = array_values(array_filter(explode(' ', $s), fn($t) => $t !== '' && !in_array($t, $stop, true)));
+    return implode(' ', $tokens);
+}
+
+/**
+ * Encontra o fornecedor JÁ cadastrado que corresponde à nota.
+ * 1º por CNPJ (campo document) — exato; 2º por semelhança de nome.
+ * @param array $fornecedores lista completa de fornecedores (objetos da API).
+ * @return array{name:string, match:string} match: 'cnpj' | 'nome' | 'nenhum'
+ */
+function financeiro_casar_fornecedor(string $cnpj, string $razao, array $fornecedores): array
+{
+    $cnpjN = preg_replace('/\D/', '', $cnpj);
+    if ($cnpjN !== '') {
+        foreach ($fornecedores as $f) {
+            $doc = preg_replace('/\D/', '', (string) ($f['document'] ?? ''));
+            if ($doc !== '' && $doc === $cnpjN) {
+                return ['name' => (string) ($f['name'] ?? ''), 'match' => 'cnpj'];
+            }
+        }
+    }
+
+    $alvo = financeiro_normalizar_nome($razao);
+    $melhorNome = '';
+    $melhorScore = 0.0;
+    if ($alvo !== '') {
+        foreach ($fornecedores as $f) {
+            $nome = (string) ($f['name'] ?? '');
+            if ($nome === '') { continue; }
+            $pct = 0.0;
+            similar_text($alvo, financeiro_normalizar_nome($nome), $pct);
+            if ($pct > $melhorScore) { $melhorScore = $pct; $melhorNome = $nome; }
+        }
+    }
+    if ($melhorScore >= 62.0) {
+        return ['name' => $melhorNome, 'match' => 'nome'];
+    }
+    return ['name' => '', 'match' => 'nenhum'];
+}
+
 /** Extrai os nomes (campo "name") de um lookup, ordenados. */
 function financeiro_nomes($resp): array
 {
@@ -113,14 +160,17 @@ function financeiro_regra_salvar(string $cnpj, string $nome, array $campos): boo
     if ($cnpj === '') {
         return false; // sem CNPJ não dá para memorizar com segurança
     }
+    // NÃO memoriza forma de pagamento: ela muda por nota e vem da própria NF-e.
+    // Memoriza a classificação de gestão (constante por fornecedor) + o nome do
+    // fornecedor escolhido (para reusar o cadastro certo, sem duplicar razão social).
     $regras = financeiro_regras_listar();
     $regras[$cnpj] = [
-        'fornecedor'     => $nome,
-        'account'        => $campos['account'] ?? '',
-        'category'       => $campos['category'] ?? '',
-        'cost_center'    => $campos['cost_center'] ?? '',
-        'payment_method' => $campos['payment_method'] ?? '',
-        'atualizado_em'  => date('c'),
+        'fornecedor'    => $nome,
+        'supplier'      => $campos['supplier'] ?? '',
+        'account'       => $campos['account'] ?? '',
+        'category'      => $campos['category'] ?? '',
+        'cost_center'   => $campos['cost_center'] ?? '',
+        'atualizado_em' => date('c'),
     ];
 
     $path = financeiro_regras_path();

@@ -20,10 +20,12 @@ $revisao = $_SESSION['financeiro_revisao'] ?? null;
 
 // Se há revisão, busca os cadastros para montar os campos.
 $listas = ['contas' => [], 'categorias' => [], 'fornecedores' => [], 'formas' => [], 'centros' => []];
+$fornecedoresFull = [];
 $erroListas = '';
 if ($revisao && $configurado) {
     try {
         $api = financeiro_api();
+        $fornecedoresFull       = financeiro_extrair_lista($api->listarFornecedores());
         $listas['contas']       = financeiro_nomes($api->listarContas());
         $listas['categorias']   = financeiro_nomes($api->listarCategorias());
         $listas['fornecedores'] = financeiro_nomes($api->listarFornecedores());
@@ -116,17 +118,32 @@ $datalist = function (string $id, array $opts): string {
             <!-- Estado 2: revisão antes de enviar -->
             <?php
             $l = $revisao['lancamento'];
-            // Pré-preenche com a classificação aprendida deste fornecedor (se houver).
-            $regra = financeiro_regra_buscar($revisao['fornecedor']['cnpj'] ?? '');
+            $cnpjForn = $revisao['fornecedor']['cnpj'] ?? '';
+            $regra = financeiro_regra_buscar($cnpjForn);
             $regraAplicada = false;
+
+            // 1) Classificação de gestão (conta/categoria/centro) — aprendida por fornecedor.
+            //    Forma de pagamento NÃO entra aqui: vem sempre da nota (tPag).
             if ($regra) {
-                // A classificação aprendida do fornecedor tem prioridade sobre a
-                // sugestão da nota (ex.: forma de pagamento vinda do tPag).
-                foreach (['account', 'category', 'cost_center', 'payment_method'] as $campo) {
+                foreach (['account', 'category', 'cost_center'] as $campo) {
                     if (!empty($regra[$campo])) {
                         $l[$campo] = $regra[$campo];
                         $regraAplicada = true;
                     }
+                }
+            }
+
+            // 2) Fornecedor: reusa o cadastro certo em vez de duplicar a razão social.
+            //    Prioridade: regra aprendida > casamento por CNPJ/semelhança > razão social.
+            $fornMatch = 'nenhum';
+            if ($regra && !empty($regra['supplier'])) {
+                $l['supplier'] = $regra['supplier'];
+                $fornMatch = 'regra';
+            } elseif (!empty($fornecedoresFull)) {
+                $casa = financeiro_casar_fornecedor($cnpjForn, $revisao['fornecedor']['nome'] ?? '', $fornecedoresFull);
+                if ($casa['match'] !== 'nenhum' && $casa['name'] !== '') {
+                    $l['supplier'] = $casa['name'];
+                    $fornMatch = $casa['match'];
                 }
             }
             ?>
@@ -181,6 +198,15 @@ $datalist = function (string $id, array $opts): string {
                             <div class="col-md-6">
                                 <label class="form-label">Fornecedor</label>
                                 <input type="text" name="supplier" class="form-control" list="dl-fornecedores" value="<?= htmlspecialchars($l['supplier']) ?>">
+                                <div class="form-text">
+                                    <?php if ($fornMatch === 'cnpj' || $fornMatch === 'regra'): ?>
+                                        ✓ Fornecedor já cadastrado (encontrado pelo CNPJ).
+                                    <?php elseif ($fornMatch === 'nome'): ?>
+                                        ✓ Correspondência por semelhança com um fornecedor existente — confira se é o mesmo.
+                                    <?php else: ?>
+                                        Fornecedor novo (não encontrado no cadastro). Da nota: <span class="mono"><?= htmlspecialchars($revisao['fornecedor']['nome']) ?></span>.
+                                    <?php endif; ?>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Descrição</label>
