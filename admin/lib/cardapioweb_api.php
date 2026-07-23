@@ -3,12 +3,18 @@
 // Cliente da API do Cardápio Web (financeiro / contas a pagar)
 //
 // Endpoints NÃO documentados publicamente, mapeados via DevTools do portal.
-// Autenticação: Firebase Auth (Google) — um refresh_token de vida longa é
-// trocado por um id_token (JWT ~8h) que vai no header "authorization".
 //
-// Projetado para ser genérico/multi-tenant: nada fixo no código, tudo vem do
-// array de config ($apiKey, $companyId, $refreshToken). Assim a mesma classe
-// serve para vários donos de delivery que usam o Cardápio Web.
+// Autenticação (descoberta por engenharia reversa, 2026-07-23):
+//   - Login (1x, manual): POST dashboard.cardapioweb.com/api/v2/auth/token
+//     com grant_type=user_credentials (email+senha+recaptcha) -> devolve
+//     access_token (8h) + refresh_token (5 dias).
+//   - Renovação (automática): mesmo endpoint, grant_type=refresh_token +
+//     refresh_token -> novo access_token E NOVO refresh_token (ROTAÇÃO).
+//     Por isso o refresh_token precisa ser PERSISTIDO a cada renovação.
+//   - Chamadas da API: header "authorization" = access_token (JWT cru,
+//     sem "Bearer") + header "companyid".
+//
+// Projetado para ser genérico/multi-tenant: nada fixo no código.
 // ============================================================================
 
 class CardapioWebApiException extends \RuntimeException {}
@@ -16,82 +22,106 @@ class CardapioWebApiException extends \RuntimeException {}
 class CardapioWebApi
 {
     private const API_BASE      = 'https://api.cardapioweb.com/api/v2';
-    private const TOKEN_URL     = 'https://securetoken.googleapis.com/v1/token';
+    private const AUTH_URL      = 'https://dashboard.cardapioweb.com/api/v2/auth/token';
     private const PORTAL_ORIGIN = 'https://portal.cardapioweb.com';
 
-    private string $apiKey;
     private string $companyId;
-    private string $refreshToken;
+    private string $seedRefreshToken;
+    private ?string $statePath;
 
-    private ?string $idToken = null;
-    private int $idTokenExpiresAt = 0; // timestamp unix
+    // cache em memória (dentro de uma mesma execução)
+    private ?string $accessToken = null;
+    private int $accessExpiresAt = 0;
 
-    public function __construct(string $apiKey, string $companyId, string $refreshToken)
+    /**
+     * @param string      $companyId        header companyid (ex.: "24945")
+     * @param string      $refreshToken     refresh_token do CW (semente inicial)
+     * @param string|null $statePath        arquivo JSON onde o refresh_token
+     *                                       rotacionado é persistido. Se null,
+     *                                       a rotação vive só em memória (some ao
+     *                                       fim da execução — só p/ testes).
+     */
+    public function __construct(string $companyId, string $refreshToken, ?string $statePath = null)
     {
-        $this->apiKey       = $apiKey;
-        $this->companyId    = $companyId;
-        $this->refreshToken = $refreshToken;
+        $this->companyId        = $companyId;
+        $this->seedRefreshToken = $refreshToken;
+        $this->statePath        = $statePath;
     }
 
-    /** Cria a partir do array de config (config_financeiro.php). */
-    public static function fromConfig(array $cfg): self
+    public static function fromConfig(array $cfg, ?string $statePath = null): self
     {
-        foreach (['firebase_api_key', 'company_id', 'refresh_token'] as $k) {
+        foreach (['company_id', 'refresh_token'] as $k) {
             if (empty($cfg[$k])) {
                 throw new CardapioWebApiException("Config incompleta: falta '$k'.");
             }
         }
-        return new self($cfg['firebase_api_key'], (string) $cfg['company_id'], $cfg['refresh_token']);
+        return new self((string) $cfg['company_id'], $cfg['refresh_token'], $statePath);
     }
 
     // ---------------------------------------------------------------- Auth ---
 
-    /**
-     * Devolve um id_token válido, renovando via refresh_token quando necessário.
-     * Guarda em memória e reaproveita até faltar 5 min para expirar.
-     */
-    public function getIdToken(): string
+    /** Devolve um access_token válido, renovando (e rotacionando) quando preciso. */
+    public function getAccessToken(): string
     {
-        if ($this->idToken !== null && time() < $this->idTokenExpiresAt - 300) {
-            return $this->idToken;
+        if ($this->accessToken !== null && time() < $this->accessExpiresAt - 300) {
+            return $this->accessToken;
         }
 
-        $body = http_build_query([
-            'grant_type'    => 'refresh_token',
-            'refresh_token' => $this->refreshToken,
-        ]);
+        $state = $this->loadState();
+        // Se a config mudou (usuário colou um refresh novo), reinicia do zero.
+        $seguirState = $state && ($state['seed'] ?? null) === $this->seedRefreshToken;
+
+        if ($seguirState
+            && !empty($state['access_token'])
+            && time() < (int) ($state['access_expires_at'] ?? 0) - 300) {
+            $this->accessToken     = $state['access_token'];
+            $this->accessExpiresAt = (int) $state['access_expires_at'];
+            return $this->accessToken;
+        }
+
+        $currentRefresh = $seguirState ? ($state['refresh_token'] ?? $this->seedRefreshToken)
+                                       : $this->seedRefreshToken;
 
         [$status, $resp] = $this->curl(
             'POST',
-            self::TOKEN_URL . '?key=' . urlencode($this->apiKey),
-            $body,
-            ['content-type: application/x-www-form-urlencoded', 'accept: */*']
+            self::AUTH_URL,
+            json_encode(['grant_type' => 'refresh_token', 'refresh_token' => $currentRefresh]),
+            ['content-type: application/json', 'accept: application/json', 'companyid: ' . $this->companyId,
+             'origin: ' . self::PORTAL_ORIGIN, 'referer: ' . self::PORTAL_ORIGIN . '/']
         );
 
         $json = json_decode($resp, true);
-        if ($status !== 200 || !is_array($json) || empty($json['id_token'])) {
-            $msg = is_array($json) && isset($json['error']['message'])
-                ? $json['error']['message'] : 'resposta inesperada';
-            throw new CardapioWebApiException("Falha ao renovar token (HTTP $status): $msg");
+        if ($status !== 200 || empty($json['access_token'])) {
+            $msg = is_array($json) && isset($json['message']) ? $json['message'] : substr($resp, 0, 200);
+            throw new CardapioWebApiException(
+                "Falha ao renovar o token (HTTP $status): $msg. " .
+                "Se o refresh_token expirou (5 dias), refaça o login no portal e atualize a config."
+            );
         }
 
-        $this->idToken = $json['id_token'];
-        $expiresIn = isset($json['expires_in']) ? (int) $json['expires_in'] : 3600;
-        $this->idTokenExpiresAt = time() + $expiresIn;
+        $this->accessToken     = $json['access_token'];
+        $this->accessExpiresAt = time() + (int) ($json['access_token_expires_in'] ?? 28800);
 
-        return $this->idToken;
+        // Rotação: guarda o NOVO refresh_token para a próxima renovação.
+        $this->saveState([
+            'seed'              => $this->seedRefreshToken,
+            'refresh_token'     => $json['refresh_token'] ?? $currentRefresh,
+            'access_token'      => $this->accessToken,
+            'access_expires_at' => $this->accessExpiresAt,
+            'atualizado_em'     => date('c'),
+        ]);
+
+        return $this->accessToken;
     }
 
     // ------------------------------------------------------------ Requests ---
 
-    /** GET autenticado na API do Cardápio Web; devolve o JSON decodificado. */
     public function get(string $path): array
     {
         [$status, $resp] = $this->apiRequest('GET', $path);
         return $this->decode($status, $resp, "GET $path");
     }
 
-    /** POST autenticado com corpo JSON; devolve o JSON decodificado. */
     public function post(string $path, array $payload): array
     {
         [$status, $resp] = $this->apiRequest('POST', $path, json_encode($payload, JSON_UNESCAPED_UNICODE));
@@ -100,17 +130,13 @@ class CardapioWebApi
 
     // ----------------------------------------------------------- Recursos ---
 
-    public function listarContas(): array           { return $this->get('/financial/accounts'); }
-    public function listarCategorias(): array        { return $this->get('/financial/categories'); }
-    public function listarFormasPagamento(): array   { return $this->get('/financial/payment_methods'); }
-    public function listarCentrosCusto(): array      { return $this->get('/financial/cost_centers'); }
-    public function listarFornecedores(): array      { return $this->get('/financial/suppliers?per_page=1000'); }
+    public function listarContas(): array          { return $this->get('/financial/accounts'); }
+    public function listarCategorias(): array       { return $this->get('/financial/categories'); }
+    public function listarFormasPagamento(): array  { return $this->get('/financial/payment_methods'); }
+    public function listarCentrosCusto(): array     { return $this->get('/financial/cost_centers'); }
+    public function listarFornecedores(): array     { return $this->get('/financial/suppliers?per_page=1000'); }
 
-    /**
-     * Importa lançamentos. $lancamentos é um array de objetos no formato do
-     * Cardápio Web (chaves: account, category, value, due_date, etc.).
-     * A API espera o envelope {"data":[ ... ]}.
-     */
+    /** Importa lançamentos no formato do CW. Envelope esperado: {"data":[...]}. */
     public function importarLancamentos(array $lancamentos): array
     {
         return $this->post('/financial/transactions/import', ['data' => array_values($lancamentos)]);
@@ -121,7 +147,7 @@ class CardapioWebApi
     private function apiRequest(string $method, string $path, ?string $jsonBody = null): array
     {
         $headers = [
-            'authorization: ' . $this->getIdToken(), // JWT cru, SEM prefixo "Bearer"
+            'authorization: ' . $this->getAccessToken(), // JWT cru, SEM "Bearer"
             'companyid: ' . $this->companyId,
             'accept: application/json, text/plain, */*',
             'origin: ' . self::PORTAL_ORIGIN,
@@ -133,7 +159,7 @@ class CardapioWebApi
         return $this->curl($method, self::API_BASE . $path, $jsonBody, $headers);
     }
 
-    /** @return array{0:int,1:string} [httpStatus, responseBody] */
+    /** @return array{0:int,1:string} */
     private function curl(string $method, string $url, ?string $body, array $headers): array
     {
         $ch = curl_init($url);
@@ -166,5 +192,28 @@ class CardapioWebApi
             throw new CardapioWebApiException("$ctx falhou (HTTP $status): $detail");
         }
         return is_array($json) ? $json : [];
+    }
+
+    // ---- Estado (persistência do refresh_token rotacionado) ----
+
+    private function loadState(): ?array
+    {
+        if (!$this->statePath || !is_file($this->statePath)) {
+            return null;
+        }
+        $data = json_decode((string) file_get_contents($this->statePath), true);
+        return is_array($data) ? $data : null;
+    }
+
+    private function saveState(array $state): void
+    {
+        if (!$this->statePath) {
+            return;
+        }
+        $dir = dirname($this->statePath);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        file_put_contents($this->statePath, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
     }
 }

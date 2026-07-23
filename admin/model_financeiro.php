@@ -27,12 +27,18 @@ function financeiro_configurado(): bool
     if (!$cfg) {
         return false;
     }
-    foreach (['firebase_api_key', 'company_id', 'refresh_token'] as $k) {
+    foreach (['company_id', 'refresh_token'] as $k) {
         if (empty($cfg[$k]) || strpos((string) $cfg[$k], 'COLOQUE_') === 0) {
             return false;
         }
     }
     return true;
+}
+
+/** Arquivo onde o refresh_token rotacionado é persistido (fora do Git). */
+function financeiro_token_state_path(): string
+{
+    return __DIR__ . '/data/financeiro_token.json';
 }
 
 /** Instância do cliente da API a partir da config. Lança se não configurado. */
@@ -42,7 +48,7 @@ function financeiro_api(): CardapioWebApi
     if (!$cfg) {
         throw new CardapioWebApiException('Integração não configurada. Crie admin/config_financeiro.php.');
     }
-    return CardapioWebApi::fromConfig($cfg);
+    return CardapioWebApi::fromConfig($cfg, financeiro_token_state_path());
 }
 
 // ------------------------------- Registro de notas processadas (dedup) ---

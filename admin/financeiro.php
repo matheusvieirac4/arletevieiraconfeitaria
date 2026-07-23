@@ -68,9 +68,8 @@ require __DIR__ . '/_header.php';
                     <p class="mb-1">Para ativar, crie o arquivo <span class="mono">admin/config_financeiro.php</span>
                        a partir do modelo <span class="mono">admin/config_financeiro.exemplo.php</span> e preencha:</p>
                     <ul class="mb-0">
-                        <li><span class="mono">firebase_api_key</span> — chave pública do Firebase</li>
                         <li><span class="mono">company_id</span> — id da empresa (header <span class="mono">companyid</span>)</li>
-                        <li><span class="mono">refresh_token</span> — <strong>segredo</strong>, tratado como senha</li>
+                        <li><span class="mono">refresh_token</span> — da resposta do login em <span class="mono">/auth/token</span>; <strong>segredo</strong></li>
                     </ul>
                 <?php endif; ?>
             </div>

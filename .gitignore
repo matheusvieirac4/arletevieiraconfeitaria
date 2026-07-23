@@ -1,7 +1,7 @@
 # ===== Segredos / credenciais (NUNCA versionar) =====
 includes/banco.php
 admin/config_financeiro.php
-admin/data/financeiro_processados.json
+admin/data/
 
 # ===== Uploads e dados gerados em produção =====
 # Descomente se NÃO quiser versionar os dados do painel:

@@ -2,17 +2,17 @@
 // ================= CONFIG DA INTEGRAÇÃO FINANCEIRA (MODELO) =================
 // Copie este arquivo para "config_financeiro.php" e preencha com os valores reais.
 // "config_financeiro.php" está no .gitignore e NUNCA deve ser versionado
-// (contém o refresh_token, que é uma credencial de vida longa).
+// (contém o refresh_token, uma credencial).
 //
-// Onde obter cada valor (capturados via DevTools do portal.cardapioweb.com):
-//   - firebase_api_key: chave pública do Firebase (aparece na URL do securetoken,
-//     ex.: ...?key=AIzaSy... ). É pública, mas fica aqui por ser por-tenant.
+// Como obter (via DevTools no portal.cardapioweb.com, aba Network):
 //   - company_id: header "companyid" das requisições da API (ex.: 24945).
-//   - refresh_token: body do POST em securetoken.googleapis.com (grant_type=refresh_token).
-//     >>> SEGREDO. Trate como senha. <<<
+//   - refresh_token: faça login e abra a RESPOSTA do POST em
+//     dashboard.cardapioweb.com/api/v2/auth/token — copie o campo "refresh_token".
+//     (É um JWT longo; NÃO é o token do Firebase que começa com "AMf-".)
+//     Vale por 5 dias e rotaciona a cada renovação — a ferramenta cuida disso
+//     sozinha; você só precisa capturar UM refresh_token válido aqui.
 
 return [
-    'firebase_api_key' => 'COLOQUE_A_FIREBASE_WEB_API_KEY',
-    'company_id'       => 'COLOQUE_O_COMPANY_ID',
-    'refresh_token'    => 'COLOQUE_O_REFRESH_TOKEN',
+    'company_id'    => 'COLOQUE_O_COMPANY_ID',
+    'refresh_token' => 'COLOQUE_O_REFRESH_TOKEN_DO_CW',
 ];
