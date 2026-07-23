@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /vendor/
+Disallow: /php/
+Disallow: /includes/
+Disallow: /ajax/
+Allow: /
+Sitemap: https://arletevieiraconfeitaria.com.br/sitemap.xml 

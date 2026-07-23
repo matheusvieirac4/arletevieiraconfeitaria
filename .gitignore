@@ -1,0 +1,32 @@
+# ===== Segredos / credenciais (NUNCA versionar) =====
+includes/banco.php
+
+# ===== Uploads e dados gerados em produção =====
+# Descomente se NÃO quiser versionar os dados do painel:
+# data/*.json
+img/imagens/blog/
+cardapios/*.pdf
+
+# ===== Dependências =====
+/vendor/
+node_modules/
+
+# ===== Logs =====
+links/logs/
+*.log
+
+# ===== Sistema operacional / editores =====
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# ===== Certificados ACME (Let's Encrypt) =====
+.well-known/acme-challenge/
+links/.well-known/
+
+# ===== Temporários =====
+*.tmp
+*.bak
+*.swp

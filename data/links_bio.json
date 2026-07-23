@@ -1,0 +1,50 @@
+[
+    {
+        "slug": "whatsapp",
+        "rotulo": "Fazer pedido no WhatsApp",
+        "url": "https://wa.me/554820133000?text=Ola! Vim pelo link da bio e gostaria de fazer um pedido.",
+        "estilo": "primary",
+        "ordem": 1,
+        "ativo": true
+    },
+    {
+        "slug": "cardapio",
+        "rotulo": "Nosso cardapio",
+        "url": "https://www.arletevieiraconfeitaria.com.br/cardapios/av_festas.pdf",
+        "estilo": "secondary",
+        "ordem": 2,
+        "ativo": true
+    },
+    {
+        "slug": "ifood",
+        "rotulo": "Nosso iFood",
+        "url": "https://www.ifood.com.br/delivery/sao-jose-sc/arlete-vieira-confeitaria-rocado/539f6976-7007-4dae-88c3-950df000ea1f",
+        "estilo": "secondary",
+        "ordem": 3,
+        "ativo": true
+    },
+    {
+        "slug": "corporativos",
+        "rotulo": "Presentes corporativos",
+        "url": "https://www.arletevieiraconfeitaria.com.br/corporativos.php",
+        "estilo": "secondary",
+        "ordem": 4,
+        "ativo": true
+    },
+    {
+        "slug": "site",
+        "rotulo": "Nosso Site",
+        "url": "https://www.arletevieiraconfeitaria.com.br/",
+        "estilo": "secondary",
+        "ordem": 5,
+        "ativo": true
+    },
+    {
+        "slug": "mapa",
+        "rotulo": "Como Chegar",
+        "url": "https://www.google.com/maps/dir//Arlete+Vieira+Confeitaria,+R.+Jos%C3%A9+Francisco+Cunha,+246+-+Ro%C3%A7ado,+S%C3%A3o+Jos%C3%A9+-+SC,+88108-120/@-27.5956923,-48.6245152,486m/data=!3m2!1e3!4b1!4m9!4m8!1m0!1m5!1m1!1s0x952749e11abb0997:0x516350bda9bafae6!2m2!1d-48.6209571!2d-27.5964081!3e0?entry=ttu&g_ep=EgoyMDI2MDUwMi4wIKXMDSoASAFQAw%3D%3D",
+        "estilo": "secondary",
+        "ordem": 6,
+        "ativo": true
+    }
+]
