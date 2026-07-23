@@ -62,6 +62,35 @@ function financeiro_extrair_lista($resp): array
     return is_array($resp) ? $resp : [];
 }
 
+/** Formata um número para exibição em reais, sem sinal (ex.: "3135.58" -> "3.135,58"). */
+function financeiro_valor_br($valor): string
+{
+    $n = abs((float) str_replace(',', '.', (string) $valor));
+    return number_format($n, 2, ',', '.');
+}
+
+/**
+ * Converte o valor digitado pelo usuário (formato BR) para o formato do envio:
+ * despesa => sempre negativo, ponto como decimal (ex.: "3.135,58" -> "-3135.58").
+ * Retorna null se inválido/zero.
+ */
+function financeiro_valor_para_envio(string $entrada): ?string
+{
+    $s = preg_replace('/[^\d,.\-]/', '', trim($entrada));
+    if (strpos($s, ',') !== false) {          // tem vírgula: ela é o decimal
+        $s = str_replace('.', '', $s);        // remove separador de milhar
+        $s = str_replace(',', '.', $s);       // vírgula -> ponto
+    }
+    if ($s === '' || !is_numeric($s)) {
+        return null;
+    }
+    $n = abs((float) $s);
+    if ($n == 0.0) {
+        return null;
+    }
+    return '-' . number_format($n, 2, '.', ''); // contas a pagar: sempre negativo
+}
+
 /** Normaliza um nome de empresa para comparação (maiúsculas, sem acento/pontuação/termos societários). */
 function financeiro_normalizar_nome(string $s): string
 {

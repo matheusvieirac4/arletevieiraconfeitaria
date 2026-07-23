@@ -76,11 +76,12 @@ if ($acao === 'importar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $campo = fn(string $k) => trim((string) ($_POST[$k] ?? ''));
 
     $account = $campo('account');
-    $value   = $campo('value');
     if ($account === '') {
         financeiro_redirect('danger', 'Selecione a Conta (obrigatório).');
     }
-    if ($value === '' || !is_numeric(str_replace(',', '.', $value))) {
+    // O usuário digita em reais (ex.: 3.135,58); aqui vira despesa negativa com ponto.
+    $value = financeiro_valor_para_envio($campo('value'));
+    if ($value === null) {
         financeiro_redirect('danger', 'Valor inválido.');
     }
 
@@ -92,7 +93,7 @@ if ($acao === 'importar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'payment_method'  => $campo('payment_method'),
         'description'     => $campo('description'),
         'observation'     => $campo('observation'),
-        'value'           => str_replace(',', '.', $value),
+        'value'           => $value,
         'due_date'        => $campo('due_date'),
         'competence_date' => $campo('competence_date'),
         'settlement_date' => $campo('settlement_date'),

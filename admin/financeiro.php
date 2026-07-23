@@ -176,9 +176,12 @@ $datalist = function (string $id, array $opts): string {
                                 <div class="form-text">Obrigatório e precisa já existir no Cardápio Web.</div>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">Valor</label>
-                                <input type="text" name="value" class="form-control" value="<?= htmlspecialchars($l['value']) ?>" required>
-                                <div class="form-text">Negativo = despesa. Ponto como decimal.</div>
+                                <label class="form-label">Valor (R$)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">R$</span>
+                                    <input type="text" name="value" class="form-control" value="<?= htmlspecialchars(financeiro_valor_br($revisao['valor_total'])) ?>" required>
+                                </div>
+                                <div class="form-text">Despesa (conta a pagar). Use vírgula para os centavos.</div>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Forma de pagamento</label>
