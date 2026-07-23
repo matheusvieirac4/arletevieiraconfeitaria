@@ -20,7 +20,7 @@ $revisao = $_SESSION['financeiro_revisao'] ?? null;
 
 // Fila de notas recebidas automaticamente do SEFAZ.
 $sefazOn   = financeiro_sefaz_configurado();
-$pendentes = $sefazOn ? financeiro_pendentes_listar() : [];
+$pendentes = financeiro_pendentes_listar();
 
 // Se há revisão, busca os cadastros para montar os campos.
 $listas = ['contas' => [], 'categorias' => [], 'fornecedores' => [], 'formas' => [], 'centros' => []];
@@ -106,14 +106,16 @@ $datalist = function (string $id, array $opts): string {
             </div>
 
         <?php elseif (!$revisao): ?>
-            <?php if ($sefazOn): ?>
+            <?php if ($sefazOn || $pendentes): ?>
             <!-- Fila de NF-e recebidas automaticamente do SEFAZ -->
             <div class="card mb-4" style="max-width: 820px;">
                 <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
                     <span>Notas recebidas do SEFAZ <?php if ($pendentes): ?><span class="badge bg-danger"><?= count($pendentes) ?></span><?php endif; ?></span>
+                    <?php if ($sefazOn): ?>
                     <form method="post" action="controller_financeiro.php?acao=sefaz_puxar" class="m-0">
                         <button class="btn btn-outline-secondary btn-sm" type="submit">Buscar agora</button>
                     </form>
+                    <?php endif; ?>
                 </div>
                 <div class="card-body">
                     <?php if (!$pendentes): ?>

@@ -358,6 +358,12 @@ function financeiro_sefaz_doc_para_nota(array $doc): ?array
             $nota['valor_total'] = $mv[1];
             $nota['lancamento']['value'] = '-' . $mv[1];
         }
+        // Data exata do resumo (a chave só traz ano/mês).
+        if (preg_match('/<dhEmi>(\d{4}-\d{2}-\d{2})/', $xml, $md)) {
+            $nota['emissao'] = $md[1];
+            $nota['lancamento']['due_date'] = $md[1];
+            $nota['lancamento']['competence_date'] = $md[1];
+        }
         $nota['natureza_operacao'] = 'NF-e (recebida do SEFAZ)';
         $nota['avisos'] = ['Recebida automaticamente do SEFAZ (resumo). Confira o valor e a categoria.'];
         return $nota;
