@@ -1,9 +1,5 @@
 <?php
-session_start();
-if (!isset($_SESSION['admin_blog']) || $_SESSION['admin_blog'] !== true) {
-    header('Location: login.php');
-    exit;
-}
+require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../includes/links_bio.php';
 
 $links = links_bio_listar();
@@ -18,68 +14,13 @@ if (isset($_SESSION['links_bio_flash'])) {
     $flash = $_SESSION['links_bio_flash'];
     unset($_SESSION['links_bio_flash']);
 }
+
+$page_title = 'Links da Bio';
+$active = 'links_bio';
+$extra_css = '
+        .url-box { font-size: 0.82rem; word-break: break-all; }';
+require __DIR__ . '/_header.php';
 ?>
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="utf-8">
-    <title>Admin - Links da Bio</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <style>
-        body { background: #f8f9fa; }
-        .admin-sidebar {
-            width: 220px;
-            min-height: 100vh;
-            background: #23272b;
-            color: #fff;
-            position: fixed;
-            top: 0;
-            left: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding-top: 32px;
-            z-index: 100;
-        }
-        .admin-sidebar .logo { width: 120px; margin-bottom: 32px; }
-        .admin-sidebar .nav { width: 100%; }
-        .admin-sidebar .nav-link {
-            color: #fff;
-            font-weight: 500;
-            padding: 12px 24px;
-            border-radius: 6px;
-            margin-bottom: 8px;
-            transition: background 0.15s;
-        }
-        .admin-sidebar .nav-link.active, .admin-sidebar .nav-link:hover {
-            background: #a51d32;
-            color: #fff;
-        }
-        .admin-main { margin-left: 220px; padding: 32px 24px 24px 24px; }
-        .url-box { font-size: 0.82rem; word-break: break-all; }
-        @media (max-width: 767px) {
-            .admin-sidebar { position: static; width: 100vw; min-height: unset; flex-direction: row; justify-content: flex-start; padding: 12px 0; }
-            .admin-sidebar .logo { width: 80px; margin-bottom: 0; margin-right: 16px; }
-            .admin-sidebar .nav { flex-direction: row; width: auto; flex-wrap: wrap; }
-            .admin-sidebar .nav-link { padding: 8px 12px; margin-bottom: 0; margin-right: 8px; }
-            .admin-main { margin-left: 0; padding: 16px 8px; }
-        }
-    </style>
-</head>
-<body>
-<div class="admin-sidebar">
-    <img src="../img/logo.png" alt="Logo Arlete Vieira Confeitaria" class="logo">
-    <nav class="nav flex-column mt-2">
-        <a href="index.php" class="nav-link">Blog</a>
-        <a href="usuarios.php" class="nav-link">Usuarios</a>
-        <a href="cardapios.php" class="nav-link">Cardapios</a>
-        <a href="links_bio.php" class="nav-link active">Links da bio</a>
-        <a href="metricas.php" class="nav-link">Metricas</a>
-        <a href="logout.php" class="nav-link text-danger">Sair</a>
-    </nav>
-</div>
-<div class="admin-main">
-    <div class="container-fluid px-0">
         <h1 class="mb-2">Links da bio</h1>
         <p class="text-muted mb-4">
             Altere o destino e o texto dos botoes de
@@ -142,8 +83,6 @@ if (isset($_SESSION['links_bio_flash'])) {
             <?php endforeach; ?>
             </tbody>
         </table>
-    </div>
-</div>
 
 <div class="modal fade" id="modalNovoLink" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg">
@@ -240,7 +179,6 @@ if (isset($_SESSION['links_bio_flash'])) {
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.querySelectorAll('.btn-editar-link').forEach(function(btn) {
   btn.addEventListener('click', function() {
@@ -257,5 +195,4 @@ document.querySelectorAll('.btn-editar-link').forEach(function(btn) {
   });
 });
 </script>
-</body>
-</html>
+<?php require __DIR__ . '/_footer.php'; ?>

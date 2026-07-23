@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="pt-BR">
 <head>
     <meta charset="utf-8">
-    <title>Login Admin Blog</title>
+    <title>Login - Painel Admin</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
         body { background: #f8f9fa; }
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
 <div class="login-box">
     <img src="../img/logo.png" alt="Logo Arlete Vieira Confeitaria" class="login-logo">
-    <h3 class="mb-4 text-center">Admin Blog</h3>
+    <h3 class="mb-4 text-center">Painel Admin</h3>
     <?php if ($erro): ?>
         <div class="alert alert-danger py-2 text-center"><?= $erro ?></div>
     <?php endif; ?>
