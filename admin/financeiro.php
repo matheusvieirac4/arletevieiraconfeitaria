@@ -102,17 +102,166 @@ $datalist = function (string $id, array $opts): string {
             </div>
 
         <?php elseif (!$revisao): ?>
-            <!-- Estado 1: upload do XML -->
+            <!-- Estado 1: composer (texto + anexos: XML / foto / câmera) -->
             <div class="card" style="max-width: 820px;">
-                <div class="card-header fw-semibold">Importar nota fiscal (XML)</div>
+                <div class="card-header fw-semibold">Novo lançamento</div>
                 <div class="card-body">
-                    <form method="post" action="controller_financeiro.php?acao=upload" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center">
-                        <input type="file" name="xml" accept=".xml,text/xml,application/xml" class="form-control" style="max-width: 420px;" required>
-                        <button type="submit" class="btn btn-primary">Ler nota</button>
+                    <div id="cp-chips" class="d-flex flex-wrap gap-2 mb-2"></div>
+                    <textarea id="cp-text" class="form-control mb-2" rows="2"
+                        placeholder="Descreva a compra (ex.: 'paguei 84,90 no pix, conta Sicredi, embalagens da SOS')&#10;ou anexe um XML / foto do QR pelo botão +"></textarea>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false">+ Anexar</button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" id="cp-add-xml">📄 Anexar XML da nota</a></li>
+                                <li><a class="dropdown-item" href="#" id="cp-add-foto">🖼️ Anexar foto (QR ou cupom)</a></li>
+                                <li><a class="dropdown-item" href="#" id="cp-add-cam" data-bs-toggle="modal" data-bs-target="#modalCamera">📷 Escanear QR com a câmera</a></li>
+                            </ul>
+                        </div>
+                        <button id="cp-enviar" class="btn btn-primary" type="button">Enviar</button>
+                    </div>
+                    <p class="text-muted small mb-0 mt-2">Nada é lançado sem sua confirmação — o próximo passo é sempre a tela de revisão.</p>
+
+                    <!-- inputs e forms ocultos -->
+                    <input type="file" id="cp-file-xml" accept=".xml,text/xml,application/xml" class="d-none">
+                    <input type="file" id="cp-file-foto" accept="image/*" class="d-none">
+                    <form id="cp-form-xml" method="post" action="controller_financeiro.php?acao=upload" enctype="multipart/form-data" class="d-none">
+                        <input type="file" name="xml" id="cp-xml-submit">
                     </form>
-                    <p class="text-muted small mb-0 mt-2">Envie o XML da NF-e. Você confere e ajusta tudo antes de lançar — nada é enviado sem sua confirmação.</p>
+                    <form id="cp-form-qr" method="post" action="controller_financeiro.php?acao=qr" class="d-none">
+                        <input type="hidden" name="chave" id="cp-qr-chave">
+                    </form>
                 </div>
             </div>
+
+            <!-- Modal câmera (QR ao vivo) -->
+            <div class="modal fade" id="modalCamera" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title">Escanear QR Code</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                  </div>
+                  <div class="modal-body text-center">
+                    <video id="cp-video" playsinline style="width:100%; border-radius:8px; background:#000;"></video>
+                    <p id="cp-cam-status" class="text-muted small mb-0 mt-2">Aponte a câmera para o QR Code do cupom…</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+            <script>
+            (function () {
+                const chips = document.getElementById('cp-chips');
+                const txt = document.getElementById('cp-text');
+                const fileXml = document.getElementById('cp-file-xml');
+                const fileFoto = document.getElementById('cp-file-foto');
+                let anexoXml = null, anexoFoto = null;
+
+                function renderChips() {
+                    chips.innerHTML = '';
+                    const add = (label, onRemove) => {
+                        const s = document.createElement('span');
+                        s.className = 'badge bg-light text-dark border';
+                        s.innerHTML = label + ' <a href="#" class="text-danger text-decoration-none">✕</a>';
+                        s.querySelector('a').onclick = (e) => { e.preventDefault(); onRemove(); renderChips(); };
+                        chips.appendChild(s);
+                    };
+                    if (anexoXml) add('📄 ' + anexoXml.name, () => { anexoXml = null; fileXml.value = ''; });
+                    if (anexoFoto) add('🖼️ ' + anexoFoto.name, () => { anexoFoto = null; fileFoto.value = ''; });
+                }
+
+                document.getElementById('cp-add-xml').onclick = (e) => { e.preventDefault(); fileXml.click(); };
+                document.getElementById('cp-add-foto').onclick = (e) => { e.preventDefault(); fileFoto.click(); };
+                fileXml.onchange = () => { anexoXml = fileXml.files[0] || null; anexoFoto = null; fileFoto.value=''; renderChips(); };
+                fileFoto.onchange = () => { anexoFoto = fileFoto.files[0] || null; anexoXml = null; fileXml.value=''; renderChips(); };
+
+                // Lê o QR de um File (imagem) via jsQR; devolve o texto ou null.
+                function lerQrDaImagem(file) {
+                    return new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const cv = document.createElement('canvas');
+                            const max = 1400, scale = Math.min(1, max / Math.max(img.width, img.height));
+                            cv.width = Math.round(img.width * scale);
+                            cv.height = Math.round(img.height * scale);
+                            const ctx = cv.getContext('2d');
+                            ctx.drawImage(img, 0, 0, cv.width, cv.height);
+                            const data = ctx.getImageData(0, 0, cv.width, cv.height);
+                            const code = window.jsQR ? window.jsQR(data.data, cv.width, cv.height) : null;
+                            resolve(code ? code.data : null);
+                        };
+                        img.onerror = () => resolve(null);
+                        img.src = URL.createObjectURL(file);
+                    });
+                }
+
+                function enviarChave(texto) {
+                    document.getElementById('cp-qr-chave').value = texto;
+                    document.getElementById('cp-form-qr').submit();
+                }
+                function enviarXml(file) {
+                    const dt = new DataTransfer(); dt.items.add(file);
+                    document.getElementById('cp-xml-submit').files = dt.files;
+                    document.getElementById('cp-form-xml').submit();
+                }
+
+                document.getElementById('cp-enviar').onclick = async () => {
+                    if (anexoXml) { enviarXml(anexoXml); return; }
+                    if (anexoFoto) {
+                        const qr = await lerQrDaImagem(anexoFoto);
+                        if (qr) { enviarChave(qr); return; }
+                        alert('Não encontrei um QR Code nessa foto. A leitura do cupom por IA (foto sem QR) entra no próximo passo, quando a chave da API for configurada.');
+                        return;
+                    }
+                    if (txt.value.trim()) {
+                        alert('A leitura de texto por IA entra no próximo passo, quando a chave da API for configurada.');
+                        return;
+                    }
+                    alert('Anexe um XML, uma foto (QR) ou escreva a compra no campo de texto.');
+                };
+
+                // ----- Câmera ao vivo (QR) -----
+                const modalEl = document.getElementById('modalCamera');
+                const video = document.getElementById('cp-video');
+                const status = document.getElementById('cp-cam-status');
+                let stream = null, raf = null, scanCanvas = document.createElement('canvas');
+
+                function pararCamera() {
+                    if (raf) cancelAnimationFrame(raf);
+                    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+                }
+                function loopScan() {
+                    if (!stream) return;
+                    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                        scanCanvas.width = video.videoWidth; scanCanvas.height = video.videoHeight;
+                        const ctx = scanCanvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
+                        const data = ctx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+                        const code = window.jsQR ? window.jsQR(data.data, scanCanvas.width, scanCanvas.height) : null;
+                        if (code && code.data) {
+                            status.textContent = 'QR lido! Processando…';
+                            pararCamera();
+                            enviarChave(code.data);
+                            return;
+                        }
+                    }
+                    raf = requestAnimationFrame(loopScan);
+                }
+                modalEl.addEventListener('shown.bs.modal', async () => {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                        video.srcObject = stream; await video.play();
+                        status.textContent = 'Aponte a câmera para o QR Code do cupom…';
+                        loopScan();
+                    } catch (e) {
+                        status.textContent = 'Não foi possível acessar a câmera (' + e.name + '). Use HTTPS e permita o acesso.';
+                    }
+                });
+                modalEl.addEventListener('hidden.bs.modal', pararCamera);
+            })();
+            </script>
 
         <?php else: ?>
             <!-- Estado 2: revisão antes de enviar -->
@@ -179,7 +328,7 @@ $datalist = function (string $id, array $opts): string {
                                 <label class="form-label">Valor (R$)</label>
                                 <div class="input-group">
                                     <span class="input-group-text">R$</span>
-                                    <input type="text" name="value" class="form-control" value="<?= htmlspecialchars(financeiro_valor_br($revisao['valor_total'])) ?>" required>
+                                    <input type="text" name="value" class="form-control" value="<?= $revisao['valor_total'] !== '' ? htmlspecialchars(financeiro_valor_br($revisao['valor_total'])) : '' ?>" placeholder="0,00" required>
                                 </div>
                                 <div class="form-text">Despesa (conta a pagar). Use vírgula para os centavos.</div>
                             </div>

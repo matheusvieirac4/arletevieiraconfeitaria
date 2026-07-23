@@ -2,6 +2,7 @@
 require_once __DIR__ . '/_auth.php';
 require_once 'model_financeiro.php';
 require_once __DIR__ . '/lib/nfe_parser.php';
+require_once __DIR__ . '/lib/nfe_chave.php';
 
 $acao = isset($_GET['acao']) ? $_GET['acao'] : '';
 
@@ -52,6 +53,30 @@ if ($acao === 'upload' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $reg = financeiro_registro_listar()[$nota['chave']];
         $quando = isset($reg['importado_em']) ? substr($reg['importado_em'], 0, 10) : '';
         financeiro_redirect('warning', "Esta nota (chave {$nota['chave']}) já foi importada em {$quando}. Não foi carregada de novo para evitar duplicidade.");
+    }
+
+    $_SESSION['financeiro_revisao'] = $nota;
+    header('Location: financeiro.php');
+    exit;
+}
+
+// -------- QR Code (NFC-e): chave de acesso -> nota parcial -> revisão --------
+if ($acao === 'qr' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $bruto = isset($_POST['chave']) ? (string) $_POST['chave'] : '';
+    $chave = NFeChave::extrairDeTexto($bruto);
+    if ($chave === null) {
+        financeiro_redirect('danger', 'Não encontrei uma chave de acesso válida no QR Code.');
+    }
+    try {
+        $nota = NFeChave::parse($chave);
+    } catch (\Throwable $e) {
+        financeiro_redirect('danger', 'QR Code inválido: ' . $e->getMessage());
+    }
+
+    if (financeiro_ja_processada($nota['chave'])) {
+        $reg = financeiro_registro_listar()[$nota['chave']];
+        $quando = isset($reg['importado_em']) ? substr($reg['importado_em'], 0, 10) : '';
+        financeiro_redirect('warning', "Esta nota (chave {$nota['chave']}) já foi importada em {$quando}.");
     }
 
     $_SESSION['financeiro_revisao'] = $nota;
