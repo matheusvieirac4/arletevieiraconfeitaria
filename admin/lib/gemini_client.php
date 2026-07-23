@@ -69,6 +69,10 @@ class GeminiClient
             '- Para account, category, cost_center, payment_method e supplier: use EXATAMENTE',
             '  um dos nomes já cadastrados abaixo quando houver correspondência; se não houver,',
             '  use o nome mais natural. NÃO invente contas que não existem.',
+            '- Se houver um CNPJ (14 dígitos) ou CPF junto ao fornecedor, coloque só os dígitos',
+            '  em supplier_cnpj e deixe supplier com o NOME LIMPO, sem o número.',
+            '- settlement_date (data de pagamento): se a forma NÃO for boleto (pix, dinheiro,',
+            '  cartão...), a compra é paga na hora — use a data da compra. Se for BOLETO, deixe vazio.',
             '',
             $lista('Contas', $ctx['contas'] ?? []),
             $lista('Categorias', $ctx['categorias'] ?? []),
@@ -86,6 +90,7 @@ class GeminiClient
             'properties' => [
                 'description'     => $str,
                 'supplier'        => $str,
+                'supplier_cnpj'   => $str,
                 'category'        => $str,
                 'cost_center'     => $str,
                 'account'         => $str,
@@ -148,17 +153,28 @@ class GeminiClient
         $hoje = date('Y-m-d');
         $g = fn(string $k) => isset($d[$k]) ? trim((string) $d[$k]) : '';
         $venc = $g('due_date') !== '' ? $g('due_date') : $hoje;
+        $comp = $g('competence_date') !== '' ? $g('competence_date') : $venc;
+
+        // Data de pagamento: boleto fica em aberto; o resto é pago na hora (data da compra).
+        $forma = $g('payment_method');
+        $liquid = $g('settlement_date');
+        $ehBoleto = stripos($forma, 'boleto') !== false;
+        if ($liquid === '' && !$ehBoleto) {
+            $liquid = $comp;
+        }
+
         return [
             'description'     => $g('description'),
             'supplier'        => $g('supplier'),
+            'supplier_cnpj'   => preg_replace('/\D/', '', $g('supplier_cnpj')),
             'category'        => $g('category'),
             'cost_center'     => $g('cost_center'),
             'account'         => $g('account'),
-            'payment_method'  => $g('payment_method'),
+            'payment_method'  => $forma,
             'value'           => $g('value'),
             'due_date'        => $venc,
-            'competence_date' => $g('competence_date') !== '' ? $g('competence_date') : $venc,
-            'settlement_date' => $g('settlement_date'),
+            'competence_date' => $comp,
+            'settlement_date' => $liquid,
             'observation'     => $g('observation'),
         ];
     }

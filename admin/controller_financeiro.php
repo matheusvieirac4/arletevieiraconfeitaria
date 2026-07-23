@@ -115,6 +115,10 @@ if (($acao === 'texto' || $acao === 'cupom') && $_SERVER['REQUEST_METHOD'] === '
         financeiro_redirect('danger', 'Falha na leitura pela IA: ' . $e->getMessage());
     }
 
+    // CNPJ extraído (se houver) casa o fornecedor por documento e evita duplicata.
+    $cnpjForn = $lanc['supplier_cnpj'] ?? '';
+    unset($lanc['supplier_cnpj']);
+
     // Monta a nota no formato da revisão (sem chave — não deduplica texto/foto).
     $_SESSION['financeiro_revisao'] = [
         'chave'             => '',
@@ -122,7 +126,7 @@ if (($acao === 'texto' || $acao === 'cupom') && $_SERVER['REQUEST_METHOD'] === '
         'serie'             => '',
         'emissao'           => $lanc['competence_date'] ?? '',
         'natureza_operacao' => $origem,
-        'fornecedor'        => ['nome' => $lanc['supplier'] ?? '', 'cnpj' => ''],
+        'fornecedor'        => ['nome' => $lanc['supplier'] ?? '', 'cnpj' => $cnpjForn],
         'valor_total'       => $lanc['value'] ?? '', // financeiro_valor_br() mostra sem sinal
         'parcelas'          => [],
         'itens'             => [],
