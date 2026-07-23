@@ -21,32 +21,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="pt-BR">
 <head>
     <meta charset="utf-8">
-    <title>Login - Painel Admin</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <style>
-        body { background: #f8f9fa; }
-        .login-box { max-width: 350px; margin: 80px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); padding: 32px 24px; }
-        .login-logo { display: block; margin: 0 auto 24px auto; width: 120px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Entrar · Painel Admin</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@adminkit/core@3/dist/css/app.css">
+    <?php require __DIR__ . '/_brand.php'; ?>
 </head>
 <body>
-<div class="login-box">
-    <img src="../img/logo.png" alt="Logo Arlete Vieira Confeitaria" class="login-logo">
-    <h3 class="mb-4 text-center">Painel Admin</h3>
-    <?php if ($erro): ?>
-        <div class="alert alert-danger py-2 text-center"><?= $erro ?></div>
-    <?php endif; ?>
-    <form method="post">
-        <div class="mb-3">
-            <label class="form-label">Usuário</label>
-            <input type="text" name="usuario" class="form-control" required autofocus>
+<main class="d-flex w-100">
+    <div class="container d-flex flex-column">
+        <div class="row vh-100">
+            <div class="col-sm-10 col-md-8 col-lg-6 col-xl-5 mx-auto d-table h-100">
+                <div class="d-table-cell align-middle">
+
+                    <div class="text-center mt-4">
+                        <img src="../img/logo.png" alt="Arlete Vieira Confeitaria" style="max-height: 90px;">
+                        <p class="lead mt-3">Painel administrativo</p>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="m-sm-4">
+                                <?php if ($erro): ?>
+                                    <div class="alert alert-danger" role="alert"><?= htmlspecialchars($erro) ?></div>
+                                <?php endif; ?>
+                                <form method="post">
+                                    <div class="mb-3">
+                                        <label class="form-label">Usuário</label>
+                                        <input class="form-control form-control-lg" type="text" name="usuario" placeholder="Seu usuário" required autofocus>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Senha</label>
+                                        <input class="form-control form-control-lg" type="password" name="senha" placeholder="Sua senha" required>
+                                    </div>
+                                    <div class="text-center mt-3">
+                                        <button type="submit" class="btn btn-lg btn-primary w-100">Entrar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Senha</label>
-            <input type="password" name="senha" class="form-control" required>
-        </div>
-        <button type="submit" class="btn btn-primary w-100">Entrar</button>
-    </form>
-</div>
+    </div>
+</main>
 </body>
-</html> 
+</html>

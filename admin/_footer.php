@@ -20,8 +20,8 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@adminkit/core@3/dist/js/app.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@adminkit/core@3/dist/js/app.js"></script>
 <script>if (window.feather) { feather.replace(); }</script>
 </body>
 </html>

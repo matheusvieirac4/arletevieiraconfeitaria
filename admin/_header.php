@@ -24,8 +24,8 @@ $navItems = [
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>Admin · <?= htmlspecialchars($page_title) ?></title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@adminkit/core@3/dist/css/app.css">
+    <?php require __DIR__ . '/_brand.php'; ?>
     <style>
-        .sidebar-brand img { max-height: 42px; width: auto; }
 <?= $extra_css ?>
     </style>
 </head>
