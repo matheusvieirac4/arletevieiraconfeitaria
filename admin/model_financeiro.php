@@ -51,6 +51,31 @@ function financeiro_api(): CardapioWebApi
     return CardapioWebApi::fromConfig($cfg, financeiro_token_state_path());
 }
 
+// --------------------------------------------- Helpers de cadastros ---
+
+/** Normaliza a resposta de um lookup (pode vir como [...] ou {"data":[...]}). */
+function financeiro_extrair_lista($resp): array
+{
+    if (isset($resp['data']) && is_array($resp['data'])) {
+        return $resp['data'];
+    }
+    return is_array($resp) ? $resp : [];
+}
+
+/** Extrai os nomes (campo "name") de um lookup, ordenados. */
+function financeiro_nomes($resp): array
+{
+    $nomes = [];
+    foreach (financeiro_extrair_lista($resp) as $item) {
+        if (is_array($item) && isset($item['name']) && $item['name'] !== '') {
+            $nomes[] = (string) $item['name'];
+        }
+    }
+    $nomes = array_values(array_unique($nomes));
+    sort($nomes, SORT_NATURAL | SORT_FLAG_CASE);
+    return $nomes;
+}
+
 // ------------------------------- Registro de notas processadas (dedup) ---
 
 function financeiro_registro_path(): string
