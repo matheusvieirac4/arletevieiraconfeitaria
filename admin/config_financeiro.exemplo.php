@@ -15,4 +15,9 @@
 return [
     'company_id'    => 'COLOQUE_O_COMPANY_ID',
     'refresh_token' => 'COLOQUE_O_REFRESH_TOKEN_DO_CW',
+
+    // OPCIONAL — IA (Gemini) para ler texto livre e foto de cupom sem QR.
+    // Chave grátis em https://aistudio.google.com/apikey . Deixe vazio para desativar.
+    'gemini_api_key' => '',
+    'gemini_model'   => 'gemini-flash-latest',
 ];

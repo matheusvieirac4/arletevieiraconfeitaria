@@ -131,6 +131,13 @@ $datalist = function (string $id, array $opts): string {
                     <form id="cp-form-qr" method="post" action="controller_financeiro.php?acao=qr" class="d-none">
                         <input type="hidden" name="chave" id="cp-qr-chave">
                     </form>
+                    <form id="cp-form-texto" method="post" action="controller_financeiro.php?acao=texto" class="d-none">
+                        <input type="hidden" name="texto" id="cp-texto-submit">
+                    </form>
+                    <form id="cp-form-cupom" method="post" action="controller_financeiro.php?acao=cupom" enctype="multipart/form-data" class="d-none">
+                        <input type="file" name="foto" id="cp-foto-submit">
+                        <input type="hidden" name="texto" id="cp-cupom-texto">
+                    </form>
                 </div>
             </div>
 
@@ -153,6 +160,7 @@ $datalist = function (string $id, array $opts): string {
             <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
             <script>
             (function () {
+                const IA_ON = <?= financeiro_ia_configurada() ? 'true' : 'false' ?>;
                 const chips = document.getElementById('cp-chips');
                 const txt = document.getElementById('cp-text');
                 const fileXml = document.getElementById('cp-file-xml');
@@ -207,16 +215,29 @@ $datalist = function (string $id, array $opts): string {
                     document.getElementById('cp-form-xml').submit();
                 }
 
+                function enviarCupom(file, texto) {
+                    const dt = new DataTransfer(); dt.items.add(file);
+                    document.getElementById('cp-foto-submit').files = dt.files;
+                    document.getElementById('cp-cupom-texto').value = texto || '';
+                    document.getElementById('cp-form-cupom').submit();
+                }
+                function enviarTexto(texto) {
+                    document.getElementById('cp-texto-submit').value = texto;
+                    document.getElementById('cp-form-texto').submit();
+                }
+
                 document.getElementById('cp-enviar').onclick = async () => {
                     if (anexoXml) { enviarXml(anexoXml); return; }
                     if (anexoFoto) {
                         const qr = await lerQrDaImagem(anexoFoto);
-                        if (qr) { enviarChave(qr); return; }
-                        alert('Não encontrei um QR Code nessa foto. A leitura do cupom por IA (foto sem QR) entra no próximo passo, quando a chave da API for configurada.');
+                        if (qr) { enviarChave(qr); return; }          // QR → chave (grátis)
+                        if (IA_ON) { enviarCupom(anexoFoto, txt.value.trim()); return; } // sem QR → IA lê o cupom
+                        alert('Não encontrei QR nessa foto e a IA não está configurada (adicione gemini_api_key em config_financeiro.php).');
                         return;
                     }
                     if (txt.value.trim()) {
-                        alert('A leitura de texto por IA entra no próximo passo, quando a chave da API for configurada.');
+                        if (IA_ON) { enviarTexto(txt.value.trim()); return; }
+                        alert('A leitura de texto precisa da IA (adicione gemini_api_key em config_financeiro.php).');
                         return;
                     }
                     alert('Anexe um XML, uma foto (QR) ou escreva a compra no campo de texto.');
@@ -298,7 +319,7 @@ $datalist = function (string $id, array $opts): string {
             ?>
             <div class="card" style="max-width: 820px;">
                 <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
-                    <span>Revisar lançamento — NF-e <?= htmlspecialchars($revisao['numero']) ?></span>
+                    <span>Revisar lançamento<?= $revisao['numero'] !== '' ? ' — NF-e ' . htmlspecialchars($revisao['numero']) : ' — ' . htmlspecialchars($revisao['natureza_operacao']) ?></span>
                     <span class="badge bg-light text-dark">Fornecedor: <?= htmlspecialchars($revisao['fornecedor']['nome']) ?></span>
                 </div>
                 <div class="card-body">

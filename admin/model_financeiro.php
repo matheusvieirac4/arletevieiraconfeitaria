@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/lib/cardapioweb_api.php';
+require_once __DIR__ . '/lib/gemini_client.php';
 
 // ---------------------------------------------------------------- Config ---
 
@@ -39,6 +40,35 @@ function financeiro_configurado(): bool
 function financeiro_token_state_path(): string
 {
     return __DIR__ . '/data/financeiro_token.json';
+}
+
+/** True quando a IA (Gemini) está configurada. */
+function financeiro_ia_configurada(): bool
+{
+    $cfg = financeiro_config();
+    return $cfg && !empty($cfg['gemini_api_key']) && strpos((string) $cfg['gemini_api_key'], 'COLOQUE_') !== 0;
+}
+
+/** Cliente do Gemini a partir da config. Lança se a IA não estiver configurada. */
+function financeiro_gemini(): GeminiClient
+{
+    $cfg = financeiro_config();
+    if (!$cfg) {
+        throw new GeminiException('Integração não configurada.');
+    }
+    return GeminiClient::fromConfig($cfg);
+}
+
+/** Lê os 5 cadastros do Cardápio Web e devolve as listas de nomes p/ a IA. */
+function financeiro_contexto_cadastros(CardapioWebApi $api): array
+{
+    return [
+        'contas'       => financeiro_nomes($api->listarContas()),
+        'categorias'   => financeiro_nomes($api->listarCategorias()),
+        'centros'      => financeiro_nomes($api->listarCentrosCusto()),
+        'formas'       => financeiro_nomes($api->listarFormasPagamento()),
+        'fornecedores' => financeiro_nomes($api->listarFornecedores()),
+    ];
 }
 
 /** Instância do cliente da API a partir da config. Lança se não configurado. */

@@ -84,6 +84,55 @@ if ($acao === 'qr' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+// -------- IA: texto livre ou foto de cupom -> lançamento -> revisão --------
+if (($acao === 'texto' || $acao === 'cupom') && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!financeiro_ia_configurada()) {
+        financeiro_redirect('danger', 'A IA (Gemini) não está configurada. Adicione gemini_api_key em config_financeiro.php.');
+    }
+    try {
+        $api = financeiro_api();
+        $ctx = financeiro_contexto_cadastros($api);
+        $ia  = financeiro_gemini();
+
+        if ($acao === 'texto') {
+            $texto = trim((string) ($_POST['texto'] ?? ''));
+            if ($texto === '') {
+                financeiro_redirect('danger', 'Escreva a compra no campo de texto.');
+            }
+            $lanc = $ia->extrairTexto($texto, $ctx);
+            $origem = 'Texto (IA)';
+        } else {
+            if (!isset($_FILES['foto']) || $_FILES['foto']['error'] !== UPLOAD_ERR_OK) {
+                financeiro_redirect('danger', 'Selecione uma foto válida do cupom.');
+            }
+            $tmp  = $_FILES['foto']['tmp_name'];
+            $mime = mime_content_type($tmp) ?: 'image/jpeg';
+            $b64  = base64_encode((string) file_get_contents($tmp));
+            $lanc = $ia->extrairImagem($b64, $mime, $ctx, trim((string) ($_POST['texto'] ?? '')));
+            $origem = 'Foto do cupom (IA)';
+        }
+    } catch (\Throwable $e) {
+        financeiro_redirect('danger', 'Falha na leitura pela IA: ' . $e->getMessage());
+    }
+
+    // Monta a nota no formato da revisão (sem chave — não deduplica texto/foto).
+    $_SESSION['financeiro_revisao'] = [
+        'chave'             => '',
+        'numero'            => '',
+        'serie'             => '',
+        'emissao'           => $lanc['competence_date'] ?? '',
+        'natureza_operacao' => $origem,
+        'fornecedor'        => ['nome' => $lanc['supplier'] ?? '', 'cnpj' => ''],
+        'valor_total'       => $lanc['value'] ?? '', // financeiro_valor_br() mostra sem sinal
+        'parcelas'          => [],
+        'itens'             => [],
+        'avisos'            => ['Extraído por IA — confira todos os campos antes de enviar.'],
+        'lancamento'        => $lanc,
+    ];
+    header('Location: financeiro.php');
+    exit;
+}
+
 // -------- Cancelar a revisão em andamento --------
 if ($acao === 'cancelar') {
     unset($_SESSION['financeiro_revisao']);
