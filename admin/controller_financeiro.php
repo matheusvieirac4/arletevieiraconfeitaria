@@ -113,6 +113,12 @@ if ($acao === 'importar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'valor'      => $lancamento['value'],
         ]);
     }
+    // Aprende a classificação deste fornecedor para pré-preencher as próximas.
+    financeiro_regra_salvar(
+        $nota['fornecedor']['cnpj'] ?? '',
+        $nota['fornecedor']['nome'] ?? '',
+        $lancamento
+    );
     unset($_SESSION['financeiro_revisao']);
     financeiro_redirect('success', 'Lançamento enviado com sucesso ao Cardápio Web! Confira em Contas a pagar.');
 }

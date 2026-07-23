@@ -114,7 +114,20 @@ $datalist = function (string $id, array $opts): string {
 
         <?php else: ?>
             <!-- Estado 2: revisão antes de enviar -->
-            <?php $l = $revisao['lancamento']; ?>
+            <?php
+            $l = $revisao['lancamento'];
+            // Pré-preenche com a classificação aprendida deste fornecedor (se houver).
+            $regra = financeiro_regra_buscar($revisao['fornecedor']['cnpj'] ?? '');
+            $regraAplicada = false;
+            if ($regra) {
+                foreach (['account', 'category', 'cost_center', 'payment_method'] as $campo) {
+                    if (($l[$campo] ?? '') === '' && !empty($regra[$campo])) {
+                        $l[$campo] = $regra[$campo];
+                        $regraAplicada = true;
+                    }
+                }
+            }
+            ?>
             <div class="card" style="max-width: 820px;">
                 <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
                     <span>Revisar lançamento — NF-e <?= htmlspecialchars($revisao['numero']) ?></span>
@@ -127,6 +140,9 @@ $datalist = function (string $id, array $opts): string {
                     <?php foreach ($revisao['avisos'] as $aviso): ?>
                         <div class="alert alert-warning py-2"><?= htmlspecialchars($aviso) ?></div>
                     <?php endforeach; ?>
+                    <?php if ($regraAplicada): ?>
+                        <div class="alert alert-info py-2">✓ Classificação preenchida automaticamente com base em compras anteriores deste fornecedor. Confira e ajuste se necessário.</div>
+                    <?php endif; ?>
 
                     <form method="post" action="controller_financeiro.php?acao=importar">
                         <div class="row g-3">
@@ -135,7 +151,7 @@ $datalist = function (string $id, array $opts): string {
                                 <select name="account" class="form-select" required>
                                     <option value="">Selecione...</option>
                                     <?php foreach ($listas['contas'] as $c): ?>
-                                        <option value="<?= htmlspecialchars($c, ENT_QUOTES) ?>"><?= htmlspecialchars($c) ?></option>
+                                        <option value="<?= htmlspecialchars($c, ENT_QUOTES) ?>" <?= ($l['account'] === $c ? 'selected' : '') ?>><?= htmlspecialchars($c) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                                 <div class="form-text">Obrigatório e precisa já existir no Cardápio Web.</div>

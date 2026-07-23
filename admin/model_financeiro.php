@@ -76,6 +76,65 @@ function financeiro_nomes($resp): array
     return $nomes;
 }
 
+// ------------------- Regras por fornecedor (classificação aprendida) ---
+// A ferramenta memoriza como cada fornecedor (chave = CNPJ) foi classificado
+// da última vez, para pré-preencher as próximas notas dele automaticamente.
+
+function financeiro_regras_path(): string
+{
+    return __DIR__ . '/data/financeiro_regras.json';
+}
+
+function financeiro_regras_listar(): array
+{
+    $path = financeiro_regras_path();
+    if (!is_file($path)) {
+        return [];
+    }
+    $data = json_decode((string) file_get_contents($path), true);
+    return is_array($data) ? $data : [];
+}
+
+/** Busca a classificação memorizada para um fornecedor (por CNPJ). */
+function financeiro_regra_buscar(string $cnpj): ?array
+{
+    $cnpj = preg_replace('/\D/', '', $cnpj);
+    if ($cnpj === '') {
+        return null;
+    }
+    $regras = financeiro_regras_listar();
+    return $regras[$cnpj] ?? null;
+}
+
+/** Memoriza/atualiza a classificação de um fornecedor após um envio. */
+function financeiro_regra_salvar(string $cnpj, string $nome, array $campos): bool
+{
+    $cnpj = preg_replace('/\D/', '', $cnpj);
+    if ($cnpj === '') {
+        return false; // sem CNPJ não dá para memorizar com segurança
+    }
+    $regras = financeiro_regras_listar();
+    $regras[$cnpj] = [
+        'fornecedor'     => $nome,
+        'account'        => $campos['account'] ?? '',
+        'category'       => $campos['category'] ?? '',
+        'cost_center'    => $campos['cost_center'] ?? '',
+        'payment_method' => $campos['payment_method'] ?? '',
+        'atualizado_em'  => date('c'),
+    ];
+
+    $path = financeiro_regras_path();
+    $dir  = dirname($path);
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        return false;
+    }
+    return file_put_contents(
+        $path,
+        json_encode($regras, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+        LOCK_EX
+    ) !== false;
+}
+
 // ------------------------------- Registro de notas processadas (dedup) ---
 
 function financeiro_registro_path(): string
