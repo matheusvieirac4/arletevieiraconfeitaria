@@ -145,6 +145,36 @@ if (($acao === 'texto' || $acao === 'cupom') && $_SERVER['REQUEST_METHOD'] === '
     exit;
 }
 
+// -------- Fila SEFAZ: revisar uma nota recebida --------
+if ($acao === 'pendente_revisar') {
+    $ch = isset($_GET['chave']) ? preg_replace('/\D/', '', (string) $_GET['chave']) : '';
+    $nota = financeiro_pendentes_listar()[$ch] ?? null;
+    if (!$nota) {
+        financeiro_redirect('danger', 'Nota recebida não encontrada (pode já ter sido tratada).');
+    }
+    unset($nota['recebido_em']);
+    $_SESSION['financeiro_revisao'] = $nota;
+    header('Location: financeiro.php');
+    exit;
+}
+
+// -------- Fila SEFAZ: descartar uma nota recebida --------
+if ($acao === 'pendente_descartar') {
+    $ch = isset($_GET['chave']) ? preg_replace('/\D/', '', (string) $_GET['chave']) : '';
+    financeiro_pendente_remover($ch);
+    financeiro_redirect('success', 'Nota recebida descartada.');
+}
+
+// -------- Rodar o puxador do SEFAZ manualmente (botão) --------
+if ($acao === 'sefaz_puxar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        $r = financeiro_sefaz_puxar();
+        financeiro_redirect('success', "Busca no SEFAZ concluída — {$r['novas']} nota(s) nova(s). (cStat {$r['cStat']}: {$r['xMotivo']})");
+    } catch (\Throwable $e) {
+        financeiro_redirect('danger', 'Falha ao buscar no SEFAZ: ' . $e->getMessage());
+    }
+}
+
 // -------- Cancelar a revisão em andamento --------
 if ($acao === 'cancelar') {
     unset($_SESSION['financeiro_revisao']);
@@ -206,6 +236,10 @@ if ($acao === 'importar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $nota['fornecedor']['nome'] ?? '',
         $lancamento
     );
+    // Se veio da fila de recebidas do SEFAZ, tira de lá.
+    if (!empty($nota['chave'])) {
+        financeiro_pendente_remover($nota['chave']);
+    }
     unset($_SESSION['financeiro_revisao']);
     financeiro_redirect('success', 'Lançamento enviado com sucesso ao Cardápio Web! Confira em Contas a pagar.');
 }

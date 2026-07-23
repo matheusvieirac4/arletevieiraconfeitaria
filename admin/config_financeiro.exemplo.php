@@ -20,4 +20,13 @@ return [
     // Chave grátis em https://aistudio.google.com/apikey . Deixe vazio para desativar.
     'gemini_api_key' => '',
     'gemini_model'   => 'gemini-flash-latest',
+
+    // OPCIONAL — Puxador de NF-e (modelo 55) do SEFAZ com certificado A1.
+    // Guarde o .pfx/.p12 FORA do public_html (ex.: /home/USUARIO/certs/cert.p12).
+    // cron_token: senha aleatória para acionar cron_sefaz.php por URL. Deixe
+    // cert_path vazio para desativar o puxador.
+    'cert_path'     => '',
+    'cert_password' => '',
+    'cert_cnpj'     => '',   // vazio = extrai do certificado
+    'cron_token'    => '',
 ];

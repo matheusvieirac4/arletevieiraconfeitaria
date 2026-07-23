@@ -18,6 +18,10 @@ if (isset($_SESSION['financeiro_teste'])) {
 // Nota em revisão (após upload do XML).
 $revisao = $_SESSION['financeiro_revisao'] ?? null;
 
+// Fila de notas recebidas automaticamente do SEFAZ.
+$sefazOn   = financeiro_sefaz_configurado();
+$pendentes = $sefazOn ? financeiro_pendentes_listar() : [];
+
 // Se há revisão, busca os cadastros para montar os campos.
 $listas = ['contas' => [], 'categorias' => [], 'fornecedores' => [], 'formas' => [], 'centros' => []];
 $fornecedoresFull = [];
@@ -102,6 +106,40 @@ $datalist = function (string $id, array $opts): string {
             </div>
 
         <?php elseif (!$revisao): ?>
+            <?php if ($sefazOn): ?>
+            <!-- Fila de NF-e recebidas automaticamente do SEFAZ -->
+            <div class="card mb-4" style="max-width: 820px;">
+                <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                    <span>Notas recebidas do SEFAZ <?php if ($pendentes): ?><span class="badge bg-danger"><?= count($pendentes) ?></span><?php endif; ?></span>
+                    <form method="post" action="controller_financeiro.php?acao=sefaz_puxar" class="m-0">
+                        <button class="btn btn-outline-secondary btn-sm" type="submit">Buscar agora</button>
+                    </form>
+                </div>
+                <div class="card-body">
+                    <?php if (!$pendentes): ?>
+                        <p class="text-muted mb-0">Nenhuma nota nova. As NF-e (modelo 55) dos seus fornecedores aparecem aqui automaticamente.</p>
+                    <?php else: ?>
+                        <table class="table table-sm align-middle mb-0">
+                            <thead><tr><th>Fornecedor</th><th>Valor</th><th>Emissão</th><th class="text-end">Ações</th></tr></thead>
+                            <tbody>
+                            <?php foreach ($pendentes as $ch => $nt): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($nt['fornecedor']['nome'] ?: $nt['fornecedor']['cnpj']) ?></td>
+                                    <td>R$ <?= htmlspecialchars(financeiro_valor_br($nt['valor_total'])) ?></td>
+                                    <td><?= htmlspecialchars($nt['emissao']) ?></td>
+                                    <td class="text-end text-nowrap">
+                                        <a class="btn btn-primary btn-sm" href="controller_financeiro.php?acao=pendente_revisar&chave=<?= urlencode($ch) ?>">Revisar</a>
+                                        <a class="btn btn-outline-danger btn-sm" href="controller_financeiro.php?acao=pendente_descartar&chave=<?= urlencode($ch) ?>" onclick="return confirm('Descartar esta nota recebida?')">Descartar</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <!-- Estado 1: composer (texto + anexos: XML / foto / câmera) -->
             <div class="card" style="max-width: 820px;">
                 <div class="card-header fw-semibold">Novo lançamento</div>

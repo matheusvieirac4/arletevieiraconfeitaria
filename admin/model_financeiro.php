@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/lib/cardapioweb_api.php';
 require_once __DIR__ . '/lib/gemini_client.php';
+require_once __DIR__ . '/lib/nfe_parser.php';
+require_once __DIR__ . '/lib/nfe_chave.php';
+require_once __DIR__ . '/lib/sefaz_distribuicao.php';
 
 // ---------------------------------------------------------------- Config ---
 
@@ -264,6 +267,144 @@ function financeiro_regra_salvar(string $cnpj, string $nome, array $campos): boo
         json_encode($regras, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
         LOCK_EX
     ) !== false;
+}
+
+// ------------------------- SEFAZ: puxador de NF-e (distribuição por NSU) ---
+
+/** Config do certificado A1: prioriza env (útil p/ cron), senão a config. */
+function financeiro_sefaz_config(): ?array
+{
+    $cfg = financeiro_config() ?: [];
+    $path = getenv('SEFAZ_PFX_PATH') ?: ($cfg['cert_path'] ?? '');
+    $pass = getenv('SEFAZ_PFX_PASS') ?: ($cfg['cert_password'] ?? '');
+    if ($path === '' || !is_file($path)) {
+        return null;
+    }
+    return ['path' => $path, 'pass' => $pass, 'cnpj' => $cfg['cert_cnpj'] ?? ''];
+}
+
+/** True quando o puxador do SEFAZ está configurado (certificado disponível). */
+function financeiro_sefaz_configurado(): bool
+{
+    return financeiro_sefaz_config() !== null;
+}
+
+function financeiro_nsu_state_path(): string { return __DIR__ . '/data/financeiro_nsu.json'; }
+function financeiro_pendentes_path(): string { return __DIR__ . '/data/financeiro_pendentes.json'; }
+
+function financeiro_nsu_ultimo(): string
+{
+    $p = financeiro_nsu_state_path();
+    if (is_file($p)) {
+        $d = json_decode((string) file_get_contents($p), true);
+        if (is_array($d) && isset($d['ultNSU'])) { return (string) $d['ultNSU']; }
+    }
+    return '0';
+}
+
+function financeiro_nsu_salvar(string $ultNSU): void
+{
+    $dir = dirname(financeiro_nsu_state_path());
+    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    file_put_contents(financeiro_nsu_state_path(), json_encode(['ultNSU' => $ultNSU, 'em' => date('c')]));
+}
+
+function financeiro_pendentes_listar(): array
+{
+    $p = financeiro_pendentes_path();
+    if (!is_file($p)) { return []; }
+    $d = json_decode((string) file_get_contents($p), true);
+    return is_array($d) ? $d : [];
+}
+
+function financeiro_pendente_salvar(string $chave, array $nota): bool
+{
+    $reg = financeiro_pendentes_listar();
+    $reg[$chave] = $nota + ['recebido_em' => date('c')];
+    $dir = dirname(financeiro_pendentes_path());
+    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    return file_put_contents(financeiro_pendentes_path(), json_encode($reg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) !== false;
+}
+
+function financeiro_pendente_remover(string $chave): void
+{
+    $reg = financeiro_pendentes_listar();
+    if (isset($reg[$chave])) {
+        unset($reg[$chave]);
+        file_put_contents(financeiro_pendentes_path(), json_encode($reg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
+}
+
+/** Converte um documento da distribuição (resNFe ou procNFe) numa nota de revisão. */
+function financeiro_sefaz_doc_para_nota(array $doc): ?array
+{
+    $xml = $doc['xml'];
+    $schema = $doc['schema'];
+
+    // XML completo → parser completo (valor, itens, forma...).
+    if (strpos($schema, 'procNFe') === 0) {
+        try { return NFeParser::parse($xml); } catch (\Throwable $e) { return null; }
+    }
+
+    // Resumo (resNFe) → chave dá número/série/CNPJ/data; resumo dá nome + valor total.
+    if (strpos($schema, 'resNFe') === 0) {
+        if (!preg_match('/<chNFe>(\d{44})<\/chNFe>/', $xml, $mc)) { return null; }
+        try { $nota = NFeChave::parse($mc[1]); } catch (\Throwable $e) { return null; }
+        if (preg_match('/<xNome>(.*?)<\/xNome>/', $xml, $mn)) {
+            $nota['fornecedor']['nome'] = trim($mn[1]);
+            $nota['lancamento']['supplier'] = trim($mn[1]);
+        }
+        if (preg_match('/<vNF>([\d.]+)<\/vNF>/', $xml, $mv)) {
+            $nota['valor_total'] = $mv[1];
+            $nota['lancamento']['value'] = '-' . $mv[1];
+        }
+        $nota['natureza_operacao'] = 'NF-e (recebida do SEFAZ)';
+        $nota['avisos'] = ['Recebida automaticamente do SEFAZ (resumo). Confira o valor e a categoria.'];
+        return $nota;
+    }
+
+    return null; // eventos e outros: ignora
+}
+
+/**
+ * Roda a distribuição por NSU: baixa novas NF-e e enfileira como pendentes.
+ * @return array{novas:int,cStat:int,xMotivo:string,ultNSU:string,maxNSU:string,paginas:int}
+ */
+function financeiro_sefaz_puxar(int $maxPaginas = 10): array
+{
+    $sc = financeiro_sefaz_config();
+    if (!$sc) {
+        throw new SefazException('Certificado do SEFAZ não configurado (cert_path).');
+    }
+    $sefaz = new SefazDistribuicao(file_get_contents($sc['path']), $sc['pass'], $sc['cnpj']);
+
+    $ult = financeiro_nsu_ultimo();
+    $novas = 0; $pag = 0; $cStat = 0; $xMotivo = ''; $maxNSU = $ult;
+
+    do {
+        $r = $sefaz->consultarPorNSU($ult);
+        $cStat = $r['cStat']; $xMotivo = $r['xMotivo'];
+        $maxNSU = $r['maxNSU'] !== '' ? $r['maxNSU'] : $maxNSU;
+        $pag++;
+
+        foreach ($r['docs'] as $doc) {
+            $nota = financeiro_sefaz_doc_para_nota($doc);
+            if (!$nota || empty($nota['chave'])) { continue; }
+            $ch = $nota['chave'];
+            if (financeiro_ja_processada($ch) || isset(financeiro_pendentes_listar()[$ch])) { continue; }
+            if (financeiro_pendente_salvar($ch, $nota)) { $novas++; }
+        }
+
+        if ($r['ultNSU'] !== '') {
+            $ult = $r['ultNSU'];
+            financeiro_nsu_salvar($ult);
+        }
+        // Continua enquanto houver mais lotes (ultNSU < maxNSU) e cStat indicar documentos.
+        $temMais = ($cStat === 138) && ($r['ultNSU'] !== '') && ($r['maxNSU'] !== '')
+                   && ((int) $r['ultNSU'] < (int) $r['maxNSU']);
+    } while ($temMais && $pag < $maxPaginas);
+
+    return ['novas' => $novas, 'cStat' => $cStat, 'xMotivo' => $xMotivo, 'ultNSU' => $ult, 'maxNSU' => $maxNSU, 'paginas' => $pag];
 }
 
 // ------------------------------- Registro de notas processadas (dedup) ---
