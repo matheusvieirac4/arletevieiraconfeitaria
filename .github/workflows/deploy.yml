@@ -27,6 +27,8 @@ jobs:
             **/.git*/**
             **/.github/**
             includes/banco.php
+            admin/config_financeiro.php
+            admin/data/**
             cardapios/*.pdf
             img/imagens/blog/**
             links/logs/**
