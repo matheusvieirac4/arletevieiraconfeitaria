@@ -319,7 +319,7 @@ $datalist = function (string $id, array $opts): string {
             ?>
             <div class="card" style="max-width: 820px;">
                 <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
-                    <span>Revisar lançamento<?= $revisao['numero'] !== '' ? ' — NF-e ' . htmlspecialchars($revisao['numero']) : ' — ' . htmlspecialchars($revisao['natureza_operacao']) ?></span>
+                    <span>Revisar lançamento<?= $revisao['numero'] !== '' ? ' — nº ' . htmlspecialchars($revisao['numero']) : ' — ' . htmlspecialchars($revisao['natureza_operacao']) ?></span>
                     <span class="badge bg-light text-dark">Fornecedor: <?= htmlspecialchars($revisao['fornecedor']['nome']) ?></span>
                 </div>
                 <div class="card-body">

@@ -81,6 +81,28 @@ function financeiro_api(): CardapioWebApi
     return CardapioWebApi::fromConfig($cfg, financeiro_token_state_path());
 }
 
+/** Busca o nome de um fornecedor pelo CNPJ na BrasilAPI (grátis, sem captcha). */
+function financeiro_consultar_cnpj(string $cnpj): ?array
+{
+    $cnpj = preg_replace('/\D/', '', $cnpj);
+    if (strlen($cnpj) !== 14) {
+        return null;
+    }
+    $ch = curl_init('https://brasilapi.com.br/api/cnpj/v1/' . $cnpj);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 12, CURLOPT_CONNECTTIMEOUT => 8]);
+    $r = curl_exec($ch);
+    $st = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($r === false || $st !== 200) {
+        return null;
+    }
+    $j = json_decode((string) $r, true);
+    if (!is_array($j) || empty($j['razao_social'])) {
+        return null;
+    }
+    return ['razao' => $j['razao_social'], 'fantasia' => $j['nome_fantasia'] ?? ''];
+}
+
 // --------------------------------------------- Helpers de cadastros ---
 
 /** Normaliza a resposta de um lookup (pode vir como [...] ou {"data":[...]}). */

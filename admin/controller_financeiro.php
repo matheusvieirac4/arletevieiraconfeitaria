@@ -73,6 +73,14 @@ if ($acao === 'qr' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         financeiro_redirect('danger', 'QR Code inválido: ' . $e->getMessage());
     }
 
+    // Nome do fornecedor não vem na chave — busca pelo CNPJ (BrasilAPI, grátis).
+    $forn = financeiro_consultar_cnpj($nota['fornecedor']['cnpj']);
+    if ($forn) {
+        $nome = $forn['fantasia'] !== '' ? $forn['fantasia'] : $forn['razao'];
+        $nota['fornecedor']['nome']     = $nome;
+        $nota['lancamento']['supplier'] = $nome;
+    }
+
     if (financeiro_ja_processada($nota['chave'])) {
         $reg = financeiro_registro_listar()[$nota['chave']];
         $quando = isset($reg['importado_em']) ? substr($reg['importado_em'], 0, 10) : '';
