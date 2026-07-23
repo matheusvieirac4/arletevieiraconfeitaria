@@ -15,6 +15,7 @@ $navItems = [
     'cardapios' => ['cardapios.php', 'Cardápios'],
     'links_bio' => ['links_bio.php', 'Links da bio'],
     'metricas'  => ['metricas.php',  'Métricas'],
+    'financeiro'=> ['financeiro.php','Financeiro'],
 ];
 ?>
 <!DOCTYPE html>
