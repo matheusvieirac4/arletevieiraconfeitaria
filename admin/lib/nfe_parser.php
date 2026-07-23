@@ -76,6 +76,10 @@ class NFeParser
             ];
         }
 
+        // Forma de pagamento: código tPag da NF-e -> nome legível.
+        $tPag = self::text($xml, '//n:infNFe/n:pag/n:detPag/n:tPag');
+        $formaPagamento = self::mapTPag($tPag);
+
         // Data de vencimento: 1ª parcela, senão a emissão.
         $vencimento = $parcelas[0]['vencimento'] ?? $emissao;
 
@@ -100,11 +104,12 @@ class NFeParser
             'competence_date' => $emissao,
             'settlement_date' => '',
             'observation'     => '',
+            // Sugerido pela nota (código tPag); pode ser ajustado na revisão.
+            'payment_method'  => $formaPagamento,
             // Preenchidos na tela de revisão (cruzando com os cadastros do lojista):
             'account'         => '',
             'category'        => '',
             'cost_center'     => '',
-            'payment_method'  => '',
         ];
 
         return [
@@ -120,6 +125,30 @@ class NFeParser
             'avisos'            => $avisos,
             'lancamento'        => $lancamento,
         ];
+    }
+
+    /** Traduz o código tPag da NF-e (tabela SEFAZ) para um nome de forma de pagamento. */
+    private static function mapTPag(string $tPag): string
+    {
+        $mapa = [
+            '01' => 'Dinheiro',
+            '02' => 'Cheque',
+            '03' => 'Cartão de crédito',
+            '04' => 'Cartão de débito',
+            '05' => 'Crédito loja',
+            '10' => 'Vale alimentação',
+            '11' => 'Vale refeição',
+            '12' => 'Vale presente',
+            '13' => 'Vale combustível',
+            '15' => 'Boleto',
+            '16' => 'Depósito bancário',
+            '17' => 'Pix',
+            '18' => 'Transferência bancária',
+            '19' => 'Cashback',
+            '90' => '', // sem pagamento
+            '99' => 'Outros',
+        ];
+        return $mapa[$tPag] ?? '';
     }
 
     // ------------------------------------------------------------- helpers ---

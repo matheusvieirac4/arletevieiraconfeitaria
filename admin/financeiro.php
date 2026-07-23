@@ -120,8 +120,10 @@ $datalist = function (string $id, array $opts): string {
             $regra = financeiro_regra_buscar($revisao['fornecedor']['cnpj'] ?? '');
             $regraAplicada = false;
             if ($regra) {
+                // A classificação aprendida do fornecedor tem prioridade sobre a
+                // sugestão da nota (ex.: forma de pagamento vinda do tPag).
                 foreach (['account', 'category', 'cost_center', 'payment_method'] as $campo) {
-                    if (($l[$campo] ?? '') === '' && !empty($regra[$campo])) {
+                    if (!empty($regra[$campo])) {
                         $l[$campo] = $regra[$campo];
                         $regraAplicada = true;
                     }
