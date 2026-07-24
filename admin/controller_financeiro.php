@@ -23,7 +23,28 @@ if ($acao === 'salvar_config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!financeiro_config_salvar($novos)) {
         financeiro_redirect('danger', 'Não consegui gravar as credenciais. Verifique a permissão da pasta admin/data/.');
     }
-    financeiro_redirect('success', 'Credenciais atualizadas. Clique em "Testar conexão" para confirmar.');
+    financeiro_redirect('success', 'Credenciais atualizadas. A bolinha ao lado do título mostra se a conexão voltou.');
+}
+
+// -------- Status da conexão em JSON (chamado sozinho ao abrir a página) --------
+// Mesma checagem do "testar", mas sem redirect/flash: alimenta a bolinha ao
+// lado do título. Fica em GET porque é só leitura.
+if ($acao === 'status') {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        $api = financeiro_api();
+        echo json_encode([
+            'ok'           => true,
+            'contas'       => count(financeiro_extrair_lista($api->listarContas())),
+            'categorias'   => count(financeiro_extrair_lista($api->listarCategorias())),
+            'fornecedores' => count(financeiro_extrair_lista($api->listarFornecedores())),
+            'formas'       => count(financeiro_extrair_lista($api->listarFormasPagamento())),
+            'centros'      => count(financeiro_extrair_lista($api->listarCentrosCusto())),
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (\Throwable $e) {
+        echo json_encode(['ok' => false, 'erro' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
 }
 
 // -------- Testar conexão: autentica e lê os 5 cadastros --------
@@ -257,8 +278,16 @@ if ($acao === 'importar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         financeiro_redirect('danger', 'Falha ao enviar ao Cardápio Web: ' . $e->getMessage());
     }
 
-    // Registra o envio para a checagem de duplicidade das próximas.
-    financeiro_enviado_registrar($lancamento['supplier'], $lancamento['value'], $lancamento['due_date']);
+    // Registra o envio: serve para a checagem de duplicidade das próximas e
+    // alimenta o histórico no fim da página.
+    financeiro_enviado_registrar($lancamento['supplier'], $lancamento['value'], $lancamento['due_date'], [
+        'descricao' => $lancamento['description'] ?? '',
+        'categoria' => $lancamento['category'] ?? '',
+        'centro'    => $lancamento['cost_center'] ?? '',
+        'conta'     => $lancamento['account'] ?? '',
+        'forma'     => $lancamento['payment_method'] ?? '',
+        'numero'    => $nota['numero'] ?? '',
+    ]);
 
     // Sucesso: marca a nota como processada (idempotência) e limpa a revisão.
     if (!empty($nota['chave'])) {

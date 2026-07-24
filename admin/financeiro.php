@@ -57,6 +57,20 @@ $extra_css = '
         .status-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
         .mono { font-family: monospace; font-size: 0.85rem; }
 
+        /* Bolinha de status ao lado do título */
+        .status-dot-lg { width: 14px; height: 14px; margin-right: 0; flex: 0 0 auto; }
+        .status-checando { background-color: #adb5bd; }
+        .status-ok  { background-color: #28a745; animation: pulso-ok 2s ease-out infinite; }
+        .status-erro { background-color: #d9534f; }
+        @keyframes pulso-ok {
+            0%   { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.6); }
+            70%  { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .status-ok { animation: none; }
+        }
+
         /* --- Choices.js no visual do AdminKit/Bootstrap ------------------- */
         .choices { margin-bottom: 0; }
         .choices__inner {
@@ -123,7 +137,20 @@ $datalist = function (string $id, array $opts): string {
     return $h . '</datalist>';
 };
 ?>
-        <h1 class="mb-2">Financeiro — Contas a pagar</h1>
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <h1 class="mb-0 d-flex align-items-center">
+                Financeiro — Contas a pagar
+                <?php if ($configurado): ?>
+                    <span id="status-dot" class="status-dot status-dot-lg status-checando ms-3"
+                          role="status" title="Verificando a conexão com o Cardápio Web..."></span>
+                <?php else: ?>
+                    <span class="status-dot status-dot-lg bg-warning ms-3" title="Integração ainda não configurada."></span>
+                <?php endif; ?>
+            </h1>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-credenciais" title="Credenciais da integração">
+                <i data-feather="settings" class="align-middle"></i>
+            </button>
+        </div>
         <p class="text-muted mb-4">
             Importe notas fiscais (XML) e lance como contas a pagar no Cardápio Web,
             sem digitar uma por uma. As contas a receber continuam sendo geradas pelo sistema de pedidos.
@@ -133,53 +160,20 @@ $datalist = function (string $id, array $opts): string {
             <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
         <?php endif; ?>
 
-        <!-- Status da integração -->
-        <div class="card mb-4" style="max-width: 820px;">
-            <div class="card-header fw-semibold">Status da integração</div>
-            <div class="card-body">
-                <?php if ($configurado): ?>
-                    <p class="mb-3"><span class="status-dot bg-success"></span> Configurado.</p>
-                    <form method="post" action="controller_financeiro.php?acao=testar" class="d-inline">
-                        <button type="submit" class="btn btn-outline-primary btn-sm">Testar conexão com o Cardápio Web</button>
-                    </form>
-                    <?php if ($teste): ?>
-                        <div class="mt-3">
-                            <?php if ($teste['ok']): ?>
-                                <div class="alert alert-success mb-0">
-                                    Conexão OK! Cadastros lidos: contas <strong><?= (int) $teste['contas'] ?></strong>,
-                                    categorias <strong><?= (int) $teste['categorias'] ?></strong>,
-                                    fornecedores <strong><?= (int) $teste['fornecedores'] ?></strong>,
-                                    formas de pagamento <strong><?= (int) $teste['formas'] ?></strong>,
-                                    centros de custo <strong><?= (int) $teste['centros'] ?></strong>.
-                                </div>
-                            <?php else: ?>
-                                <div class="alert alert-danger mb-0">Falha: <span class="mono"><?= htmlspecialchars($teste['erro']) ?></span></div>
-                            <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
-                <?php else: ?>
-                    <p class="mb-2"><span class="status-dot bg-warning"></span> Ainda não configurado.</p>
-                    <p class="mb-1">Crie <span class="mono">admin/config_financeiro.php</span> a partir do modelo
-                       <span class="mono">.exemplo.php</span> e preencha:</p>
-                    <ul class="mb-0">
-                        <li><span class="mono">company_id</span> — id da empresa (header <span class="mono">companyid</span>)</li>
-                        <li><span class="mono">refresh_token</span> — da resposta do login em <span class="mono">/auth/token</span>; <strong>segredo</strong></li>
-                    </ul>
-                <?php endif; ?>
-            </div>
-        </div>
-
-        <!-- Credenciais editáveis pelo painel (sem precisar do Gerenciador de Arquivos) -->
-        <div class="card mb-4" style="max-width: 820px;">
-            <div class="card-header fw-semibold">
-                <details<?= $configurado ? '' : ' open' ?>>
-                    <summary style="cursor:pointer;">Credenciais da integração</summary>
-                    <div class="pt-3">
-                        <p class="text-muted small">
-                            O <strong>refresh token</strong> do Cardápio Web expira a cada 5 dias — quando a conexão falhar,
-                            cole o novo aqui. Campos em branco <strong>mantêm</strong> o valor atual.
-                        </p>
-                        <form method="post" action="controller_financeiro.php?acao=salvar_config">
+        <!-- Credenciais: só no pop-up da engrenagem -->
+        <div class="modal fade" id="modal-credenciais" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Credenciais da integração</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    </div>
+                    <form method="post" action="controller_financeiro.php?acao=salvar_config">
+                        <div class="modal-body">
+                            <p class="text-muted small">
+                                O <strong>refresh token</strong> do Cardápio Web expira a cada 5 dias — quando a bolinha ficar
+                                vermelha, cole o novo aqui. Campos em branco <strong>mantêm</strong> o valor atual.
+                            </p>
                             <div class="row g-3">
                                 <?php foreach (financeiro_config_campos() as $k => $meta): $def = !empty($cfgAtual[$k]); ?>
                                     <div class="col-md-6">
@@ -187,26 +181,31 @@ $datalist = function (string $id, array $opts): string {
                                         <?php if ($meta['secreto']): ?>
                                             <input type="password" name="<?= $k ?>" class="form-control" autocomplete="new-password"
                                                    placeholder="<?= $def ? '•••••••• (definido)' : 'não definido' ?>">
+                                            <div class="form-text"><?= $def ? '✓ já definido' : 'ainda não definido' ?></div>
                                         <?php else: ?>
                                             <input type="text" name="<?= $k ?>" class="form-control"
                                                    value="<?= htmlspecialchars((string) ($cfgAtual[$k] ?? '')) ?>" placeholder="não definido">
                                         <?php endif; ?>
-                                        <?php if ($meta['secreto']): ?>
-                                            <div class="form-text"><?= $def ? '✓ já definido' : 'ainda não definido' ?></div>
-                                        <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
-                            <button type="submit" class="btn btn-primary mt-3">Salvar credenciais</button>
-                        </form>
-                    </div>
-                </details>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Salvar credenciais</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
 
         <?php if (!$configurado): ?>
             <div class="card" style="max-width: 820px;">
-                <div class="card-body text-muted">Configure a integração acima para liberar a importação.</div>
+                <div class="card-body text-muted">
+                    Integração ainda não configurada. Abra a <strong>engrenagem</strong> no canto superior direito e
+                    informe pelo menos o <span class="mono">company_id</span> e o <span class="mono">refresh_token</span>
+                    (da resposta do login em <span class="mono">/auth/token</span>).
+                </div>
             </div>
 
         <?php elseif (!$revisao): ?>
@@ -708,6 +707,91 @@ $datalist = function (string $id, array $opts): string {
                 </div>
             </div>
         <?php endif; ?>
+
+        <?php
+        // Histórico: os últimos 100 envios (o mesmo log usado na checagem de
+        // duplicidade). Mais recentes primeiro.
+        $historico = array_reverse(financeiro_enviados_listar());
+        ?>
+        <div class="card mt-4" style="max-width: 820px;">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                <span>Histórico de lançamentos</span>
+                <small class="text-muted fw-normal"><?= count($historico) ?> de <?= FINANCEIRO_ENVIADOS_MAX ?></small>
+            </div>
+            <div class="card-body">
+                <?php if (!$historico): ?>
+                    <p class="text-muted mb-0">Nenhum lançamento enviado ainda.</p>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Enviado em</th>
+                                    <th>Fornecedor</th>
+                                    <th>Categoria</th>
+                                    <th>Vencimento</th>
+                                    <th class="text-end">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($historico as $h): ?>
+                                <tr>
+                                    <td class="text-nowrap"><?= htmlspecialchars(!empty($h['ts']) ? date('d/m/Y H:i', (int) $h['ts']) : '—') ?></td>
+                                    <td>
+                                        <?= htmlspecialchars($h['fornecedor'] ?? '—') ?>
+                                        <?php if (!empty($h['descricao'])): ?>
+                                            <div class="text-muted small"><?= htmlspecialchars($h['descricao']) ?></div>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?= htmlspecialchars($h['categoria'] ?? '') ?: '<span class="text-muted">—</span>' ?>
+                                        <?php if (!empty($h['centro'])): ?>
+                                            <div class="text-muted small"><?= htmlspecialchars($h['centro']) ?></div>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="text-nowrap"><?= htmlspecialchars(financeiro_data_br($h['data'] ?? '')) ?></td>
+                                    <td class="text-end text-nowrap">R$ <?= htmlspecialchars(financeiro_valor_br($h['valor'] ?? '0')) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted small mb-0 mt-3">
+                        Registrado por esta integração. Lançamentos feitos direto no Cardápio Web não aparecem aqui.
+                    </p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+<script>
+// Testa a conexão sozinho ao abrir a página e reflete o resultado na bolinha.
+// Verde pulsando = token ok; vermelho = falhou (normalmente o refresh token
+// venceu — é só abrir a engrenagem e colar o novo).
+(function () {
+    const dot = document.getElementById('status-dot');
+    if (!dot) { return; }
+    fetch('controller_financeiro.php?acao=status', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            dot.classList.remove('status-checando');
+            if (d && d.ok) {
+                dot.classList.add('status-ok');
+                dot.title = 'Conectado ao Cardápio Web — ' + d.contas + ' contas, ' + d.categorias +
+                            ' categorias, ' + d.fornecedores + ' fornecedores, ' + d.formas +
+                            ' formas de pagamento, ' + d.centros + ' centros de custo.';
+            } else {
+                dot.classList.add('status-erro');
+                dot.title = 'Falha na conexão: ' + ((d && d.erro) || 'erro desconhecido') +
+                            ' — abra a engrenagem e atualize as credenciais.';
+            }
+        })
+        .catch(function (e) {
+            dot.classList.remove('status-checando');
+            dot.classList.add('status-erro');
+            dot.title = 'Não consegui verificar a conexão: ' + e;
+        });
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/scripts/choices.min.js"></script>
 <script>
 // Selects bonitos (conta / categoria / centro de custo). Se o CDN cair, o

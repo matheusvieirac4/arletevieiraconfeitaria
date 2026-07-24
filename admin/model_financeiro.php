@@ -202,6 +202,15 @@ function financeiro_valor_br($valor): string
     return number_format($n, 2, ',', '.');
 }
 
+/** Formata uma data ISO (YYYY-MM-DD) para exibição em BR. Vazio vira "—". */
+function financeiro_data_br(string $iso): string
+{
+    $iso = trim($iso);
+    if ($iso === '') { return '—'; }
+    $d = \DateTime::createFromFormat('Y-m-d', substr($iso, 0, 10));
+    return $d ? $d->format('d/m/Y') : $iso;
+}
+
 /**
  * Converte o valor digitado pelo usuário (formato BR) para o formato do envio:
  * despesa => sempre negativo, ponto como decimal (ex.: "3.135,58" -> "-3135.58").
@@ -768,12 +777,20 @@ function financeiro_enviado_duplicado(string $supplier, string $value, string $d
     return null;
 }
 
-/** Registra um envio bem-sucedido e poda o log para os últimos 7 dias. */
-function financeiro_enviado_registrar(string $supplier, string $value, string $data): void
+/** Quantos envios o log guarda (também é o tamanho do histórico na tela). */
+const FINANCEIRO_ENVIADOS_MAX = 100;
+
+/**
+ * Registra um envio bem-sucedido, mantendo os últimos FINANCEIRO_ENVIADOS_MAX.
+ * A dedup só olha os últimos 7 dias (ver financeiro_enviado_duplicado); o resto
+ * fica para o histórico na tela.
+ *
+ * @param array $extra Campos opcionais do lançamento (descrição, categoria...).
+ */
+function financeiro_enviado_registrar(string $supplier, string $value, string $data, array $extra = []): void
 {
-    $limite = time() - 7 * 86400;
-    $lista = array_values(array_filter(financeiro_enviados_listar(), fn($e) => ($e['ts'] ?? 0) >= $limite));
-    $lista[] = [
+    $lista = financeiro_enviados_listar();
+    $lista[] = $extra + [
         'assinatura' => financeiro_enviado_assinatura($supplier, $value, $data),
         'fornecedor' => $supplier,
         'valor'      => $value,
@@ -781,6 +798,9 @@ function financeiro_enviado_registrar(string $supplier, string $value, string $d
         'ts'         => time(),
         'em'         => date('c'),
     ];
+    if (count($lista) > FINANCEIRO_ENVIADOS_MAX) {
+        $lista = array_slice($lista, -FINANCEIRO_ENVIADOS_MAX);
+    }
     $dir = dirname(financeiro_enviados_path());
     financeiro_data_dir();
     file_put_contents(financeiro_enviados_path(), json_encode($lista, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
