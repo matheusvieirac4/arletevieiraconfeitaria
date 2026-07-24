@@ -368,7 +368,7 @@ $datalist = function (string $id, array $opts): string {
                         chips.appendChild(s);
                     };
                     if (anexoXml) add('📄 ' + anexoXml.name, () => { anexoXml = null; fileXml.value = ''; });
-                    if (anexoFoto) add('🖼️ ' + anexoFoto.name, () => { anexoFoto = null; fileFoto.value = ''; });
+                    if (anexoFoto) add('🖼️ ' + anexoFoto.name, () => { anexoFoto = null; fileFoto.value = ''; camInput.value = ''; });
                 }
 
                 document.getElementById('cp-add-xml').onclick = (e) => { e.preventDefault(); fileXml.click(); };
@@ -453,12 +453,18 @@ $datalist = function (string $id, array $opts): string {
                     showMsg('A IA não está configurada e não encontrei QR nessa foto.', 'warning');
                 }
 
-                // Botão de câmera no topo: abre a câmera direto e já processa a foto.
+                // Botão de câmera (atalho): abre a câmera direto e ANEXA a foto —
+                // não processa na hora, para dar tempo de escrever a instrução
+                // (ex.: "vale para Matheus") antes de tocar em Enviar.
                 const camInput = document.getElementById('cp-cam-input');
                 document.getElementById('cp-cam-quick').onclick = () => camInput.click();
                 camInput.onchange = () => {
                     const f = camInput.files[0];
-                    if (f) { processarFoto(f, txt.value.trim()); }
+                    if (!f) { return; }
+                    anexoFoto = f; anexoXml = null; fileXml.value = '';
+                    renderChips();
+                    showMsg('Foto anexada. Se quiser, escreva uma instrução (ex.: “vale para Matheus”) e toque em Enviar.', 'info');
+                    txt.focus();
                 };
 
                 btnEnviar.onclick = async () => {
