@@ -432,26 +432,25 @@ $datalist = function (string $id, array $opts): string {
                     btnEnviar.disabled = false;
                 }
 
-                // Processa uma foto de cupom.
-                // Sem instrução escrita: tenta o QR primeiro, que é grátis e exato.
-                // COM instrução escrita: vai direto para a IA de visão — o caminho
-                // do QR só lê a chave de acesso e descartaria o que você digitou
-                // (ex.: "cupom da padaria, mas é vale do Matheus").
+                // Processa uma FOTO de cupom: a visão computacional vem primeiro.
+                // A foto do cupom inteiro já traz fornecedor, valor, itens e forma
+                // de pagamento; o QR só devolve a chave de acesso, e desde que o
+                // SEFAZ passou a exigir captcha a chave quase não rende dado. Por
+                // isso o QR ficou como plano B (IA não configurada ou falhou).
+                // Escanear QR ao vivo continua tendo o fluxo dele, sem foto.
                 async function processarFoto(file, textoExtra) {
                     const instrucao = (textoExtra || '').trim();
-                    travar('Lendo…');
-                    if (instrucao && IA_ON) {
-                        showMsg('Lendo o cupom junto com a sua instrução…', 'info');
-                        travar('Lendo cupom…');
+                    travar('Lendo cupom…');
+                    if (IA_ON) {
+                        showMsg(instrucao ? 'Lendo o cupom junto com a sua instrução…' : 'Lendo o cupom…', 'info');
                         enviarCupom(file, instrucao);
                         return;
                     }
-                    showMsg('Processando a foto do cupom…', 'info');
+                    showMsg('Procurando o QR Code na foto…', 'info');
                     const qr = await lerQrDaImagem(file);
-                    if (qr) { enviarChave(qr); return; }          // QR → chave (grátis)
-                    if (IA_ON) { travar('Lendo cupom…'); enviarCupom(file, instrucao); return; }
+                    if (qr) { enviarChave(qr); return; }
                     destravar();
-                    showMsg('Não encontrei QR nessa foto e a IA não está configurada.', 'warning');
+                    showMsg('A IA não está configurada e não encontrei QR nessa foto.', 'warning');
                 }
 
                 // Botão de câmera no topo: abre a câmera direto e já processa a foto.
@@ -653,7 +652,7 @@ $datalist = function (string $id, array $opts): string {
                                 <input type="text" name="supplier" class="form-control" list="dl-fornecedores" value="<?= htmlspecialchars($l['supplier']) ?>">
                                 <div class="form-text">
                                     <?php if ($fornMatch === 'cnpj' || $fornMatch === 'regra'): ?>
-                                        ✓ Fornecedor já cadastrado (encontrado pelo CNPJ).
+                                        ✓ Já cadastrado (encontrado pelo documento).
                                     <?php elseif ($fornMatch === 'nome'): ?>
                                         ✓ Correspondência por semelhança com um fornecedor existente — confira se é o mesmo.
                                     <?php else: ?>
@@ -662,9 +661,20 @@ $datalist = function (string $id, array $opts): string {
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">CNPJ do fornecedor</label>
+                                <?php
+                                $docForn = preg_replace('/\D/', '', (string) ($revisao['fornecedor']['cnpj'] ?? ''));
+                                $ehCpf   = strlen($docForn) === 11;
+                                ?>
+                                <label class="form-label">CNPJ / CPF do fornecedor</label>
                                 <input type="text" name="supplier_cnpj" class="form-control" value="<?= htmlspecialchars($revisao['fornecedor']['cnpj'] ?? '') ?>" placeholder="opcional">
-                                <div class="form-text">Se for fornecedor novo, ele será cadastrado com este CNPJ (casamento futuro exato).</div>
+                                <div class="form-text">
+                                    <?php if ($ehCpf): ?>
+                                        CPF (11 dígitos) — será cadastrado como <strong>pessoa</strong>.
+                                    <?php else: ?>
+                                        Fornecedor novo é cadastrado com este documento (casamento futuro exato).
+                                        <strong>CNPJ</strong> para empresa, <strong>CPF</strong> para pessoa — ex.: vale de colaborador.
+                                    <?php endif; ?>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Descrição</label>
