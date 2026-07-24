@@ -217,9 +217,15 @@ $datalist = function (string $id, array $opts): string {
 
             <!-- Estado 1: composer (texto + anexos: XML / foto / câmera) -->
             <div class="card" style="max-width: 820px;">
-                <div class="card-header fw-semibold">Novo lançamento</div>
+                <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                    <span>Novo lançamento</span>
+                    <button type="button" id="cp-cam-quick" class="btn btn-primary btn-sm" title="Tirar foto do cupom">
+                        <i class="align-middle" data-feather="camera"></i> Foto do cupom
+                    </button>
+                </div>
                 <div class="card-body">
                     <div id="cp-msg"></div>
+                    <input type="file" id="cp-cam-input" accept="image/*" capture="environment" class="d-none">
                     <div id="cp-chips" class="d-flex flex-wrap gap-2 mb-2"></div>
                     <textarea id="cp-text" class="form-control mb-2" rows="2"
                         placeholder="Descreva a compra (ex.: 'paguei 84,90 no pix, conta Sicredi, embalagens da SOS')&#10;ou anexe um XML / foto do QR pelo botão +"></textarea>
@@ -361,17 +367,28 @@ $datalist = function (string $id, array $opts): string {
                     btnEnviar.disabled = false;
                 }
 
+                // Processa uma foto de cupom: 1º tenta QR (grátis), senão IA de visão.
+                async function processarFoto(file, textoExtra) {
+                    travar('Lendo…');
+                    showMsg('Processando a foto do cupom…', 'info');
+                    const qr = await lerQrDaImagem(file);
+                    if (qr) { enviarChave(qr); return; }          // QR → chave (grátis)
+                    if (IA_ON) { travar('Lendo cupom…'); enviarCupom(file, textoExtra || ''); return; }
+                    destravar();
+                    showMsg('Não encontrei QR nessa foto e a IA não está configurada.', 'warning');
+                }
+
+                // Botão de câmera no topo: abre a câmera direto e já processa a foto.
+                const camInput = document.getElementById('cp-cam-input');
+                document.getElementById('cp-cam-quick').onclick = () => camInput.click();
+                camInput.onchange = () => {
+                    const f = camInput.files[0];
+                    if (f) { processarFoto(f, txt.value.trim()); }
+                };
+
                 btnEnviar.onclick = async () => {
                     if (anexoXml) { travar(); enviarXml(anexoXml); return; }
-                    if (anexoFoto) {
-                        travar('Lendo…');
-                        const qr = await lerQrDaImagem(anexoFoto);
-                        if (qr) { enviarChave(qr); return; }          // QR → chave (grátis)
-                        if (IA_ON) { travar('Lendo cupom…'); enviarCupom(anexoFoto, txt.value.trim()); return; }
-                        destravar();
-                        showMsg('Não encontrei QR nessa foto e a IA não está configurada.', 'warning');
-                        return;
-                    }
+                    if (anexoFoto) { processarFoto(anexoFoto, txt.value.trim()); return; }
                     if (txt.value.trim()) {
                         if (IA_ON) { travar('Lendo…'); enviarTexto(txt.value.trim()); return; }
                         showMsg('A leitura de texto precisa da IA (Gemini) configurada.', 'warning');
