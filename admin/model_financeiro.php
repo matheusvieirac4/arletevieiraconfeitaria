@@ -365,11 +365,55 @@ function financeiro_nsu_ultimo(): string
     return '0';
 }
 
-function financeiro_nsu_salvar(string $ultNSU): void
+/** Lê o estado do NSU preservando as demais chaves do arquivo. */
+function financeiro_nsu_state(): array
+{
+    $p = financeiro_nsu_state_path();
+    if (!is_file($p)) { return []; }
+    $d = json_decode((string) file_get_contents($p), true);
+    return is_array($d) ? $d : [];
+}
+
+function financeiro_nsu_state_gravar(array $state): void
 {
     $dir = dirname(financeiro_nsu_state_path());
     if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
-    file_put_contents(financeiro_nsu_state_path(), json_encode(['ultNSU' => $ultNSU, 'em' => date('c')]));
+    file_put_contents(financeiro_nsu_state_path(), json_encode($state, JSON_PRETTY_PRINT));
+}
+
+function financeiro_nsu_salvar(string $ultNSU): void
+{
+    $s = financeiro_nsu_state();
+    $s['ultNSU'] = $ultNSU;
+    $s['em'] = date('c');
+    financeiro_nsu_state_gravar($s);
+}
+
+/** Intervalo mínimo entre consultas ao SEFAZ (anti "consumo indevido"). */
+function financeiro_sefaz_intervalo(): int { return 3600; } // 1 hora
+
+/** Timestamp (unix) da última consulta feita ao SEFAZ. 0 = nunca. */
+function financeiro_sefaz_ultima_execucao(): int
+{
+    $s = financeiro_nsu_state();
+    return isset($s['ultima_execucao']) ? (int) $s['ultima_execucao'] : 0;
+}
+
+/** Registra que acabamos de consultar o SEFAZ (usado para a janela de espera). */
+function financeiro_sefaz_marcar_execucao(): void
+{
+    $s = financeiro_nsu_state();
+    $s['ultima_execucao'] = time();
+    $s['ultima_execucao_em'] = date('c');
+    financeiro_nsu_state_gravar($s);
+}
+
+/** Segundos que faltam para poder consultar de novo (0 = liberado). */
+function financeiro_sefaz_espera_restante(): int
+{
+    $u = financeiro_sefaz_ultima_execucao();
+    if ($u <= 0) { return 0; }
+    return max(0, financeiro_sefaz_intervalo() - (time() - $u));
 }
 
 function financeiro_pendentes_listar(): array
@@ -452,6 +496,7 @@ function financeiro_sefaz_puxar(int $maxPaginas = 10): array
 
     do {
         $r = $sefaz->consultarPorNSU($ult);
+        financeiro_sefaz_marcar_execucao(); // conta para a janela de 1h
         $cStat = $r['cStat']; $xMotivo = $r['xMotivo'];
         $maxNSU = $r['maxNSU'] !== '' ? $r['maxNSU'] : $maxNSU;
         $pag++;

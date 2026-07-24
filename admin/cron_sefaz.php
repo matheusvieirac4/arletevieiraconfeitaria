@@ -25,6 +25,14 @@ if (!financeiro_sefaz_configurado()) {
     exit;
 }
 
+// Respeita a janela de 1h do SEFAZ (evita "consumo indevido" se o cron
+// disparar cedo ou logo após uma busca manual pelo painel).
+$espera = financeiro_sefaz_espera_restante();
+if ($espera > 0) {
+    echo date('c') . " — aguardando janela do SEFAZ (faltam " . ceil($espera / 60) . " min). Nada a fazer.\n";
+    exit;
+}
+
 try {
     $r = financeiro_sefaz_puxar();
     echo date('c') . " OK — novas: {$r['novas']} | cStat {$r['cStat']} ({$r['xMotivo']}) | "

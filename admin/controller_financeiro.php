@@ -180,6 +180,11 @@ if ($acao === 'pendente_descartar') {
 
 // -------- Rodar o puxador do SEFAZ manualmente (botão) --------
 if ($acao === 'sefaz_puxar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $espera = financeiro_sefaz_espera_restante();
+    if ($espera > 0) {
+        $min = (int) ceil($espera / 60);
+        financeiro_redirect('warning', "O SEFAZ limita uma consulta por hora. Aguarde mais {$min} minuto(s) — o cron continua buscando sozinho.");
+    }
     try {
         $r = financeiro_sefaz_puxar();
         financeiro_redirect('success', "Busca no SEFAZ concluída — {$r['novas']} nota(s) nova(s). (cStat {$r['cStat']}: {$r['xMotivo']})");

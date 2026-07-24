@@ -20,8 +20,10 @@ if (isset($_SESSION['financeiro_teste'])) {
 $revisao = $_SESSION['financeiro_revisao'] ?? null;
 
 // Fila de notas recebidas automaticamente do SEFAZ.
-$sefazOn   = financeiro_sefaz_configurado();
-$pendentes = financeiro_pendentes_listar();
+$sefazOn     = financeiro_sefaz_configurado();
+$pendentes   = financeiro_pendentes_listar();
+$sefazEspera = financeiro_sefaz_espera_restante();      // segundos até liberar
+$sefazUltima = financeiro_sefaz_ultima_execucao();      // timestamp da última busca
 
 // Se há revisão, busca os cadastros para montar os campos.
 $listas = ['contas' => [], 'categorias' => [], 'fornecedores' => [], 'formas' => [], 'centros' => []];
@@ -148,9 +150,13 @@ $datalist = function (string $id, array $opts): string {
                 <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
                     <span>Notas recebidas do SEFAZ <?php if ($pendentes): ?><span class="badge bg-danger"><?= count($pendentes) ?></span><?php endif; ?></span>
                     <?php if ($sefazOn): ?>
-                    <form method="post" action="controller_financeiro.php?acao=sefaz_puxar" class="m-0">
-                        <button class="btn btn-outline-secondary btn-sm" type="submit">Buscar agora</button>
-                    </form>
+                    <div class="d-flex align-items-center gap-2">
+                        <small class="text-muted fw-normal" id="sefaz-espera" data-restam="<?= (int) $sefazEspera ?>"></small>
+                        <form method="post" action="controller_financeiro.php?acao=sefaz_puxar" class="m-0">
+                            <button id="sefaz-btn" class="btn btn-outline-secondary btn-sm" type="submit"
+                                    <?= $sefazEspera > 0 ? 'disabled' : '' ?>>Buscar agora</button>
+                        </form>
+                    </div>
                     <?php endif; ?>
                 </div>
                 <div class="card-body">
@@ -174,8 +180,39 @@ $datalist = function (string $id, array $opts): string {
                             </tbody>
                         </table>
                     <?php endif; ?>
+                    <?php if ($sefazOn && $sefazUltima > 0): ?>
+                        <p class="text-muted small mb-0 mt-3">
+                            Última busca: <?= htmlspecialchars(date('d/m/Y H:i', $sefazUltima)) ?>.
+                            O SEFAZ permite uma consulta por hora — o cron faz isso sozinho.
+                        </p>
+                    <?php endif; ?>
                 </div>
             </div>
+            <?php if ($sefazOn): ?>
+            <script>
+            (function () {
+                const el = document.getElementById('sefaz-espera');
+                const btn = document.getElementById('sefaz-btn');
+                if (!el || !btn) { return; }
+                let restam = parseInt(el.dataset.restam || '0', 10);
+                const fmt = (s) => {
+                    const m = Math.floor(s / 60), r = s % 60;
+                    return String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
+                };
+                (function tick() {
+                    if (restam > 0) {
+                        el.textContent = 'Liberado em ' + fmt(restam);
+                        btn.disabled = true;
+                        restam--;
+                        setTimeout(tick, 1000);
+                    } else {
+                        el.textContent = 'Pronto para buscar';
+                        btn.disabled = false;
+                    }
+                })();
+            })();
+            </script>
+            <?php endif; ?>
             <?php endif; ?>
 
             <!-- Estado 1: composer (texto + anexos: XML / foto / câmera) -->
