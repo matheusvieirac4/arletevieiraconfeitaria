@@ -409,14 +409,21 @@ function financeiro_contas_abertas_semelhantes(CardapioWebApi $api, string $supp
     foreach (financeiro_extrair_lista($resp) as $t) {
         if (!is_array($t)) { continue; }
 
-        // 1) Só em aberto: sem data de pagamento (settlement).
-        $sett = $t['settlement_date'] ?? ($t['settled_at'] ?? null);
-        if (!empty($sett)) { continue; }
+        // 1) Só em aberto. O CW marca isso em "status" ("pending" = em aberto,
+        //    "settled" = paga). ATENÇÃO: settlement_date vem preenchido (com o
+        //    vencimento) mesmo em contas pendentes, então NÃO serve para isso.
+        $status = strtolower(trim((string) ($t['status'] ?? '')));
+        if ($status !== '') {
+            if ($status !== 'pending') { continue; }   // paga/cancelada/etc.
+        } else {
+            $sett = $t['settlement_date'] ?? ($t['settled_at'] ?? null);
+            if (!empty($sett)) { continue; }           // fallback se não vier status
+        }
 
         // 2) Fornecedor: por id quando ambos existem; senão por nome. Sem
         //    confirmação de fornecedor, descarta (evita sugerir conta alheia).
         $tid   = isset($t['supplier_id']) ? (int) $t['supplier_id'] : (int) ($t['supplier']['id'] ?? 0);
-        $tnome = (string) ($t['supplier']['name'] ?? ($t['supplier_name'] ?? ''));
+        $tnome = (string) ($t['supplier_name'] ?? ($t['supplier']['name'] ?? ''));
         $bate  = false;
         if ($supplierId !== null && $tid > 0) {
             $bate = ($tid === $supplierId);
@@ -439,6 +446,8 @@ function financeiro_contas_abertas_semelhantes(CardapioWebApi $api, string $supp
             'valor_bate' => $valorBate,
         ];
     }
+    // Ordena as candidatas por vencimento (mais recente primeiro).
+    usort($out, fn($a, $b) => strcmp($b['vencimento'], $a['vencimento']));
     return $out;
 }
 
