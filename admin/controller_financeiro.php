@@ -311,5 +311,54 @@ if ($acao === 'importar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     financeiro_redirect('success', 'Lançamento enviado com sucesso ao Cardápio Web! Confira em Contas a pagar.');
 }
 
+// -------- Dar baixa numa conta a pagar já existente (recorrência) --------
+// Em vez de criar um lançamento novo, marca como paga a conta que já estava no
+// Cardápio Web. Evita duplicar aluguel/luz/água etc. já lançados por recorrência.
+if ($acao === 'pagar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $nota = $_SESSION['financeiro_revisao'] ?? null;
+    $tid  = (int) ($_POST['transaction_id'] ?? 0);
+    $campo = fn(string $k) => trim((string) ($_POST[$k] ?? ''));
+    $contaNome = $campo('account');
+    $formaNome = $campo('payment_method');
+    $dataPg    = $campo('settlement_date') ?: date('Y-m-d');
+
+    if ($tid <= 0) {
+        financeiro_redirect('danger', 'Não identifiquei a conta a marcar como paga. Recarregue e tente de novo.');
+    }
+    if ($contaNome === '' || $formaNome === '') {
+        financeiro_redirect('danger', 'Para dar baixa, selecione a Conta e a Forma de pagamento.');
+    }
+
+    try {
+        $api = financeiro_api();
+        $contaId = financeiro_id_por_nome($api->listarContas(), $contaNome);
+        $formaId = financeiro_id_por_nome($api->listarFormasPagamento(), $formaNome);
+        if (!$contaId) { financeiro_redirect('danger', "Conta \"{$contaNome}\" não encontrada no Cardápio Web."); }
+        if (!$formaId) { financeiro_redirect('danger', "Forma de pagamento \"{$formaNome}\" não encontrada no Cardápio Web."); }
+        $api->pagarTransacao($tid, $contaId, $formaId, $dataPg);
+    } catch (\Throwable $e) {
+        financeiro_redirect('danger', 'Falha ao marcar como paga: ' . $e->getMessage());
+    }
+
+    // Registra no histórico como baixa (não é lançamento novo).
+    financeiro_enviado_registrar(
+        (string) ($nota['fornecedor']['nome'] ?? $campo('supplier')),
+        (string) ($nota['valor_total'] ?? ''),
+        $dataPg,
+        ['descricao' => 'Baixa de conta existente (recorrência)', 'conta' => $contaNome, 'forma' => $formaNome, 'baixa' => true]
+    );
+    // Idempotência: a nota do comprovante fica marcada como processada.
+    if (!empty($nota['chave'])) {
+        financeiro_marcar_processada($nota['chave'], [
+            'numero'     => $nota['numero'] ?? '',
+            'fornecedor' => $nota['fornecedor']['nome'] ?? '',
+            'valor'      => $nota['valor_total'] ?? '',
+        ]);
+        financeiro_pendente_remover($nota['chave']);
+    }
+    unset($_SESSION['financeiro_revisao']);
+    financeiro_redirect('success', 'Conta marcada como paga no Cardápio Web — sem duplicar. Confira em Contas a pagar.');
+}
+
 header('Location: financeiro.php');
 exit;

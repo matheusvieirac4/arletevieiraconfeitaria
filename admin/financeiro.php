@@ -559,13 +559,32 @@ $datalist = function (string $id, array $opts): string {
             // CNPJ/CPF quando existe e para saber quando ele está em branco.
             $fornCasado = ($fornMatch !== 'nenhum');
             $fornDocExistente = '';
+            $fornIdExistente  = null;
             if ($fornCasado && !empty($fornecedoresFull)) {
                 $alvoNome = financeiro_normalizar_nome($l['supplier']);
                 foreach ($fornecedoresFull as $f) {
                     if (financeiro_normalizar_nome((string) ($f['name'] ?? '')) === $alvoNome) {
                         $fornDocExistente = preg_replace('/\D/', '', (string) ($f['document'] ?? ''));
+                        $fornIdExistente  = isset($f['id']) ? (int) $f['id'] : null;
                         break;
                     }
+                }
+            }
+
+            // Detecta conta a pagar já existente (recorrência) para não duplicar.
+            // Só faz sentido se o fornecedor já existe no CW. Falha => lista vazia.
+            $contasAbertas = [];
+            if ($fornCasado && $configurado && !$erroListas) {
+                try {
+                    $contasAbertas = financeiro_contas_abertas_semelhantes(
+                        financeiro_api(),
+                        (string) $l['supplier'],
+                        $fornIdExistente,
+                        (string) ($revisao['valor_total'] ?? $l['value']),
+                        (string) ($l['due_date'] ?: ($revisao['emissao'] ?? ''))
+                    );
+                } catch (\Throwable $e) {
+                    $contasAbertas = [];
                 }
             }
             ?>
@@ -583,6 +602,59 @@ $datalist = function (string $id, array $opts): string {
                     <?php endforeach; ?>
                     <?php if ($regraAplicada): ?>
                         <div class="alert alert-info py-2">✓ Classificação preenchida automaticamente com base em compras anteriores deste fornecedor. Confira e ajuste se necessário.</div>
+                    <?php endif; ?>
+
+                    <?php if ($contasAbertas): ?>
+                        <div class="alert alert-warning">
+                            <div class="fw-semibold mb-1">⚠ Esta conta talvez já exista no Cardápio Web (recorrência).</div>
+                            Encontrei <?= count($contasAbertas) ?> conta(s) a pagar <strong>em aberto</strong> com fornecedor e valor
+                            parecidos. Se for a mesma, <strong>marque como paga</strong> em vez de criar outra — assim não duplica.
+                            <form method="post" action="controller_financeiro.php?acao=pagar" class="mt-3" data-no-loading="1">
+                                <input type="hidden" name="supplier" value="<?= htmlspecialchars($l['supplier']) ?>">
+                                <?php foreach ($contasAbertas as $i => $c): ?>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="transaction_id"
+                                               id="conta-<?= (int) $c['id'] ?>" value="<?= (int) $c['id'] ?>" <?= $i === 0 ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="conta-<?= (int) $c['id'] ?>">
+                                            <?= htmlspecialchars($c['descricao'] ?: $c['fornecedor'] ?: 'Conta a pagar') ?>
+                                            — <strong>R$ <?= htmlspecialchars(financeiro_valor_br($c['valor'])) ?></strong>
+                                            <?php if ($c['vencimento']): ?>· vence <?= htmlspecialchars(financeiro_data_br($c['vencimento'])) ?><?php endif; ?>
+                                        </label>
+                                    </div>
+                                <?php endforeach; ?>
+                                <div class="row g-2 mt-2" style="max-width: 640px;">
+                                    <div class="col-sm-4">
+                                        <label class="form-label small mb-1">Conta</label>
+                                        <select name="account" class="form-select form-select-sm" required>
+                                            <option value="">Selecione...</option>
+                                            <?php foreach ($listas['contas'] as $c): ?>
+                                                <option value="<?= htmlspecialchars($c, ENT_QUOTES) ?>" <?= ($l['account'] === $c ? 'selected' : '') ?>><?= htmlspecialchars($c) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <label class="form-label small mb-1">Forma de pagamento</label>
+                                        <select name="payment_method" class="form-select form-select-sm" required>
+                                            <option value="">Selecione...</option>
+                                            <?php foreach ($listas['formas'] as $fm): ?>
+                                                <option value="<?= htmlspecialchars($fm, ENT_QUOTES) ?>" <?= ($l['payment_method'] === $fm ? 'selected' : '') ?>><?= htmlspecialchars($fm) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <label class="form-label small mb-1">Data do pagamento</label>
+                                        <input type="date" name="settlement_date" class="form-control form-control-sm"
+                                               value="<?= htmlspecialchars($l['settlement_date'] ?: date('Y-m-d')) ?>" required>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-success btn-sm mt-3"
+                                        onclick="return confirm('Marcar a conta selecionada como paga no Cardápio Web?');">
+                                    Marcar como paga (não duplica)
+                                </button>
+                                <div class="form-text mt-1">O valor da conta não muda na baixa — só entra conta, forma e data.</div>
+                            </form>
+                        </div>
+                        <p class="text-muted small">Não é a mesma conta? Ignore o aviso acima e crie o lançamento normalmente abaixo.</p>
                     <?php endif; ?>
 
                     <form method="post" action="controller_financeiro.php?acao=importar">

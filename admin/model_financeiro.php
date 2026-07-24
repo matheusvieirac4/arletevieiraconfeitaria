@@ -349,6 +349,87 @@ function financeiro_fornecedor_garantir(CardapioWebApi $api, string $nome, strin
     }
 }
 
+/** Acha o id de um item de lookup pelo nome (case-insensitive). Null se não achar. */
+function financeiro_id_por_nome($resp, string $nome): ?int
+{
+    $alvo = mb_strtolower(trim($nome), 'UTF-8');
+    if ($alvo === '') { return null; }
+    foreach (financeiro_extrair_lista($resp) as $it) {
+        if (is_array($it) && mb_strtolower(trim((string) ($it['name'] ?? '')), 'UTF-8') === $alvo) {
+            return isset($it['id']) ? (int) $it['id'] : null;
+        }
+    }
+    return null;
+}
+
+/**
+ * Procura contas a pagar JÁ EXISTENTES no Cardápio Web (ex.: criadas por
+ * recorrência) que casem com o comprovante em revisão, para evitar duplicar.
+ * Casa por: em aberto (sem data de pagamento) + valor próximo + fornecedor
+ * (por id quando dá, senão por nome) numa janela ao redor do vencimento.
+ *
+ * NUNCA lança e NUNCA dá baixa — só devolve candidatos para o usuário confirmar.
+ *
+ * @return array<int,array{id:int,descricao:string,valor:string,vencimento:string,fornecedor:string}>
+ */
+function financeiro_contas_abertas_semelhantes(CardapioWebApi $api, string $supplierNome, ?int $supplierId, string $valor, string $venc): array
+{
+    $alvoVal = abs((float) str_replace(',', '.', (string) $valor));
+    if ($alvoVal <= 0) { return []; }
+
+    $ts   = strtotime($venc) ?: time();
+    $iniQ = date('Y-m-d', strtotime(date('Y-m-01', $ts) . ' -7 days'));
+    $fimQ = date('Y-m-d', strtotime(date('Y-m-t',  $ts) . ' +7 days'));
+
+    try {
+        $resp = $api->listarTransacoes([
+            'q' => [
+                'activity_type_eq' => 'out',
+                'due_date_gteq'    => $iniQ,
+                'due_date_lteq'    => $fimQ,
+            ],
+            'page'     => 1,
+            'per_page' => 100,
+        ]);
+    } catch (\Throwable $e) {
+        return [];   // falha na consulta nunca trava o fluxo normal
+    }
+
+    $alvoForn = financeiro_normalizar_nome($supplierNome);
+    $out = [];
+    foreach (financeiro_extrair_lista($resp) as $t) {
+        if (!is_array($t)) { continue; }
+
+        // 1) Só em aberto: sem data de pagamento (settlement).
+        $sett = $t['settlement_date'] ?? ($t['settled_at'] ?? null);
+        if (!empty($sett)) { continue; }
+
+        // 2) Valor próximo (tolera centavos de diferença).
+        $v = $t['value'] ?? ($t['amount'] ?? null);
+        if ($v === null) { continue; }
+        if (abs(abs((float) str_replace(',', '.', (string) $v)) - $alvoVal) > 0.05) { continue; }
+
+        // 3) Fornecedor: por id quando ambos existem; senão por nome; senão
+        //    aceita (o usuário confirma) para não perder a detecção.
+        $tid  = isset($t['supplier_id']) ? (int) $t['supplier_id'] : (int) ($t['supplier']['id'] ?? 0);
+        $tnome = (string) ($t['supplier']['name'] ?? ($t['supplier_name'] ?? ''));
+        if ($supplierId && $tid) {
+            if ($tid !== $supplierId) { continue; }
+        } elseif ($alvoForn !== '' && $tnome !== '') {
+            if (financeiro_normalizar_nome($tnome) !== $alvoForn) { continue; }
+        }
+
+        $out[] = [
+            'id'         => (int) ($t['id'] ?? 0),
+            'descricao'  => (string) ($t['description'] ?? ''),
+            'valor'      => (string) $v,
+            'vencimento' => (string) ($t['due_date'] ?? ''),
+            'fornecedor' => $tnome,
+        ];
+    }
+    return $out;
+}
+
 /** Extrai os nomes (campo "name") de um lookup, ordenados. */
 function financeiro_nomes($resp): array
 {

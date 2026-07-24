@@ -148,6 +148,35 @@ class CardapioWebApi
         return $this->post('/financial/transactions/import', ['data' => array_values($lancamentos)]);
     }
 
+    /**
+     * Lista lançamentos (contas a pagar/receber). Usa filtros ransack: passe
+     * ['q' => ['activity_type_eq' => 'out', 'due_date_gteq' => 'YYYY-MM-DD', ...]].
+     */
+    public function listarTransacoes(array $query): array
+    {
+        return $this->get('/financial/transactions?' . http_build_query($query));
+    }
+
+    /**
+     * Dá baixa (marca como paga) numa conta a pagar existente.
+     * PUT /financial/transactions/{id}/pay — o valor da conta NÃO muda aqui;
+     * só entram conta, forma, data e, se houver, juros/multa/desconto.
+     */
+    public function pagarTransacao(int $id, int $contaId, int $formaId, string $settlementDate, array $extra = []): array
+    {
+        return $this->put('/financial/transactions/' . $id . '/pay', [
+            'transaction' => [
+                'fin_account_id'        => $contaId,
+                'fin_payment_method_id' => $formaId,
+                'settlement_date'       => $settlementDate,
+                'fee'                   => $extra['fee']      ?? null,
+                'fine'                  => $extra['fine']     ?? null,
+                'interest'              => $extra['interest'] ?? null,
+                'discount'              => $extra['discount'] ?? null,
+            ],
+        ]);
+    }
+
     /** Cria um fornecedor com CNPJ/CPF (para casamento futuro por documento). */
     public function criarFornecedor(string $nome, string $documento): array
     {
