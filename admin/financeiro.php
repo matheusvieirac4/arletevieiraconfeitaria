@@ -547,6 +547,21 @@ $datalist = function (string $id, array $opts): string {
                     $fornMatch = $casa['match'];
                 }
             }
+
+            // Documento do cadastro casado: procura o fornecedor final na lista e
+            // lê o document que ele já tem no Cardápio Web. Serve para PUXAR o
+            // CNPJ/CPF quando existe e para saber quando ele está em branco.
+            $fornCasado = ($fornMatch !== 'nenhum');
+            $fornDocExistente = '';
+            if ($fornCasado && !empty($fornecedoresFull)) {
+                $alvoNome = financeiro_normalizar_nome($l['supplier']);
+                foreach ($fornecedoresFull as $f) {
+                    if (financeiro_normalizar_nome((string) ($f['name'] ?? '')) === $alvoNome) {
+                        $fornDocExistente = preg_replace('/\D/', '', (string) ($f['document'] ?? ''));
+                        break;
+                    }
+                }
+            }
             ?>
             <div class="card" style="max-width: 820px;">
                 <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
@@ -662,13 +677,24 @@ $datalist = function (string $id, array $opts): string {
                             </div>
                             <div class="col-md-6">
                                 <?php
-                                $docForn = preg_replace('/\D/', '', (string) ($revisao['fornecedor']['cnpj'] ?? ''));
-                                $ehCpf   = strlen($docForn) === 11;
+                                // Documento mostrado no campo:
+                                //  - fornecedor casado -> o que ele já tem no CW (travado);
+                                //  - fornecedor novo   -> o que veio da nota (editável).
+                                $docNota  = preg_replace('/\D/', '', (string) ($revisao['fornecedor']['cnpj'] ?? ''));
+                                $docCampo = $fornCasado ? $fornDocExistente : $docNota;
+                                $ehCpf    = strlen($docCampo) === 11;
                                 ?>
                                 <label class="form-label">CNPJ / CPF do fornecedor</label>
-                                <input type="text" name="supplier_cnpj" class="form-control" value="<?= htmlspecialchars($revisao['fornecedor']['cnpj'] ?? '') ?>" placeholder="opcional">
+                                <input type="text" name="supplier_cnpj" class="form-control<?= $fornCasado ? ' bg-light' : '' ?>"
+                                       value="<?= htmlspecialchars($docCampo) ?>"
+                                       placeholder="<?= $fornCasado ? '' : 'opcional' ?>"
+                                       <?= $fornCasado ? 'readonly' : '' ?>>
                                 <div class="form-text">
-                                    <?php if ($ehCpf): ?>
+                                    <?php if ($fornCasado && $fornDocExistente !== ''): ?>
+                                        ✓ Fornecedor já cadastrado com este documento (<?= $ehCpf ? 'CPF / pessoa' : 'CNPJ / empresa' ?>).
+                                    <?php elseif ($fornCasado): ?>
+                                        Fornecedor existente <strong>sem CNPJ cadastrado</strong>. Para completar, edite-o direto no Cardápio Web.
+                                    <?php elseif ($ehCpf): ?>
                                         CPF (11 dígitos) — será cadastrado como <strong>pessoa</strong>.
                                     <?php else: ?>
                                         Fornecedor novo é cadastrado com este documento (casamento futuro exato).
