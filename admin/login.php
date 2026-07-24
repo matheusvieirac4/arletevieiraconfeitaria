@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . '/_session.php';
 require_once 'model_user.php';
 $erro = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -7,9 +7,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $senha = $_POST['senha'] ?? '';
     $user = user_buscar_por_login($pdo, $usuario);
     if ($user && password_verify($senha, $user['senha'])) {
+        session_regenerate_id(true);            // evita fixação de sessão
         $_SESSION['admin_blog'] = true;
         $_SESSION['admin_nome'] = $user['nome'];
         $_SESSION['admin_id'] = $user['id'];
+        // "Confiar neste dispositivo": mantém logado por 30 dias (renovando a cada visita).
+        $_SESSION['confiado'] = !empty($_POST['confiar']);
+        if ($_SESSION['confiado']) {
+            admin_sessao_cookie_longo();
+        }
         header('Location: index.php');
         exit;
     } else {
@@ -52,6 +58,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <div class="mb-3">
                                         <label class="form-label">Senha</label>
                                         <input class="form-control form-control-lg" type="password" name="senha" placeholder="Sua senha" required>
+                                    </div>
+                                    <div class="form-check mt-3">
+                                        <input class="form-check-input" type="checkbox" name="confiar" id="confiar" value="1">
+                                        <label class="form-check-label" for="confiar">
+                                            Confiar neste dispositivo por 30 dias
+                                        </label>
+                                        <div class="form-text">Não marque em computadores compartilhados.</div>
                                     </div>
                                     <div class="text-center mt-3">
                                         <button type="submit" class="btn btn-lg btn-primary w-100">Entrar</button>
