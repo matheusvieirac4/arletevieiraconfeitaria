@@ -663,8 +663,32 @@ $datalist = function (string $id, array $opts): string {
                             </div>
 
                             <div class="col-md-6">
+                                <?php
+                                // Fornecedor vira select (igual categoria/centro). Como PODE ser
+                                // um fornecedor NOVO, o nome sugerido (da nota/IA) entra como uma
+                                // opção própria no grupo "Novo" quando não existe no cadastro —
+                                // assim não se perde a criação de fornecedor.
+                                $fornAtual = (string) $l['supplier'];
+                                $fornNovo  = $fornAtual !== '' && !in_array($fornAtual, $listas['fornecedores'], true);
+                                ?>
                                 <label class="form-label">Fornecedor</label>
-                                <input type="text" name="supplier" class="form-control" list="dl-fornecedores" value="<?= htmlspecialchars($l['supplier']) ?>">
+                                <?php if (!$erroListas && $listas['fornecedores']): ?>
+                                    <select name="supplier" class="form-select js-choice" data-placeholder="Busque o fornecedor">
+                                        <option value=""></option>
+                                        <?php if ($fornNovo): ?>
+                                            <optgroup label="Novo (será cadastrado)">
+                                                <option value="<?= htmlspecialchars($fornAtual, ENT_QUOTES) ?>" selected><?= htmlspecialchars($fornAtual) ?></option>
+                                            </optgroup>
+                                        <?php endif; ?>
+                                        <optgroup label="Cadastrados">
+                                            <?php foreach ($listas['fornecedores'] as $fn): ?>
+                                                <option value="<?= htmlspecialchars($fn, ENT_QUOTES) ?>" <?= (!$fornNovo && $fn === $fornAtual ? 'selected' : '') ?>><?= htmlspecialchars($fn) ?></option>
+                                            <?php endforeach; ?>
+                                        </optgroup>
+                                    </select>
+                                <?php else: ?>
+                                    <input type="text" name="supplier" class="form-control" list="dl-fornecedores" value="<?= htmlspecialchars($fornAtual) ?>">
+                                <?php endif; ?>
                                 <div class="form-text">
                                     <?php if ($fornMatch === 'cnpj' || $fornMatch === 'regra'): ?>
                                         ✓ Já cadastrado (encontrado pelo documento).
@@ -687,9 +711,10 @@ $datalist = function (string $id, array $opts): string {
                                 $ehCpf     = strlen($docCampo) === 11;
                                 ?>
                                 <label class="form-label">CNPJ / CPF do fornecedor</label>
-                                <input type="text" name="supplier_cnpj" class="form-control<?= $casadoComDoc ? ' bg-light' : '' ?>"
+                                <input type="text" name="supplier_cnpj" id="cp-doc" inputmode="numeric"
+                                       class="form-control<?= $casadoComDoc ? ' bg-light' : '' ?>"
                                        value="<?= htmlspecialchars($docCampo) ?>"
-                                       placeholder="<?= $casadoComDoc ? '' : 'opcional' ?>"
+                                       placeholder="<?= $casadoComDoc ? '' : 'CNPJ ou CPF' ?>"
                                        <?= $casadoComDoc ? 'readonly' : '' ?>>
                                 <div class="form-text">
                                     <?php if ($casadoComDoc): ?>
@@ -881,5 +906,31 @@ if (window.Choices) {
         });
     });
 }
+
+// Máscara de CNPJ/CPF (só visual — o servidor guarda apenas os dígitos).
+// Até 11 dígitos formata como CPF; acima, como CNPJ.
+(function () {
+    const campo = document.getElementById('cp-doc');
+    if (!campo) { return; }
+    function mascara(v) {
+        const d = (v || '').replace(/\D/g, '').slice(0, 14);
+        if (d.length <= 11) {
+            let o = d.slice(0, 3);
+            if (d.length > 3) { o += '.' + d.slice(3, 6); }
+            if (d.length > 6) { o += '.' + d.slice(6, 9); }
+            if (d.length > 9) { o += '-' + d.slice(9, 11); }
+            return o;
+        }
+        let o = d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8, 12);
+        if (d.length > 12) { o += '-' + d.slice(12, 14); }
+        return o;
+    }
+    campo.value = mascara(campo.value);
+    campo.addEventListener('input', function () {
+        const pos = campo.selectionStart === campo.value.length;
+        campo.value = mascara(campo.value);
+        if (pos) { campo.setSelectionRange(campo.value.length, campo.value.length); }
+    });
+})();
 </script>
 <?php require __DIR__ . '/_footer.php'; ?>
