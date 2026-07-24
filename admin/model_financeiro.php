@@ -256,6 +256,33 @@ function financeiro_casar_fornecedor(string $cnpj, string $razao, array $fornece
     return ['name' => '', 'match' => 'nenhum'];
 }
 
+/**
+ * Garante que o fornecedor exista no CW com o CNPJ. Só cadastra se ainda não
+ * houver (nem por documento, nem por nome). Devolve 'criado' | 'existe' | 'ignorado'.
+ * Nunca lança — falha vira 'ignorado' (não deve travar o lançamento).
+ */
+function financeiro_fornecedor_garantir(CardapioWebApi $api, string $nome, string $documento): string
+{
+    $doc = preg_replace('/\D/', '', $documento);
+    $nome = trim($nome);
+    if ($doc === '' || $nome === '' || (strlen($doc) !== 14 && strlen($doc) !== 11)) {
+        return 'ignorado';
+    }
+    try {
+        $lista = financeiro_extrair_lista($api->listarFornecedores());
+        $nomeNorm = financeiro_normalizar_nome($nome);
+        foreach ($lista as $f) {
+            $fdoc = preg_replace('/\D/', '', (string) ($f['document'] ?? ''));
+            if ($fdoc !== '' && $fdoc === $doc) { return 'existe'; }
+            if (financeiro_normalizar_nome((string) ($f['name'] ?? '')) === $nomeNorm) { return 'existe'; }
+        }
+        $api->criarFornecedor($nome, $doc);
+        return 'criado';
+    } catch (\Throwable $e) {
+        return 'ignorado';
+    }
+}
+
 /** Extrai os nomes (campo "name") de um lookup, ordenados. */
 function financeiro_nomes($resp): array
 {

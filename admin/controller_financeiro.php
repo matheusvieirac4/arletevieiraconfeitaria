@@ -247,6 +247,11 @@ if ($acao === 'importar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $api = financeiro_api();
+        // Fornecedor novo? cadastra com CNPJ antes, para casamento futuro por documento.
+        $cnpjForn = preg_replace('/\D/', '', (string) ($_POST['supplier_cnpj'] ?? ''));
+        if ($cnpjForn !== '' && $lancamento['supplier'] !== '') {
+            financeiro_fornecedor_garantir($api, $lancamento['supplier'], $cnpjForn);
+        }
         $api->importarLancamentos([$lancamento]);
     } catch (\Throwable $e) {
         financeiro_redirect('danger', 'Falha ao enviar ao Cardápio Web: ' . $e->getMessage());

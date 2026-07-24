@@ -142,6 +142,28 @@ class CardapioWebApi
         return $this->post('/financial/transactions/import', ['data' => array_values($lancamentos)]);
     }
 
+    /** Cria um fornecedor com CNPJ/CPF (para casamento futuro por documento). */
+    public function criarFornecedor(string $nome, string $documento): array
+    {
+        $doc = preg_replace('/\D/', '', $documento);
+        $tipo = strlen($doc) === 11 ? 'cpf' : 'cnpj';
+        return $this->post('/financial/suppliers', [
+            'supplier' => [
+                'name'          => $nome,
+                'kind'          => 'supplier',
+                'active'        => true,
+                'document_type' => $tipo,
+                'document'      => $doc,
+                'phone_number'  => null,
+                'email'         => null,
+                'company_name'  => null,
+                'pix_key_type'  => null,
+                'pix_key'       => null,
+                'notes'         => null,
+            ],
+        ]);
+    }
+
     // ------------------------------------------------------------ Internos ---
 
     private function apiRequest(string $method, string $path, ?string $jsonBody = null): array

@@ -539,6 +539,11 @@ $datalist = function (string $id, array $opts): string {
                                 </div>
                             </div>
                             <div class="col-md-6">
+                                <label class="form-label">CNPJ do fornecedor</label>
+                                <input type="text" name="supplier_cnpj" class="form-control" value="<?= htmlspecialchars($revisao['fornecedor']['cnpj'] ?? '') ?>" placeholder="opcional">
+                                <div class="form-text">Se for fornecedor novo, ele será cadastrado com este CNPJ (casamento futuro exato).</div>
+                            </div>
+                            <div class="col-md-6">
                                 <label class="form-label">Descrição</label>
                                 <input type="text" name="description" class="form-control" value="<?= htmlspecialchars($l['description']) ?>">
                             </div>
