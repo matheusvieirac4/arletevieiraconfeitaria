@@ -329,13 +329,26 @@ if ($acao === 'pagar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         financeiro_redirect('danger', 'Para dar baixa, selecione a Conta e a Forma de pagamento.');
     }
 
+    // Juros/multa/desconto (opcionais, formato BR): valor positivo ou null.
+    $valorOpc = function (string $k): ?float {
+        $s = trim((string) ($_POST[$k] ?? ''));
+        if ($s === '') { return null; }
+        $n = abs((float) str_replace(',', '.', str_replace('.', '', $s)));
+        return $n > 0 ? $n : null;
+    };
+    $extra = [
+        'interest' => $valorOpc('interest'),   // juros
+        'fine'     => $valorOpc('fine'),        // multa
+        'discount' => $valorOpc('discount'),    // desconto
+    ];
+
     try {
         $api = financeiro_api();
         $contaId = financeiro_id_por_nome($api->listarContas(), $contaNome);
         $formaId = financeiro_id_por_nome($api->listarFormasPagamento(), $formaNome);
         if (!$contaId) { financeiro_redirect('danger', "Conta \"{$contaNome}\" não encontrada no Cardápio Web."); }
         if (!$formaId) { financeiro_redirect('danger', "Forma de pagamento \"{$formaNome}\" não encontrada no Cardápio Web."); }
-        $api->pagarTransacao($tid, $contaId, $formaId, $dataPg);
+        $api->pagarTransacao($tid, $contaId, $formaId, $dataPg, $extra);
     } catch (\Throwable $e) {
         financeiro_redirect('danger', 'Falha ao marcar como paga: ' . $e->getMessage());
     }

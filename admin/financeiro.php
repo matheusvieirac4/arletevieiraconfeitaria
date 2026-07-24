@@ -605,10 +605,12 @@ $datalist = function (string $id, array $opts): string {
                     <?php endif; ?>
 
                     <?php if ($contasAbertas): ?>
+                        <?php $valComprovante = financeiro_valor_br($revisao['valor_total'] ?? $l['value']); ?>
                         <div class="alert alert-warning">
-                            <div class="fw-semibold mb-1">⚠ Esta conta talvez já exista no Cardápio Web (recorrência).</div>
-                            Encontrei <?= count($contasAbertas) ?> conta(s) a pagar <strong>em aberto</strong> com fornecedor e valor
-                            parecidos. Se for a mesma, <strong>marque como paga</strong> em vez de criar outra — assim não duplica.
+                            <div class="fw-semibold mb-1">⚠ Esta conta provavelmente já existe no Cardápio Web (recorrência).</div>
+                            Encontrei <?= count($contasAbertas) ?> conta(s) do <strong>mesmo fornecedor</strong>, <strong>em aberto</strong>,
+                            vencendo neste período. Conta fixa costuma vir uma vez por mês, então marque a existente como
+                            <strong>paga</strong> em vez de criar outra. <span class="text-muted">Valor do comprovante: <strong>R$ <?= htmlspecialchars($valComprovante) ?></strong>.</span>
                             <form method="post" action="controller_financeiro.php?acao=pagar" class="mt-3" data-no-loading="1">
                                 <input type="hidden" name="supplier" value="<?= htmlspecialchars($l['supplier']) ?>">
                                 <?php foreach ($contasAbertas as $i => $c): ?>
@@ -617,12 +619,15 @@ $datalist = function (string $id, array $opts): string {
                                                id="conta-<?= (int) $c['id'] ?>" value="<?= (int) $c['id'] ?>" <?= $i === 0 ? 'checked' : '' ?>>
                                         <label class="form-check-label" for="conta-<?= (int) $c['id'] ?>">
                                             <?= htmlspecialchars($c['descricao'] ?: $c['fornecedor'] ?: 'Conta a pagar') ?>
-                                            — <strong>R$ <?= htmlspecialchars(financeiro_valor_br($c['valor'])) ?></strong>
+                                            — cadastrada em <strong>R$ <?= htmlspecialchars(financeiro_valor_br($c['valor'])) ?></strong>
                                             <?php if ($c['vencimento']): ?>· vence <?= htmlspecialchars(financeiro_data_br($c['vencimento'])) ?><?php endif; ?>
+                                            <?php if (!$c['valor_bate']): ?>
+                                                <span class="badge bg-warning text-dark">valor difere do comprovante</span>
+                                            <?php endif; ?>
                                         </label>
                                     </div>
                                 <?php endforeach; ?>
-                                <div class="row g-2 mt-2" style="max-width: 640px;">
+                                <div class="row g-2 mt-2" style="max-width: 720px;">
                                     <div class="col-sm-4">
                                         <label class="form-label small mb-1">Conta</label>
                                         <select name="account" class="form-select form-select-sm" required>
@@ -646,12 +651,27 @@ $datalist = function (string $id, array $opts): string {
                                         <input type="date" name="settlement_date" class="form-control form-control-sm"
                                                value="<?= htmlspecialchars($l['settlement_date'] ?: date('Y-m-d')) ?>" required>
                                     </div>
+                                    <div class="col-sm-4">
+                                        <label class="form-label small mb-1">Juros (R$)</label>
+                                        <input type="text" name="interest" class="form-control form-control-sm" placeholder="0,00" inputmode="decimal">
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <label class="form-label small mb-1">Multa (R$)</label>
+                                        <input type="text" name="fine" class="form-control form-control-sm" placeholder="0,00" inputmode="decimal">
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <label class="form-label small mb-1">Desconto (R$)</label>
+                                        <input type="text" name="discount" class="form-control form-control-sm" placeholder="0,00" inputmode="decimal">
+                                    </div>
                                 </div>
                                 <button type="submit" class="btn btn-success btn-sm mt-3"
                                         onclick="return confirm('Marcar a conta selecionada como paga no Cardápio Web?');">
                                     Marcar como paga (não duplica)
                                 </button>
-                                <div class="form-text mt-1">O valor da conta não muda na baixa — só entra conta, forma e data.</div>
+                                <div class="form-text mt-1">
+                                    O valor-base da conta não muda na baixa. Juros/multa (pago atrasado) e desconto entram aqui —
+                                    se o comprovante já discrimina, copie. Se o valor-base estiver muito diferente, ajuste-o direto no Cardápio Web.
+                                </div>
                             </form>
                         </div>
                         <p class="text-muted small">Não é a mesma conta? Ignore o aviso acima e crie o lançamento normalmente abaixo.</p>

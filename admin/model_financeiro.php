@@ -365,21 +365,31 @@ function financeiro_id_por_nome($resp, string $nome): ?int
 /**
  * Procura contas a pagar JÁ EXISTENTES no Cardápio Web (ex.: criadas por
  * recorrência) que casem com o comprovante em revisão, para evitar duplicar.
- * Casa por: em aberto (sem data de pagamento) + valor próximo + fornecedor
- * (por id quando dá, senão por nome) numa janela ao redor do vencimento.
  *
- * NUNCA lança e NUNCA dá baixa — só devolve candidatos para o usuário confirmar.
+ * Casamento por FORNECEDOR + VENCIMENTO no mês (a marca da recorrência). O VALOR
+ * NÃO entra no filtro de propósito: conta fixa varia bastante (ex.: Celesc
+ * cadastrada em 600 mas vem 400 ou 800), então descartar por valor perderia a
+ * duplicata. O valor só é comparado para SINALIZAR diferença na tela.
  *
- * @return array<int,array{id:int,descricao:string,valor:string,vencimento:string,fornecedor:string}>
+ * Exige identificar o fornecedor (id, senão nome); sem isso devolve vazio, para
+ * não sugerir contas de outros fornecedores. NUNCA lança e NUNCA dá baixa —
+ * só devolve candidatos para o usuário confirmar.
+ *
+ * @return array<int,array{id:int,descricao:string,valor:string,vencimento:string,fornecedor:string,valor_bate:bool}>
  */
 function financeiro_contas_abertas_semelhantes(CardapioWebApi $api, string $supplierNome, ?int $supplierId, string $valor, string $venc): array
 {
+    $alvoForn = financeiro_normalizar_nome($supplierNome);
+    if ($supplierId === null && $alvoForn === '') {
+        return [];   // sem como confirmar o fornecedor -> não arrisca
+    }
     $alvoVal = abs((float) str_replace(',', '.', (string) $valor));
-    if ($alvoVal <= 0) { return []; }
 
+    // Janela centrada no vencimento (±18 dias). Conta fixa é mensal, então o mês
+    // vizinho (~30 dias) fica de fora e sobra a do próprio mês.
     $ts   = strtotime($venc) ?: time();
-    $iniQ = date('Y-m-d', strtotime(date('Y-m-01', $ts) . ' -7 days'));
-    $fimQ = date('Y-m-d', strtotime(date('Y-m-t',  $ts) . ' +7 days'));
+    $iniQ = date('Y-m-d', $ts - 18 * 86400);
+    $fimQ = date('Y-m-d', $ts + 18 * 86400);
 
     try {
         $resp = $api->listarTransacoes([
@@ -395,7 +405,6 @@ function financeiro_contas_abertas_semelhantes(CardapioWebApi $api, string $supp
         return [];   // falha na consulta nunca trava o fluxo normal
     }
 
-    $alvoForn = financeiro_normalizar_nome($supplierNome);
     $out = [];
     foreach (financeiro_extrair_lista($resp) as $t) {
         if (!is_array($t)) { continue; }
@@ -404,27 +413,30 @@ function financeiro_contas_abertas_semelhantes(CardapioWebApi $api, string $supp
         $sett = $t['settlement_date'] ?? ($t['settled_at'] ?? null);
         if (!empty($sett)) { continue; }
 
-        // 2) Valor próximo (tolera centavos de diferença).
-        $v = $t['value'] ?? ($t['amount'] ?? null);
-        if ($v === null) { continue; }
-        if (abs(abs((float) str_replace(',', '.', (string) $v)) - $alvoVal) > 0.05) { continue; }
-
-        // 3) Fornecedor: por id quando ambos existem; senão por nome; senão
-        //    aceita (o usuário confirma) para não perder a detecção.
-        $tid  = isset($t['supplier_id']) ? (int) $t['supplier_id'] : (int) ($t['supplier']['id'] ?? 0);
+        // 2) Fornecedor: por id quando ambos existem; senão por nome. Sem
+        //    confirmação de fornecedor, descarta (evita sugerir conta alheia).
+        $tid   = isset($t['supplier_id']) ? (int) $t['supplier_id'] : (int) ($t['supplier']['id'] ?? 0);
         $tnome = (string) ($t['supplier']['name'] ?? ($t['supplier_name'] ?? ''));
-        if ($supplierId && $tid) {
-            if ($tid !== $supplierId) { continue; }
+        $bate  = false;
+        if ($supplierId !== null && $tid > 0) {
+            $bate = ($tid === $supplierId);
         } elseif ($alvoForn !== '' && $tnome !== '') {
-            if (financeiro_normalizar_nome($tnome) !== $alvoForn) { continue; }
+            $bate = (financeiro_normalizar_nome($tnome) === $alvoForn);
         }
+        if (!$bate) { continue; }
+
+        // 3) Valor NÃO filtra — só sinaliza se bate (tolerância de centavos).
+        $v = $t['value'] ?? ($t['amount'] ?? null);
+        $valorBate = $v !== null && $alvoVal > 0
+            && abs(abs((float) str_replace(',', '.', (string) $v)) - $alvoVal) <= 0.05;
 
         $out[] = [
             'id'         => (int) ($t['id'] ?? 0),
             'descricao'  => (string) ($t['description'] ?? ''),
-            'valor'      => (string) $v,
+            'valor'      => (string) ($v ?? ''),
             'vencimento' => (string) ($t['due_date'] ?? ''),
             'fornecedor' => $tnome,
+            'valor_bate' => $valorBate,
         ];
     }
     return $out;
