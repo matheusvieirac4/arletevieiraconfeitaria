@@ -233,12 +233,27 @@ if ($acao === 'importar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'settlement_date' => $campo('settlement_date'),
     ];
 
+    // Anti-duplicidade: já enviamos igual (fornecedor+valor+data) nos últimos 7 dias?
+    if (empty($_POST['forcar'])) {
+        $dup = financeiro_enviado_duplicado($lancamento['supplier'], $lancamento['value'], $lancamento['due_date']);
+        if ($dup !== null) {
+            // Preserva o que o usuário preencheu e volta para a revisão pedindo confirmação.
+            $_SESSION['financeiro_revisao']['lancamento'] = $lancamento;
+            $_SESSION['financeiro_revisao']['valor_total'] = $lancamento['value'];
+            $_SESSION['financeiro_forcar'] = true;
+            financeiro_redirect('warning', "Já existe um lançamento igual (mesmo fornecedor, valor e data) enviado em {$dup}. Se for intencional, clique em \"Enviar\" novamente.");
+        }
+    }
+
     try {
         $api = financeiro_api();
         $api->importarLancamentos([$lancamento]);
     } catch (\Throwable $e) {
         financeiro_redirect('danger', 'Falha ao enviar ao Cardápio Web: ' . $e->getMessage());
     }
+
+    // Registra o envio para a checagem de duplicidade das próximas.
+    financeiro_enviado_registrar($lancamento['supplier'], $lancamento['value'], $lancamento['due_date']);
 
     // Sucesso: marca a nota como processada (idempotência) e limpa a revisão.
     if (!empty($nota['chave'])) {

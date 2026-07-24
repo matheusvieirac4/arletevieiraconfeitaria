@@ -65,4 +65,13 @@
     .spinner-border-sm { width: .85rem; height: .85rem; border-width: .15em; }
     @keyframes spinner-border { to { transform: rotate(360deg); } }
     .btn.is-loading { pointer-events: none; opacity: .85; }
+
+    /* Alertas (o app.css do AdminKit também não inclui) */
+    .alert { position: relative; padding: .9rem 1rem; margin-bottom: 1rem; border: 1px solid transparent; border-radius: .375rem; }
+    .alert-success { color: #0f5132; background-color: #d1e7dd; border-color: #badbcc; }
+    .alert-danger  { color: #842029; background-color: #f8d7da; border-color: #f5c2c7; }
+    .alert-warning { color: #664d03; background-color: #fff3cd; border-color: #ffecb5; }
+    .alert-info    { color: #055160; background-color: #cff4fc; border-color: #b6effb; }
+    .alert-dismissible { padding-right: 3rem; }
+    .alert-dismissible .btn-close { position: absolute; top: 0; right: 0; padding: 1.1rem 1rem; }
 </style>

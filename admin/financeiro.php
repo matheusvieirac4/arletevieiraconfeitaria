@@ -219,6 +219,7 @@ $datalist = function (string $id, array $opts): string {
             <div class="card" style="max-width: 820px;">
                 <div class="card-header fw-semibold">Novo lançamento</div>
                 <div class="card-body">
+                    <div id="cp-msg"></div>
                     <div id="cp-chips" class="d-flex flex-wrap gap-2 mb-2"></div>
                     <textarea id="cp-text" class="form-control mb-2" rows="2"
                         placeholder="Descreva a compra (ex.: 'paguei 84,90 no pix, conta Sicredi, embalagens da SOS')&#10;ou anexe um XML / foto do QR pelo botão +"></textarea>
@@ -276,6 +277,12 @@ $datalist = function (string $id, array $opts): string {
                 const IA_ON = <?= financeiro_ia_configurada() ? 'true' : 'false' ?>;
                 const chips = document.getElementById('cp-chips');
                 const txt = document.getElementById('cp-text');
+                function showMsg(texto, tipo) {
+                    const box = document.getElementById('cp-msg');
+                    box.innerHTML = '<div class="alert alert-' + (tipo || 'warning') + ' alert-dismissible">'
+                        + texto.replace(/</g, '&lt;')
+                        + '<button type="button" class="btn-close" onclick="this.parentNode.remove()"></button></div>';
+                }
                 const fileXml = document.getElementById('cp-file-xml');
                 const fileFoto = document.getElementById('cp-file-foto');
                 let anexoXml = null, anexoFoto = null;
@@ -362,15 +369,15 @@ $datalist = function (string $id, array $opts): string {
                         if (qr) { enviarChave(qr); return; }          // QR → chave (grátis)
                         if (IA_ON) { travar('Lendo cupom…'); enviarCupom(anexoFoto, txt.value.trim()); return; }
                         destravar();
-                        alert('Não encontrei QR nessa foto e a IA não está configurada (adicione gemini_api_key em config_financeiro.php).');
+                        showMsg('Não encontrei QR nessa foto e a IA não está configurada.', 'warning');
                         return;
                     }
                     if (txt.value.trim()) {
                         if (IA_ON) { travar('Lendo…'); enviarTexto(txt.value.trim()); return; }
-                        alert('A leitura de texto precisa da IA (adicione gemini_api_key em config_financeiro.php).');
+                        showMsg('A leitura de texto precisa da IA (Gemini) configurada.', 'warning');
                         return;
                     }
-                    alert('Anexe um XML, uma foto (QR) ou escreva a compra no campo de texto.');
+                    showMsg('Anexe um XML, uma foto (QR) ou escreva a compra no campo de texto.', 'info');
                 };
 
                 // ----- Câmera ao vivo (QR) -----
@@ -418,6 +425,8 @@ $datalist = function (string $id, array $opts): string {
             <!-- Estado 2: revisão antes de enviar -->
             <?php
             $l = $revisao['lancamento'];
+            $forcarEnvio = !empty($_SESSION['financeiro_forcar']);
+            unset($_SESSION['financeiro_forcar']);
             $cnpjForn = $revisao['fornecedor']['cnpj'] ?? '';
             $regra = financeiro_regra_buscar($cnpjForn);
             $regraAplicada = false;
@@ -464,6 +473,7 @@ $datalist = function (string $id, array $opts): string {
                     <?php endif; ?>
 
                     <form method="post" action="controller_financeiro.php?acao=importar">
+                        <input type="hidden" name="forcar" value="<?= $forcarEnvio ? '1' : '0' ?>">
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label">Conta <span class="text-danger">*</span></label>

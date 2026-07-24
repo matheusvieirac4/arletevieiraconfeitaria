@@ -546,6 +546,60 @@ function financeiro_ja_processada(string $chave): bool
     return isset($reg[$chave]);
 }
 
+// ------------------- Log leve de enviados (dedup por valor/fornecedor/data) ---
+
+function financeiro_enviados_path(): string { return __DIR__ . '/data/financeiro_enviados.json'; }
+
+function financeiro_enviados_listar(): array
+{
+    $p = financeiro_enviados_path();
+    if (!is_file($p)) { return []; }
+    $d = json_decode((string) file_get_contents($p), true);
+    return is_array($d) ? $d : [];
+}
+
+/** Chave de comparação: fornecedor normalizado + valor + data. */
+function financeiro_enviado_assinatura(string $supplier, string $value, string $data): string
+{
+    $forn = mb_strtolower(trim($supplier), 'UTF-8');
+    $val  = str_replace(',', '.', trim($value));
+    return $forn . '|' . $val . '|' . trim($data);
+}
+
+/**
+ * Verifica se já foi enviado um lançamento igual (mesmo fornecedor, valor e data)
+ * nos últimos $dias dias. Devolve a data/hora do envio anterior, ou null.
+ */
+function financeiro_enviado_duplicado(string $supplier, string $value, string $data, int $dias = 7): ?string
+{
+    $limite = time() - $dias * 86400;
+    $assin = financeiro_enviado_assinatura($supplier, $value, $data);
+    foreach (financeiro_enviados_listar() as $e) {
+        if (($e['ts'] ?? 0) >= $limite && ($e['assinatura'] ?? '') === $assin) {
+            return isset($e['em']) ? substr($e['em'], 0, 16) : date('d/m/Y', $e['ts']);
+        }
+    }
+    return null;
+}
+
+/** Registra um envio bem-sucedido e poda o log para os últimos 7 dias. */
+function financeiro_enviado_registrar(string $supplier, string $value, string $data): void
+{
+    $limite = time() - 7 * 86400;
+    $lista = array_values(array_filter(financeiro_enviados_listar(), fn($e) => ($e['ts'] ?? 0) >= $limite));
+    $lista[] = [
+        'assinatura' => financeiro_enviado_assinatura($supplier, $value, $data),
+        'fornecedor' => $supplier,
+        'valor'      => $value,
+        'data'       => $data,
+        'ts'         => time(),
+        'em'         => date('c'),
+    ];
+    $dir = dirname(financeiro_enviados_path());
+    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    file_put_contents(financeiro_enviados_path(), json_encode($lista, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+}
+
 /** Marca a nota como processada APÓS confirmação de sucesso no envio. */
 function financeiro_marcar_processada(string $chave, array $meta = []): bool
 {
