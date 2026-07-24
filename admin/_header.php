@@ -25,6 +25,7 @@ $navItems = [
     <title>Admin · <?= htmlspecialchars($page_title) ?></title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@adminkit/core@3/dist/css/app.css">
     <?php require __DIR__ . '/_brand.php'; ?>
+    <?= $extra_head ?? '' ?>
     <style>
 <?= $extra_css ?>
     </style>

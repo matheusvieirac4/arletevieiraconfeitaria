@@ -49,9 +49,71 @@ if ($revisao && $configurado) {
 
 $page_title = 'Financeiro';
 $active = 'financeiro';
+// Choices.js — o mesmo componente de select que o AdminKit usa nos exemplos de
+// formulário. Dá busca e agrupamento legível na lista longa de categorias
+// (o <select> nativo do celular não mostra bem os optgroups).
+$extra_head = '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/styles/choices.min.css">';
 $extra_css = '
         .status-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
-        .mono { font-family: monospace; font-size: 0.85rem; }';
+        .mono { font-family: monospace; font-size: 0.85rem; }
+
+        /* --- Choices.js no visual do AdminKit/Bootstrap ------------------- */
+        .choices { margin-bottom: 0; }
+        .choices__inner {
+            min-height: calc(1.5em + 0.5rem + 2px);
+            padding: 0.25rem 0.75rem;
+            background-color: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 0.2rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: #495057;
+        }
+        .choices[data-type*="select-one"] .choices__inner { padding-bottom: 0.25rem; }
+        .choices.is-focused .choices__inner, .choices.is-open .choices__inner {
+            border-color: #a51d32;
+            box-shadow: 0 0 0 0.2rem rgba(165, 29, 50, 0.15);
+        }
+        .choices.is-open .choices__inner { border-radius: 0.2rem 0.2rem 0 0; }
+        .choices[data-type*="select-one"]::after {
+            border-color: #495057 transparent transparent;
+        }
+        .choices__list--dropdown, .choices__list[aria-expanded] {
+            border-color: #ced4da;
+            border-radius: 0 0 0.2rem 0.2rem;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+            font-size: 0.875rem;
+            z-index: 1056;   /* acima de modais do Bootstrap */
+        }
+        .choices__list--dropdown .choices__item--selectable.is-highlighted,
+        .choices__list[aria-expanded] .choices__item--selectable.is-highlighted {
+            background-color: #a51d32;
+            color: #fff;
+        }
+        .choices__list--dropdown .choices__item, .choices__list[aria-expanded] .choices__item {
+            padding: 0.4rem 0.75rem;
+        }
+        /* Cabeçalho do grupo (a categoria numerada) */
+        .choices__group .choices__heading {
+            border-bottom: 0;
+            padding: 0.5rem 0.75rem 0.2rem;
+            color: #a51d32;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .choices__group .choices__item { padding-left: 1.25rem; }
+        .choices__input { background-color: #fff; font-size: 0.875rem; margin-bottom: 0; }
+        .choices[data-type*="select-one"] .choices__input {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid #eceef1;
+        }
+        /* Campo obrigatório não preenchido */
+        .campo-invalido .choices__inner, select.campo-invalido {
+            border-color: #d9534f;
+            box-shadow: 0 0 0 0.2rem rgba(217, 83, 79, 0.15);
+        }';
 require __DIR__ . '/_header.php';
 
 // helper local para <datalist>
@@ -498,7 +560,7 @@ $datalist = function (string $id, array $opts): string {
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label">Conta <span class="text-danger">*</span></label>
-                                <select name="account" class="form-select" required>
+                                <select name="account" class="form-select js-choice" data-placeholder="Selecione a conta" data-obrigatorio="1">
                                     <option value="">Selecione...</option>
                                     <?php foreach ($listas['contas'] as $c): ?>
                                         <option value="<?= htmlspecialchars($c, ENT_QUOTES) ?>" <?= ($l['account'] === $c ? 'selected' : '') ?>><?= htmlspecialchars($c) ?></option>
@@ -533,7 +595,7 @@ $datalist = function (string $id, array $opts): string {
                             <div class="col-md-6">
                                 <label class="form-label">Categoria</label>
                                 <?php if ($temCadastros): ?>
-                                    <select name="category" class="form-select">
+                                    <select name="category" class="form-select js-choice" data-placeholder="Busque a categoria">
                                         <option value="">Selecione...</option>
                                         <?php foreach ($categoriasGrupos as $grupo => $itens): ?>
                                             <optgroup label="<?= htmlspecialchars($grupo, ENT_QUOTES) ?>">
@@ -558,7 +620,7 @@ $datalist = function (string $id, array $opts): string {
                             <div class="col-md-6">
                                 <label class="form-label">Centro de custo</label>
                                 <?php if (!$erroListas && $listas['centros']): ?>
-                                    <select name="cost_center" class="form-select">
+                                    <select name="cost_center" class="form-select js-choice" data-placeholder="Busque o centro de custo">
                                         <option value="">Selecione...</option>
                                         <?php foreach ($listas['centros'] as $c): ?>
                                             <option value="<?= htmlspecialchars($c, ENT_QUOTES) ?>" <?= ($ccExiste && $ccSugerido === $c ? 'selected' : '') ?>><?= htmlspecialchars($c) ?></option>
@@ -646,4 +708,45 @@ $datalist = function (string $id, array $opts): string {
                 </div>
             </div>
         <?php endif; ?>
+<script src="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/scripts/choices.min.js"></script>
+<script>
+// Selects bonitos (conta / categoria / centro de custo). Se o CDN cair, o
+// <select> nativo continua funcionando normalmente — nada quebra.
+// O Choices esconde o <select> original ([hidden]); um "required" nele faria o
+// Chrome barrar o envio sem mostrar mensagem nenhuma (controle não focável).
+// Por isso a obrigatoriedade da Conta é validada aqui, com aviso visível.
+// Este listener é registrado ANTES do handler de loading do rodapé, então roda
+// primeiro e consegue abortar o envio antes do spinner travar o botão.
+document.addEventListener('submit', function (e) {
+    const form = e.target;
+    if (!form || !form.querySelector) { return; }
+    let falhou = null;
+    form.querySelectorAll('select[data-obrigatorio="1"]').forEach(function (sel) {
+        const vazio = !sel.value;
+        const alvo = sel.closest('.choices') || sel;
+        alvo.classList.toggle('campo-invalido', vazio);
+        if (vazio && !falhou) { falhou = alvo; }
+    });
+    if (falhou) {
+        e.preventDefault();
+        e.stopImmediatePropagation();   // não deixa o botão virar spinner à toa
+        falhou.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+}, true);
+
+if (window.Choices) {
+    document.querySelectorAll('select.js-choice').forEach(function (el) {
+        new Choices(el, {
+            searchEnabled: true,
+            searchPlaceholderValue: el.dataset.placeholder || 'Buscar...',
+            shouldSort: false,          // preserva a ordem/agrupamento do Cardápio Web
+            itemSelectText: '',         // sem o "Press to select"
+            allowHTML: false,
+            searchResultLimit: 50,
+            noResultsText: 'Nada encontrado',
+            noChoicesText: 'Nenhuma opção cadastrada',
+        });
+    });
+}
+</script>
 <?php require __DIR__ . '/_footer.php'; ?>
