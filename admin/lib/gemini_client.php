@@ -90,11 +90,16 @@ class GeminiClient
             $nomes = array_slice(array_values(array_filter($nomes)), 0, 200);
             return $rot . ': ' . ($nomes ? implode('; ', $nomes) : '(nenhum cadastrado)');
         };
+        $hoje = date('Y-m-d');
+        $ano  = date('Y');
         return implode("\n", [
             'Você extrai UM lançamento de conta a pagar (despesa) para um sistema financeiro.',
+            "HOJE é {$hoje}. Use isto para resolver datas.",
             'Responda SOMENTE com o JSON do schema. Regras:',
             '- value: número como string, PONTO decimal, NEGATIVO para despesa (ex.: "-84.90").',
             '- Datas no formato YYYY-MM-DD. Se não souber, deixe vazio.',
+            "- Data SEM ano (ex.: \"20/07\") usa o ano atual ({$ano}). \"hoje\" = {$hoje}.",
+            '  NUNCA invente um ano passado; só use outro ano se o texto/documento disser explicitamente.',
             '- Para account, category, cost_center, payment_method e supplier: use EXATAMENTE',
             '  um dos nomes já cadastrados abaixo quando houver correspondência; se não houver,',
             '  use o nome mais natural. NÃO invente contas que não existem.',
