@@ -217,12 +217,7 @@ $datalist = function (string $id, array $opts): string {
 
             <!-- Estado 1: composer (texto + anexos: XML / foto / câmera) -->
             <div class="card" style="max-width: 820px;">
-                <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
-                    <span>Novo lançamento</span>
-                    <button type="button" id="cp-cam-quick" class="btn btn-primary btn-sm" title="Tirar foto do cupom">
-                        <i class="align-middle" data-feather="camera"></i> Foto do cupom
-                    </button>
-                </div>
+                <div class="card-header fw-semibold">Novo lançamento</div>
                 <div class="card-body">
                     <div id="cp-msg"></div>
                     <input type="file" id="cp-cam-input" accept="image/*" capture="environment" class="d-none">
@@ -230,13 +225,18 @@ $datalist = function (string $id, array $opts): string {
                     <textarea id="cp-text" class="form-control mb-2" rows="2"
                         placeholder="Descreva a compra (ex.: 'paguei 84,90 no pix, conta Sicredi, embalagens da SOS')&#10;ou anexe um XML / foto do QR pelo botão +"></textarea>
                     <div class="d-flex justify-content-between align-items-center">
-                        <div class="dropdown">
-                            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false">+ Anexar</button>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="#" id="cp-add-xml">📄 Anexar XML da nota</a></li>
-                                <li><a class="dropdown-item" href="#" id="cp-add-foto">🖼️ Anexar foto (QR ou cupom)</a></li>
-                                <li><a class="dropdown-item" href="#" id="cp-add-cam" data-bs-toggle="modal" data-bs-target="#modalCamera">📷 Escanear QR com a câmera</a></li>
-                            </ul>
+                        <div class="d-flex gap-2">
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false">+ Anexar</button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" id="cp-add-xml">📄 Anexar XML da nota</a></li>
+                                    <li><a class="dropdown-item" href="#" id="cp-add-foto">🖼️ Anexar foto (QR ou cupom)</a></li>
+                                    <li><a class="dropdown-item" href="#" id="cp-add-cam" data-bs-toggle="modal" data-bs-target="#modalCamera">📷 Escanear QR com a câmera</a></li>
+                                </ul>
+                            </div>
+                            <button type="button" id="cp-cam-quick" class="btn btn-outline-secondary" title="Tirar foto do cupom">
+                                <i class="align-middle" data-feather="camera"></i>
+                            </button>
                         </div>
                         <button id="cp-enviar" class="btn btn-primary" type="button">Enviar</button>
                     </div>
