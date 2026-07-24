@@ -611,7 +611,7 @@ $datalist = function (string $id, array $opts): string {
                             Encontrei <?= count($contasAbertas) ?> conta(s) do <strong>mesmo fornecedor</strong>, <strong>em aberto</strong>,
                             vencendo neste período. Conta fixa costuma vir uma vez por mês, então marque a existente como
                             <strong>paga</strong> em vez de criar outra. <span class="text-muted">Valor do comprovante: <strong>R$ <?= htmlspecialchars($valComprovante) ?></strong>.</span>
-                            <form method="post" action="controller_financeiro.php?acao=pagar" class="mt-3" data-no-loading="1">
+                            <form method="post" action="controller_financeiro.php?acao=pagar" class="mt-3" data-no-loading="1" id="form-baixa">
                                 <input type="hidden" name="supplier" value="<?= htmlspecialchars($l['supplier']) ?>">
                                 <?php foreach ($contasAbertas as $i => $c): ?>
                                     <div class="form-check">
@@ -664,10 +664,11 @@ $datalist = function (string $id, array $opts): string {
                                         <input type="text" name="discount" class="form-control form-control-sm" placeholder="0,00" inputmode="decimal">
                                     </div>
                                 </div>
-                                <button type="submit" class="btn btn-success btn-sm mt-3"
-                                        onclick="return confirm('Marcar a conta selecionada como paga no Cardápio Web?');">
+                                <button type="submit" class="btn btn-success btn-sm mt-3">
                                     Marcar como paga (não duplica)
                                 </button>
+                                <!-- gatilho oculto do modal (declarativo, não depende de JS global) -->
+                                <button type="button" id="abre-modal-baixa" class="d-none" data-bs-toggle="modal" data-bs-target="#modal-baixa"></button>
                                 <div class="form-text mt-1">
                                     O valor-base da conta não muda na baixa. Juros/multa (pago atrasado) e desconto entram aqui —
                                     se o comprovante já discrimina, copie. Se o valor-base estiver muito diferente, ajuste-o direto no Cardápio Web.
@@ -675,6 +676,26 @@ $datalist = function (string $id, array $opts): string {
                             </form>
                         </div>
                         <p class="text-muted small">Não é a mesma conta? Ignore o aviso acima e crie o lançamento normalmente abaixo.</p>
+
+                        <!-- Confirmação da baixa (no lugar do alert nativo) -->
+                        <div class="modal fade" id="modal-baixa" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Confirmar pagamento</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        Marcar a conta selecionada como <strong>paga</strong> no Cardápio Web?
+                                        Isso dá baixa no lançamento que já existe — <strong>não cria outro</strong>.
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="button" id="btn-baixa-confirmar" class="btn btn-success" data-bs-dismiss="modal">Sim, marcar como paga</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     <?php endif; ?>
 
                     <form method="post" action="controller_financeiro.php?acao=importar">
@@ -1004,6 +1025,27 @@ if (window.Choices) {
         });
     });
 }
+
+// Confirmação da baixa por modal (substitui o confirm() nativo). O botão é
+// type="submit", então a validação nativa (conta/forma/data) roda antes; aqui
+// só intercepto para pedir confirmação num modal bonito e reenvio ao confirmar.
+(function () {
+    const form = document.getElementById('form-baixa');
+    if (!form) { return; }
+    let confirmado = false;
+    form.addEventListener('submit', function (e) {
+        if (confirmado) { return; }              // já confirmado: deixa enviar
+        e.preventDefault();
+        document.getElementById('abre-modal-baixa').click();   // abre o modal
+    });
+    const btnOk = document.getElementById('btn-baixa-confirmar');
+    if (btnOk) {
+        btnOk.addEventListener('click', function () {
+            confirmado = true;
+            if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+        });
+    }
+})();
 
 // Máscara de CNPJ/CPF (só visual — o servidor guarda apenas os dígitos).
 // Até 11 dígitos formata como CPF; acima, como CNPJ.
