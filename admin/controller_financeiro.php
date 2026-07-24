@@ -13,6 +13,19 @@ function financeiro_redirect(string $tipo, string $texto): void
     exit;
 }
 
+// -------- Salvar credenciais pelo painel (sem mexer em arquivo no servidor) --------
+if ($acao === 'salvar_config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $campos = array_keys(financeiro_config_campos());
+    $novos = [];
+    foreach ($campos as $c) {
+        if (isset($_POST[$c])) { $novos[$c] = $_POST[$c]; }
+    }
+    if (!financeiro_config_salvar($novos)) {
+        financeiro_redirect('danger', 'Não consegui gravar as credenciais. Verifique a permissão da pasta admin/data/.');
+    }
+    financeiro_redirect('success', 'Credenciais atualizadas. Clique em "Testar conexão" para confirmar.');
+}
+
 // -------- Testar conexão: autentica e lê os 5 cadastros --------
 if ($acao === 'testar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {

@@ -13,15 +13,78 @@ function financeiro_config_path(): string
     return __DIR__ . '/config_financeiro.php';
 }
 
-/** Devolve a config, ou null se ainda não foi criada. */
+/** Arquivo gravável com as credenciais editadas pelo painel (sobrescreve a config). */
+function financeiro_config_override_path(): string
+{
+    return __DIR__ . '/data/financeiro_config.json';
+}
+
+/** Campos que podem ser editados pela interface. */
+function financeiro_config_campos(): array
+{
+    return [
+        'company_id'     => ['rotulo' => 'Company ID (Cardápio Web)', 'secreto' => false],
+        'refresh_token'  => ['rotulo' => 'Refresh token do Cardápio Web', 'secreto' => true],
+        'gemini_api_key' => ['rotulo' => 'Chave da IA (Gemini)', 'secreto' => true],
+        'gemini_model'   => ['rotulo' => 'Modelo do Gemini', 'secreto' => false],
+        'cert_path'      => ['rotulo' => 'Caminho do certificado A1 (.p12)', 'secreto' => false],
+        'cert_password'  => ['rotulo' => 'Senha do certificado', 'secreto' => true],
+        'cron_token'     => ['rotulo' => 'Token do cron', 'secreto' => true],
+    ];
+}
+
+/** Lê só as sobrescritas gravadas pelo painel. */
+function financeiro_config_override(): array
+{
+    $p = financeiro_config_override_path();
+    if (!is_file($p)) {
+        return [];
+    }
+    $d = json_decode((string) file_get_contents($p), true);
+    return is_array($d) ? $d : [];
+}
+
+/**
+ * Config efetiva: o arquivo config_financeiro.php (base) + o que foi salvo pelo
+ * painel (tem prioridade). Assim dá para trocar o token pela interface.
+ */
 function financeiro_config(): ?array
 {
+    $base = [];
     $path = financeiro_config_path();
-    if (!is_file($path)) {
-        return null;
+    if (is_file($path)) {
+        $c = require $path;
+        if (is_array($c)) { $base = $c; }
     }
-    $cfg = require $path;
-    return is_array($cfg) ? $cfg : null;
+    $cfg = array_merge($base, financeiro_config_override());
+    return $cfg ?: null;
+}
+
+/**
+ * Salva credenciais vindas do painel. Só grava os campos permitidos e não
+ * apaga o que veio em branco (branco = manter o valor atual).
+ */
+function financeiro_config_salvar(array $novos): bool
+{
+    $permitidos = array_keys(financeiro_config_campos());
+    $atual = financeiro_config_override();
+
+    foreach ($novos as $k => $v) {
+        if (!in_array($k, $permitidos, true)) { continue; }
+        $v = trim((string) $v);
+        if ($v === '') { continue; }          // em branco = não mexe
+        $atual[$k] = $v;
+    }
+
+    $dir = dirname(financeiro_config_override_path());
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        return false;
+    }
+    return file_put_contents(
+        financeiro_config_override_path(),
+        json_encode($atual, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        LOCK_EX
+    ) !== false;
 }
 
 /** True quando a config existe e está preenchida (sem placeholders). */

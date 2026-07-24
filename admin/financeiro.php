@@ -3,6 +3,7 @@ require_once __DIR__ . '/_auth.php';
 require_once 'model_financeiro.php';
 
 $configurado = financeiro_configurado();
+$cfgAtual = financeiro_config() ?: [];
 
 $flash = null;
 if (isset($_SESSION['financeiro_flash'])) {
@@ -97,6 +98,41 @@ $datalist = function (string $id, array $opts): string {
                         <li><span class="mono">refresh_token</span> — da resposta do login em <span class="mono">/auth/token</span>; <strong>segredo</strong></li>
                     </ul>
                 <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Credenciais editáveis pelo painel (sem precisar do Gerenciador de Arquivos) -->
+        <div class="card mb-4" style="max-width: 820px;">
+            <div class="card-header fw-semibold">
+                <details<?= $configurado ? '' : ' open' ?>>
+                    <summary style="cursor:pointer;">Credenciais da integração</summary>
+                    <div class="pt-3">
+                        <p class="text-muted small">
+                            O <strong>refresh token</strong> do Cardápio Web expira a cada 5 dias — quando a conexão falhar,
+                            cole o novo aqui. Campos em branco <strong>mantêm</strong> o valor atual.
+                        </p>
+                        <form method="post" action="controller_financeiro.php?acao=salvar_config">
+                            <div class="row g-3">
+                                <?php foreach (financeiro_config_campos() as $k => $meta): $def = !empty($cfgAtual[$k]); ?>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-normal"><?= htmlspecialchars($meta['rotulo']) ?></label>
+                                        <?php if ($meta['secreto']): ?>
+                                            <input type="password" name="<?= $k ?>" class="form-control" autocomplete="new-password"
+                                                   placeholder="<?= $def ? '•••••••• (definido)' : 'não definido' ?>">
+                                        <?php else: ?>
+                                            <input type="text" name="<?= $k ?>" class="form-control"
+                                                   value="<?= htmlspecialchars((string) ($cfgAtual[$k] ?? '')) ?>" placeholder="não definido">
+                                        <?php endif; ?>
+                                        <?php if ($meta['secreto']): ?>
+                                            <div class="form-text"><?= $def ? '✓ já definido' : 'ainda não definido' ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <button type="submit" class="btn btn-primary mt-3">Salvar credenciais</button>
+                        </form>
+                    </div>
+                </details>
             </div>
         </div>
 
