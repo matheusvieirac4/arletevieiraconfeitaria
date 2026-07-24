@@ -309,8 +309,10 @@ function financeiro_casar_fornecedor(string $cnpj, string $razao, array $fornece
 }
 
 /**
- * Garante que o fornecedor exista no CW com o CNPJ. Só cadastra se ainda não
- * houver (nem por documento, nem por nome). Devolve 'criado' | 'existe' | 'ignorado'.
+ * Garante que o fornecedor exista no CW com o documento informado.
+ *  - Ninguém com esse nome/doc  -> cria (POST)            => 'criado'
+ *  - Existe pelo nome, SEM doc   -> completa o doc (PUT)   => 'atualizado'
+ *  - Já existe com doc igual/qualquer -> não mexe          => 'existe'
  * Nunca lança — falha vira 'ignorado' (não deve travar o lançamento).
  */
 function financeiro_fornecedor_garantir(CardapioWebApi $api, string $nome, string $documento): string
@@ -323,11 +325,23 @@ function financeiro_fornecedor_garantir(CardapioWebApi $api, string $nome, strin
     try {
         $lista = financeiro_extrair_lista($api->listarFornecedores());
         $nomeNorm = financeiro_normalizar_nome($nome);
+
+        // 1) Já existe alguém com esse mesmo documento? Nada a fazer.
         foreach ($lista as $f) {
             $fdoc = preg_replace('/\D/', '', (string) ($f['document'] ?? ''));
             if ($fdoc !== '' && $fdoc === $doc) { return 'existe'; }
-            if (financeiro_normalizar_nome((string) ($f['name'] ?? '')) === $nomeNorm) { return 'existe'; }
         }
+        // 2) Existe pelo nome: se estiver SEM documento, completa; senão respeita.
+        foreach ($lista as $f) {
+            if (financeiro_normalizar_nome((string) ($f['name'] ?? '')) !== $nomeNorm) { continue; }
+            $fdoc = preg_replace('/\D/', '', (string) ($f['document'] ?? ''));
+            if ($fdoc === '' && !empty($f['id'])) {
+                $api->atualizarFornecedor((int) $f['id'], $f, $doc);
+                return 'atualizado';
+            }
+            return 'existe';   // já tem documento próprio — não sobrescreve
+        }
+        // 3) Ninguém: cria novo.
         $api->criarFornecedor($nome, $doc);
         return 'criado';
     } catch (\Throwable $e) {

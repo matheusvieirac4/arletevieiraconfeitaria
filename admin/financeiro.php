@@ -677,23 +677,25 @@ $datalist = function (string $id, array $opts): string {
                             </div>
                             <div class="col-md-6">
                                 <?php
-                                // Documento mostrado no campo:
-                                //  - fornecedor casado -> o que ele já tem no CW (travado);
-                                //  - fornecedor novo   -> o que veio da nota (editável).
-                                $docNota  = preg_replace('/\D/', '', (string) ($revisao['fornecedor']['cnpj'] ?? ''));
-                                $docCampo = $fornCasado ? $fornDocExistente : $docNota;
-                                $ehCpf    = strlen($docCampo) === 11;
+                                // O campo só trava quando o fornecedor casado JÁ TEM documento
+                                // (nada a fazer). Casado sem documento fica editável: se o
+                                // usuário preencher, o doc é adicionado ao cadastro existente
+                                // (PUT), não duplica. Fornecedor novo também é editável.
+                                $docNota   = preg_replace('/\D/', '', (string) ($revisao['fornecedor']['cnpj'] ?? ''));
+                                $casadoComDoc = $fornCasado && $fornDocExistente !== '';
+                                $docCampo  = $casadoComDoc ? $fornDocExistente : $docNota;
+                                $ehCpf     = strlen($docCampo) === 11;
                                 ?>
                                 <label class="form-label">CNPJ / CPF do fornecedor</label>
-                                <input type="text" name="supplier_cnpj" class="form-control<?= $fornCasado ? ' bg-light' : '' ?>"
+                                <input type="text" name="supplier_cnpj" class="form-control<?= $casadoComDoc ? ' bg-light' : '' ?>"
                                        value="<?= htmlspecialchars($docCampo) ?>"
-                                       placeholder="<?= $fornCasado ? '' : 'opcional' ?>"
-                                       <?= $fornCasado ? 'readonly' : '' ?>>
+                                       placeholder="<?= $casadoComDoc ? '' : 'opcional' ?>"
+                                       <?= $casadoComDoc ? 'readonly' : '' ?>>
                                 <div class="form-text">
-                                    <?php if ($fornCasado && $fornDocExistente !== ''): ?>
+                                    <?php if ($casadoComDoc): ?>
                                         ✓ Fornecedor já cadastrado com este documento (<?= $ehCpf ? 'CPF / pessoa' : 'CNPJ / empresa' ?>).
                                     <?php elseif ($fornCasado): ?>
-                                        Fornecedor existente <strong>sem CNPJ cadastrado</strong>. Para completar, edite-o direto no Cardápio Web.
+                                        Fornecedor existente <strong>sem CNPJ cadastrado</strong>. Preencha para completar o cadastro (ou deixe em branco).
                                     <?php elseif ($ehCpf): ?>
                                         CPF (11 dígitos) — será cadastrado como <strong>pessoa</strong>.
                                     <?php else: ?>

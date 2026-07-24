@@ -128,6 +128,12 @@ class CardapioWebApi
         return $this->decode($status, $resp, "POST $path");
     }
 
+    public function put(string $path, array $payload): array
+    {
+        [$status, $resp] = $this->apiRequest('PUT', $path, json_encode($payload, JSON_UNESCAPED_UNICODE));
+        return $this->decode($status, $resp, "PUT $path");
+    }
+
     // ----------------------------------------------------------- Recursos ---
 
     public function listarContas(): array          { return $this->get('/financial/accounts'); }
@@ -162,6 +168,27 @@ class CardapioWebApi
                 'notes'         => null,
             ],
         ]);
+    }
+
+    /**
+     * Atualiza um fornecedor existente (PUT /financial/suppliers/{id}).
+     * Preserva os campos que já vieram no cadastro ($existente) e só sobrescreve
+     * o documento — assim não zera email/pix/telefone que a API reenvia no corpo.
+     */
+    public function atualizarFornecedor(int $id, array $existente, string $documento): array
+    {
+        $doc  = preg_replace('/\D/', '', $documento);
+        $tipo = strlen($doc) === 11 ? 'cpf' : 'cnpj';
+        $campos = ['name', 'kind', 'active', 'phone_number', 'email', 'company_name', 'pix_key_type', 'pix_key', 'notes'];
+        $supplier = [];
+        foreach ($campos as $c) {
+            $supplier[$c] = $existente[$c] ?? null;
+        }
+        if (empty($supplier['kind']))   { $supplier['kind'] = 'supplier'; }
+        if (!isset($existente['active'])) { $supplier['active'] = true; }
+        $supplier['document_type'] = $tipo;
+        $supplier['document']      = $doc;
+        return $this->put('/financial/suppliers/' . $id, ['supplier' => $supplier]);
     }
 
     // ------------------------------------------------------------ Internos ---
