@@ -288,7 +288,7 @@ $datalist = function (string $id, array $opts): string {
                     <input type="file" id="cp-cam-input" accept="image/*" capture="environment" class="d-none">
                     <div id="cp-chips" class="d-flex flex-wrap gap-2 mb-2"></div>
                     <textarea id="cp-text" class="form-control mb-2" rows="2"
-                        placeholder="Descreva a compra (ex.: 'paguei 84,90 no pix, conta Sicredi, embalagens da SOS')&#10;ou anexe um XML / foto do QR pelo botão +"></textarea>
+                        placeholder="Descreva a compra (ex.: 'paguei 84,90 no pix, conta Sicredi, embalagens da SOS')&#10;ou anexe um XML / foto pelo botão +. Foto + texto juntos funcionam: o cupom dá fornecedor e valor, o texto explica a finalidade (ex.: 'é vale do Matheus')."></textarea>
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex gap-2">
                             <div class="dropdown">
@@ -432,13 +432,24 @@ $datalist = function (string $id, array $opts): string {
                     btnEnviar.disabled = false;
                 }
 
-                // Processa uma foto de cupom: 1º tenta QR (grátis), senão IA de visão.
+                // Processa uma foto de cupom.
+                // Sem instrução escrita: tenta o QR primeiro, que é grátis e exato.
+                // COM instrução escrita: vai direto para a IA de visão — o caminho
+                // do QR só lê a chave de acesso e descartaria o que você digitou
+                // (ex.: "cupom da padaria, mas é vale do Matheus").
                 async function processarFoto(file, textoExtra) {
+                    const instrucao = (textoExtra || '').trim();
                     travar('Lendo…');
+                    if (instrucao && IA_ON) {
+                        showMsg('Lendo o cupom junto com a sua instrução…', 'info');
+                        travar('Lendo cupom…');
+                        enviarCupom(file, instrucao);
+                        return;
+                    }
                     showMsg('Processando a foto do cupom…', 'info');
                     const qr = await lerQrDaImagem(file);
                     if (qr) { enviarChave(qr); return; }          // QR → chave (grátis)
-                    if (IA_ON) { travar('Lendo cupom…'); enviarCupom(file, textoExtra || ''); return; }
+                    if (IA_ON) { travar('Lendo cupom…'); enviarCupom(file, instrucao); return; }
                     destravar();
                     showMsg('Não encontrei QR nessa foto e a IA não está configurada.', 'warning');
                 }

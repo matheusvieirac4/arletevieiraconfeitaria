@@ -46,7 +46,22 @@ class GeminiClient
     {
         $parts = [['text' => $this->instrucoes($ctx)]];
         if ($textoExtra !== '') {
-            $parts[] = ['text' => "Observação do usuário:\n" . $textoExtra];
+            // A observação é uma INSTRUÇÃO, não só contexto: o cupom diz onde foi
+            // comprado, o usuário diz o que aquilo significa (ex.: cupom da
+            // padaria que na verdade é vale de um funcionário). Por isso ela
+            // manda na classificação, mas não inventa fornecedor/valor/data.
+            $parts[] = ['text' => implode("\n", [
+                'INSTRUÇÃO DO USUÁRIO sobre este documento (tem PRIORIDADE sobre o que está impresso):',
+                $textoExtra,
+                '',
+                'Como aplicar: fornecedor, CNPJ, valor e datas continuam vindo do documento,',
+                'a menos que a instrução diga explicitamente outra coisa. Já a descrição, a',
+                'categoria e o centro de custo devem seguir a instrução — ela explica a',
+                'finalidade real da despesa, que o cupom não mostra. Se a instrução citar uma',
+                'pessoa, um evento ou uma finalidade (vale, adiantamento, consumo próprio,',
+                'festa, obra...), leve isso para description. Copie a instrução, na íntegra,',
+                'no campo observation.',
+            ])];
         }
         $parts[] = ['inline_data' => ['mime_type' => $mime, 'data' => $base64]];
         $parts[] = ['text' => 'Leia este cupom/nota fiscal e extraia o lançamento de despesa.'];
