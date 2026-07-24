@@ -391,12 +391,16 @@ function financeiro_contas_abertas_semelhantes(CardapioWebApi $api, string $supp
     $iniQ = date('Y-m-d', $ts - 18 * 86400);
     $fimQ = date('Y-m-d', $ts + 18 * 86400);
 
+    // Filtro por settlement_date (o único range de data comprovadamente aceito
+    // pelo ransack do CW). Conta pendente vem com settlement_date = vencimento,
+    // então a janela captura a recorrência do mês; a conferência fina de
+    // vencimento é feita abaixo, em PHP.
     try {
         $resp = $api->listarTransacoes([
             'q' => [
-                'activity_type_eq' => 'out',
-                'due_date_gteq'    => $iniQ,
-                'due_date_lteq'    => $fimQ,
+                'activity_type_eq'     => 'out',
+                'settlement_date_gteq' => $iniQ,
+                'settlement_date_lteq' => $fimQ,
             ],
             'page'     => 1,
             'per_page' => 100,
@@ -404,6 +408,8 @@ function financeiro_contas_abertas_semelhantes(CardapioWebApi $api, string $supp
     } catch (\Throwable $e) {
         return [];   // falha na consulta nunca trava o fluxo normal
     }
+    $venToleranciaIni = date('Y-m-d', $ts - 20 * 86400);
+    $venToleranciaFim = date('Y-m-d', $ts + 20 * 86400);
 
     $out = [];
     foreach (financeiro_extrair_lista($resp) as $t) {
@@ -420,7 +426,11 @@ function financeiro_contas_abertas_semelhantes(CardapioWebApi $api, string $supp
             if (!empty($sett)) { continue; }           // fallback se não vier status
         }
 
-        // 2) Fornecedor: por id quando ambos existem; senão por nome. Sem
+        // 2) Vencimento perto do de referência (a recorrência é mensal).
+        $venc = (string) ($t['due_date'] ?? '');
+        if ($venc !== '' && ($venc < $venToleranciaIni || $venc > $venToleranciaFim)) { continue; }
+
+        // 3) Fornecedor: por id quando ambos existem; senão por nome. Sem
         //    confirmação de fornecedor, descarta (evita sugerir conta alheia).
         $tid   = isset($t['supplier_id']) ? (int) $t['supplier_id'] : (int) ($t['supplier']['id'] ?? 0);
         $tnome = (string) ($t['supplier_name'] ?? ($t['supplier']['name'] ?? ''));
