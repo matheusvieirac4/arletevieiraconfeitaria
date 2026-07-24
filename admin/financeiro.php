@@ -27,6 +27,7 @@ $sefazUltima = financeiro_sefaz_ultima_execucao();      // timestamp da última 
 
 // Se há revisão, busca os cadastros para montar os campos.
 $listas = ['contas' => [], 'categorias' => [], 'fornecedores' => [], 'formas' => [], 'centros' => []];
+$categoriasGrupos = [];   // ['Grupo' => ['Categoria', ...]] para o <optgroup>
 $fornecedoresFull = [];
 $erroListas = '';
 if ($revisao && $configurado) {
@@ -34,7 +35,9 @@ if ($revisao && $configurado) {
         $api = financeiro_api();
         $fornecedoresFull       = financeiro_extrair_lista($api->listarFornecedores());
         $listas['contas']       = financeiro_nomes($api->listarContas());
-        $listas['categorias']   = financeiro_nomes($api->listarCategorias());
+        $respCategorias         = $api->listarCategorias();
+        $listas['categorias']   = financeiro_nomes($respCategorias);
+        $categoriasGrupos       = financeiro_categorias_agrupadas($respCategorias);
         $listas['fornecedores'] = financeiro_nomes($api->listarFornecedores());
         $listas['formas']       = financeiro_nomes($api->listarFormasPagamento());
         $listas['centros']      = financeiro_nomes($api->listarCentrosCusto());
@@ -515,14 +518,61 @@ $datalist = function (string $id, array $opts): string {
                                 <input type="text" name="payment_method" class="form-control" list="dl-formas" value="<?= htmlspecialchars($l['payment_method']) ?>">
                             </div>
 
+                            <?php
+                            // Categoria e centro de custo são SEMPRE escolhidos entre os já
+                            // cadastrados — os cadastros do Cardápio Web já são abrangentes e
+                            // criar nomes novos só gera duplicidade. Se a sugestão da IA/regra
+                            // não bater com nenhum existente, ela é descartada e avisamos.
+                            $catSugerida  = trim((string) $l['category']);
+                            $ccSugerido   = trim((string) $l['cost_center']);
+                            $catExiste    = $catSugerida !== '' && in_array($catSugerida, $listas['categorias'], true);
+                            $ccExiste     = $ccSugerido !== '' && in_array($ccSugerido, $listas['centros'], true);
+                            $temCadastros = !$erroListas && $listas['categorias'];
+                            ?>
                             <div class="col-md-6">
                                 <label class="form-label">Categoria</label>
-                                <input type="text" name="category" class="form-control" list="dl-categorias" value="<?= htmlspecialchars($l['category']) ?>">
-                                <div class="form-text">Se não existir, o Cardápio Web cria automaticamente.</div>
+                                <?php if ($temCadastros): ?>
+                                    <select name="category" class="form-select">
+                                        <option value="">Selecione...</option>
+                                        <?php foreach ($categoriasGrupos as $grupo => $itens): ?>
+                                            <optgroup label="<?= htmlspecialchars($grupo, ENT_QUOTES) ?>">
+                                                <?php foreach ($itens as $c): ?>
+                                                    <option value="<?= htmlspecialchars($c, ENT_QUOTES) ?>" <?= ($catExiste && $catSugerida === $c ? 'selected' : '') ?>><?= htmlspecialchars($c) ?></option>
+                                                <?php endforeach; ?>
+                                            </optgroup>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="form-text">
+                                        <?php if ($catSugerida !== '' && !$catExiste): ?>
+                                            <span class="text-danger">A sugestão “<?= htmlspecialchars($catSugerida) ?>” não existe no cadastro. Escolha a categoria equivalente.</span>
+                                        <?php else: ?>
+                                            Agrupadas por subcategoria. Use sempre uma já cadastrada.
+                                        <?php endif; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <input type="text" name="category" class="form-control" list="dl-categorias" value="<?= htmlspecialchars($catSugerida) ?>">
+                                    <div class="form-text">Cadastros indisponíveis — digite manualmente.</div>
+                                <?php endif; ?>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Centro de custo</label>
-                                <input type="text" name="cost_center" class="form-control" list="dl-centros" value="<?= htmlspecialchars($l['cost_center']) ?>">
+                                <?php if (!$erroListas && $listas['centros']): ?>
+                                    <select name="cost_center" class="form-select">
+                                        <option value="">Selecione...</option>
+                                        <?php foreach ($listas['centros'] as $c): ?>
+                                            <option value="<?= htmlspecialchars($c, ENT_QUOTES) ?>" <?= ($ccExiste && $ccSugerido === $c ? 'selected' : '') ?>><?= htmlspecialchars($c) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="form-text">
+                                        <?php if ($ccSugerido !== '' && !$ccExiste): ?>
+                                            <span class="text-danger">A sugestão “<?= htmlspecialchars($ccSugerido) ?>” não existe no cadastro. Escolha o centro equivalente.</span>
+                                        <?php else: ?>
+                                            Use sempre um já cadastrado.
+                                        <?php endif; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <input type="text" name="cost_center" class="form-control" list="dl-centros" value="<?= htmlspecialchars($ccSugerido) ?>">
+                                <?php endif; ?>
                             </div>
 
                             <div class="col-md-6">

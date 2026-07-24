@@ -69,6 +69,8 @@ class GeminiClient
             '- Para account, category, cost_center, payment_method e supplier: use EXATAMENTE',
             '  um dos nomes já cadastrados abaixo quando houver correspondência; se não houver,',
             '  use o nome mais natural. NÃO invente contas que não existem.',
+            '- category e cost_center: NUNCA invente. Escolha OBRIGATORIAMENTE um dos nomes',
+            '  listados abaixo, copiado caractere por caractere. Se nenhum servir, deixe vazio.',
             '- Se houver um CNPJ (14 dígitos) ou CPF junto ao fornecedor, coloque só os dígitos',
             '  em supplier_cnpj e deixe supplier com o NOME LIMPO, sem o número.',
             '- settlement_date (data de pagamento): se a forma NÃO for boleto (pix, dinheiro,',

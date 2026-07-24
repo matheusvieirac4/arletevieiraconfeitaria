@@ -311,6 +311,97 @@ function financeiro_nomes($resp): array
     return $nomes;
 }
 
+/**
+ * Agrupa as categorias por subcategoria/grupo para montar <optgroup> no select.
+ *
+ * O lookup do Cardápio Web pode expressar a hierarquia de formas diferentes
+ * (children aninhados, parent_id apontando para outro item, ou um rótulo de
+ * grupo no próprio item). Tratamos todos os casos; o que não tiver pai cai em
+ * "Outras".
+ *
+ * @return array<string, string[]> ['Grupo' => ['Categoria', ...]]
+ */
+function financeiro_categorias_agrupadas($resp): array
+{
+    $itens = financeiro_extrair_lista($resp);
+
+    // Mapa id => nome, para resolver parent_id.
+    $porId = [];
+    foreach ($itens as $it) {
+        if (is_array($it) && isset($it['id'], $it['name'])) {
+            $porId[(string) $it['id']] = (string) $it['name'];
+        }
+    }
+
+    // Quem é pai de alguém só serve de rótulo de grupo — não vira opção sozinho.
+    $ehPai = [];
+    foreach ($itens as $it) {
+        if (!is_array($it)) { continue; }
+        foreach (['parent_id', 'category_id', 'group_id', 'father_id'] as $k) {
+            if (!empty($it[$k]) && isset($porId[(string) $it[$k]])) { $ehPai[$porId[(string) $it[$k]]] = true; }
+        }
+    }
+
+    $grupos = [];
+    $add = function (string $grupo, string $nome) use (&$grupos): void {
+        if ($nome === '') { return; }
+        if (!isset($grupos[$grupo])) { $grupos[$grupo] = []; }
+        $grupos[$grupo][] = $nome;
+    };
+
+    foreach ($itens as $it) {
+        if (!is_array($it) || empty($it['name'])) { continue; }
+        $nome = (string) $it['name'];
+        if (isset($ehPai[$nome])) { continue; }
+
+        // Caso A: o item traz filhos — ele é o grupo.
+        if (!empty($it['children']) && is_array($it['children'])) {
+            foreach ($it['children'] as $f) {
+                if (is_array($f) && !empty($f['name'])) { $add($nome, (string) $f['name']); }
+            }
+            continue;
+        }
+
+        // Caso B: aponta para um pai.
+        $pai = '';
+        foreach (['parent', 'category', 'group', 'category_group', 'father'] as $k) {
+            if (!isset($it[$k])) { continue; }
+            if (is_array($it[$k]) && !empty($it[$k]['name'])) { $pai = (string) $it[$k]['name']; break; }
+            if (is_string($it[$k]) && $it[$k] !== '') { $pai = $it[$k]; break; }
+        }
+        if ($pai === '') {
+            foreach (['parent_id', 'category_id', 'group_id', 'father_id'] as $k) {
+                if (!empty($it[$k]) && isset($porId[(string) $it[$k]])) { $pai = $porId[(string) $it[$k]]; break; }
+            }
+        }
+
+        // Caso C: hierarquia embutida no próprio nome ("Insumos > Farinha").
+        if ($pai === '') {
+            foreach ([' > ', ' / ', ' - '] as $sep) {
+                if (strpos($nome, $sep) !== false) {
+                    [$pai, $nome] = array_map('trim', explode($sep, $nome, 2));
+                    break;
+                }
+            }
+        }
+
+        $add($pai !== '' ? $pai : 'Outras', $nome);
+    }
+
+    foreach ($grupos as $g => $lista) {
+        $lista = array_values(array_unique($lista));
+        sort($lista, SORT_NATURAL | SORT_FLAG_CASE);
+        $grupos[$g] = $lista;
+    }
+    uksort($grupos, function ($a, $b) {
+        if ($a === 'Outras') { return 1; }
+        if ($b === 'Outras') { return -1; }
+        return strnatcasecmp($a, $b);
+    });
+
+    return $grupos;
+}
+
 // ------------------- Regras por fornecedor (classificação aprendida) ---
 // A ferramenta memoriza como cada fornecedor (chave = CNPJ) foi classificado
 // da última vez, para pré-preencher as próximas notas dele automaticamente.
