@@ -263,6 +263,34 @@ function financeiro_casar_fornecedor(string $cnpj, string $razao, array $fornece
     }
 
     $alvo = financeiro_normalizar_nome($razao);
+
+    // Nome curto/parcial ("matheus" para "Matheus Vieira Cardoso"): a similaridade
+    // por caractere não pega isso (dá ~48%, abaixo do corte). Antes dela, tenta
+    // casar por PALAVRAS: se todas as palavras do que foi digitado estiverem no
+    // nome de um cadastro, e de UM SÓ, é ele. Havendo empate (dois "Casa ..."),
+    // não adivinha — deixa o usuário escolher.
+    $palavras = array_values(array_filter(
+        preg_split('/\s+/', $alvo) ?: [],
+        fn($p) => mb_strlen($p, 'UTF-8') >= 3      // ignora "de", "da", "do"
+    ));
+    if ($palavras) {
+        $candidatos = [];
+        foreach ($fornecedores as $f) {
+            $nome = (string) ($f['name'] ?? '');
+            if ($nome === '') { continue; }
+            $tokens = preg_split('/\s+/', financeiro_normalizar_nome($nome)) ?: [];
+            $contemTodas = true;
+            foreach ($palavras as $p) {
+                if (!in_array($p, $tokens, true)) { $contemTodas = false; break; }
+            }
+            if ($contemTodas) { $candidatos[] = $nome; }
+        }
+        $candidatos = array_values(array_unique($candidatos));
+        if (count($candidatos) === 1) {
+            return ['name' => $candidatos[0], 'match' => 'nome'];
+        }
+    }
+
     $melhorNome = '';
     $melhorScore = 0.0;
     if ($alvo !== '') {
