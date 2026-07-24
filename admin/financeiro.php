@@ -339,17 +339,34 @@ $datalist = function (string $id, array $opts): string {
                     document.getElementById('cp-form-texto').submit();
                 }
 
-                document.getElementById('cp-enviar').onclick = async () => {
-                    if (anexoXml) { enviarXml(anexoXml); return; }
+                const btnEnviar = document.getElementById('cp-enviar');
+                function travar(msg) {
+                    if (!btnEnviar.classList.contains('is-loading')) {
+                        btnEnviar.dataset.htmlOriginal = btnEnviar.innerHTML; // salva o original só uma vez
+                    }
+                    btnEnviar.classList.add('is-loading');
+                    btnEnviar.disabled = true;
+                    btnEnviar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + (msg || 'Enviando…');
+                }
+                function destravar() {
+                    if (btnEnviar.dataset.htmlOriginal) { btnEnviar.innerHTML = btnEnviar.dataset.htmlOriginal; }
+                    btnEnviar.classList.remove('is-loading');
+                    btnEnviar.disabled = false;
+                }
+
+                btnEnviar.onclick = async () => {
+                    if (anexoXml) { travar(); enviarXml(anexoXml); return; }
                     if (anexoFoto) {
+                        travar('Lendo…');
                         const qr = await lerQrDaImagem(anexoFoto);
                         if (qr) { enviarChave(qr); return; }          // QR → chave (grátis)
-                        if (IA_ON) { enviarCupom(anexoFoto, txt.value.trim()); return; } // sem QR → IA lê o cupom
+                        if (IA_ON) { travar('Lendo cupom…'); enviarCupom(anexoFoto, txt.value.trim()); return; }
+                        destravar();
                         alert('Não encontrei QR nessa foto e a IA não está configurada (adicione gemini_api_key em config_financeiro.php).');
                         return;
                     }
                     if (txt.value.trim()) {
-                        if (IA_ON) { enviarTexto(txt.value.trim()); return; }
+                        if (IA_ON) { travar('Lendo…'); enviarTexto(txt.value.trim()); return; }
                         alert('A leitura de texto precisa da IA (adicione gemini_api_key em config_financeiro.php).');
                         return;
                     }

@@ -55,4 +55,14 @@
         background: transparent url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e") center/1em auto no-repeat;
     }
     .btn-close:hover { opacity: .75; }
+
+    /* Spinner (o app.css do AdminKit também não inclui) — usado no loading dos botões */
+    .spinner-border {
+        display: inline-block; width: 1rem; height: 1rem; vertical-align: -.125em;
+        border: .2em solid currentColor; border-right-color: transparent;
+        border-radius: 50%; animation: .75s linear infinite spinner-border;
+    }
+    .spinner-border-sm { width: .85rem; height: .85rem; border-width: .15em; }
+    @keyframes spinner-border { to { transform: rotate(360deg); } }
+    .btn.is-loading { pointer-events: none; opacity: .85; }
 </style>
