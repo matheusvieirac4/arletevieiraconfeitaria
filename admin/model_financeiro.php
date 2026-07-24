@@ -144,7 +144,8 @@ function financeiro_contexto_cadastros(CardapioWebApi $api): array
 {
     return [
         'contas'       => financeiro_nomes($api->listarContas()),
-        'categorias'   => financeiro_nomes($api->listarCategorias()),
+        // Para a IA, só as subcategorias escolhíveis (sem os rótulos numerados).
+        'categorias'   => financeiro_categorias_selecionaveis(financeiro_categorias_agrupadas($api->listarCategorias())),
         'centros'      => financeiro_nomes($api->listarCentrosCusto()),
         'formas'       => financeiro_nomes($api->listarFormasPagamento()),
         'fornecedores' => financeiro_nomes($api->listarFornecedores()),
@@ -314,16 +315,56 @@ function financeiro_nomes($resp): array
 /**
  * Agrupa as categorias por subcategoria/grupo para montar <optgroup> no select.
  *
- * O lookup do Cardápio Web pode expressar a hierarquia de formas diferentes
- * (children aninhados, parent_id apontando para outro item, ou um rótulo de
- * grupo no próprio item). Tratamos todos os casos; o que não tiver pai cai em
- * "Outras".
+ * O Cardápio Web devolve uma lista PLANA, na ordem certa, em que a numeração do
+ * nome indica o nível ("4.02 Custos com produtos e serviços" = categoria; os
+ * itens seguintes sem número = subcategorias dela). Também tratamos os formatos
+ * genéricos (children, parent_id, rótulo de grupo) caso a API mude.
  *
  * @return array<string, string[]> ['Grupo' => ['Categoria', ...]]
  */
 function financeiro_categorias_agrupadas($resp): array
 {
     $itens = financeiro_extrair_lista($resp);
+
+    // --- Caso do Cardápio Web: lista PLANA, hierarquia pela numeração ---------
+    // Vem na ordem certa e o nome diz o nível: "4.02 Custos com produtos e
+    // serviços" é categoria (rótulo, não selecionável) e tudo que vem depois
+    // sem numeração ("Bebidas", "Embalagens"...) é subcategoria dela. É assim
+    // que o próprio CW monta o select. Só usamos este caminho se realmente
+    // houver itens numerados, senão caímos na detecção genérica abaixo.
+    $temNumerado = false;
+    foreach ($itens as $it) {
+        if (is_array($it) && !empty($it['name']) && preg_match('/^\d+(\.\d+)+\s/u', (string) $it['name'])) {
+            $temNumerado = true;
+            break;
+        }
+    }
+    if ($temNumerado) {
+        $grupos  = [];
+        $atual   = 'Outras';
+        $ordem   = [];   // preserva a ordem de chegada dos grupos
+        foreach ($itens as $it) {
+            if (!is_array($it) || empty($it['name'])) { continue; }
+            $nome = trim((string) $it['name']);
+            if (preg_match('/^\d+(\.\d+)+\s/u', $nome)) {
+                $atual = $nome;                       // abre uma nova categoria
+                if (!isset($grupos[$atual])) { $grupos[$atual] = []; $ordem[] = $atual; }
+                continue;
+            }
+            if (!isset($grupos[$atual])) { $grupos[$atual] = []; $ordem[] = $atual; }
+            $grupos[$atual][] = $nome;                // subcategoria da atual
+        }
+        // Categoria numerada sem nenhuma subcategoria continua selecionável
+        // (senão ela sumiria do select).
+        foreach ($grupos as $g => $subs) {
+            if (!$subs) { $grupos[$g] = [$g]; }
+        }
+        $ordenado = [];
+        foreach ($ordem as $g) {
+            $ordenado[$g] = array_values(array_unique($grupos[$g]));
+        }
+        return $ordenado;
+    }
 
     // Mapa id => nome, para resolver parent_id.
     $porId = [];
@@ -400,6 +441,19 @@ function financeiro_categorias_agrupadas($resp): array
     });
 
     return $grupos;
+}
+
+/**
+ * Nomes de categoria que podem de fato ser escolhidos (as folhas do agrupamento).
+ * Rótulos de categoria numerada não entram — no CW eles são só cabeçalho.
+ */
+function financeiro_categorias_selecionaveis(array $grupos): array
+{
+    $nomes = [];
+    foreach ($grupos as $subs) {
+        foreach ($subs as $s) { $nomes[] = $s; }
+    }
+    return array_values(array_unique($nomes));
 }
 
 // ------------------- Regras por fornecedor (classificação aprendida) ---

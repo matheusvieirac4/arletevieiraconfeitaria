@@ -36,8 +36,9 @@ if ($revisao && $configurado) {
         $fornecedoresFull       = financeiro_extrair_lista($api->listarFornecedores());
         $listas['contas']       = financeiro_nomes($api->listarContas());
         $respCategorias         = $api->listarCategorias();
-        $listas['categorias']   = financeiro_nomes($respCategorias);
         $categoriasGrupos       = financeiro_categorias_agrupadas($respCategorias);
+        // Só as folhas: os rótulos numerados são cabeçalho, não são escolhíveis.
+        $listas['categorias']   = financeiro_categorias_selecionaveis($categoriasGrupos);
         $listas['fornecedores'] = financeiro_nomes($api->listarFornecedores());
         $listas['formas']       = financeiro_nomes($api->listarFormasPagamento());
         $listas['centros']      = financeiro_nomes($api->listarCentrosCusto());
