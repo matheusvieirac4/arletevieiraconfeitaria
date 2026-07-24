@@ -1,0 +1,17 @@
+# Bloqueia acesso web à pasta de dados do painel (credenciais, tokens, filas).
+# Esses arquivos só devem ser lidos pelo PHP, nunca servidos pelo navegador.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^data/ - [F,L]
+</IfModule>
+
+# Reforço: nega qualquer .json/.p12/.pfx servido diretamente desta pasta.
+<FilesMatch "\.(json|p12|pfx|pem|key)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

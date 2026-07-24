@@ -13,6 +13,21 @@ function financeiro_config_path(): string
     return __DIR__ . '/config_financeiro.php';
 }
 
+/**
+ * Garante a pasta de dados COM proteção contra acesso web (defesa em profundidade:
+ * vale mesmo que o .htaccess de admin/ não seja aplicado pelo servidor).
+ */
+function financeiro_data_dir(): string
+{
+    $dir = __DIR__ . '/data';
+    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    $ht = $dir . '/.htaccess';
+    if (is_dir($dir) && !is_file($ht)) {
+        @file_put_contents($ht, "Require all denied\n<IfModule !mod_authz_core.c>\nOrder allow,deny\nDeny from all\n</IfModule>\n");
+    }
+    return $dir;
+}
+
 /** Arquivo gravável com as credenciais editadas pelo painel (sobrescreve a config). */
 function financeiro_config_override_path(): string
 {
@@ -76,8 +91,7 @@ function financeiro_config_salvar(array $novos): bool
         $atual[$k] = $v;
     }
 
-    $dir = dirname(financeiro_config_override_path());
-    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+    if (!is_dir(financeiro_data_dir())) {
         return false;
     }
     return file_put_contents(
@@ -404,7 +418,7 @@ function financeiro_nsu_state(): array
 function financeiro_nsu_state_gravar(array $state): void
 {
     $dir = dirname(financeiro_nsu_state_path());
-    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    financeiro_data_dir();
     file_put_contents(financeiro_nsu_state_path(), json_encode($state, JSON_PRETTY_PRINT));
 }
 
@@ -456,7 +470,7 @@ function financeiro_pendente_salvar(string $chave, array $nota): bool
     $reg = financeiro_pendentes_listar();
     $reg[$chave] = $nota + ['recebido_em' => date('c')];
     $dir = dirname(financeiro_pendentes_path());
-    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    financeiro_data_dir();
     return file_put_contents(financeiro_pendentes_path(), json_encode($reg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) !== false;
 }
 
@@ -623,7 +637,7 @@ function financeiro_enviado_registrar(string $supplier, string $value, string $d
         'em'         => date('c'),
     ];
     $dir = dirname(financeiro_enviados_path());
-    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    financeiro_data_dir();
     file_put_contents(financeiro_enviados_path(), json_encode($lista, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
 }
 
