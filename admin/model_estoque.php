@@ -242,15 +242,58 @@ function estoque_movimentacoes(PDO $pdo, int $itemId, int $limite = 30): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/**
- * Casa um item da nota (código de barras + descrição) com um item do estoque.
- * Prioridade: código de barras (exato) > semelhança de nome (>= 60%) > nenhum.
- * Recebe $itensCache (lista de itens ativos) para não consultar a cada linha.
- *
- * @return array{item_id:?int, match:string}  match: 'barcode'|'nome'|'nenhum'
- */
-function estoque_casar_item(string $ean, string $descricao, array $itensCache): array
+/** Normaliza um nome/descrição para comparar (minúsculo, sem acento, sem espaço extra). */
+function estoque_normalizar_nome(string $s): string
 {
+    $s = mb_strtolower(trim($s), 'UTF-8');
+    $s = strtr($s, ['á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e',
+                    'í'=>'i','ì'=>'i','î'=>'i','ó'=>'o','ò'=>'o','ô'=>'o','õ'=>'o','ö'=>'o',
+                    'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c']);
+    return trim(preg_replace('/\s+/', ' ', $s));
+}
+
+/** Mapa alias_normalizado => item_id (só itens ativos). [] se a tabela não existir. */
+function estoque_aliases_map(PDO $pdo): array
+{
+    try {
+        $rows = $pdo->query("
+            SELECT a.alias, a.item_id
+            FROM estoque_item_aliases a
+            JOIN estoque_itens i ON i.id = a.item_id AND i.ativo = 1
+        ")->fetchAll(PDO::FETCH_KEY_PAIR);
+        return $rows ?: [];
+    } catch (\Throwable $e) {
+        return [];
+    }
+}
+
+/** Aprende: liga a descrição (ex.: como vem no cupom) a um item do estoque. */
+function estoque_alias_salvar(PDO $pdo, string $descricao, int $itemId): void
+{
+    $alias = mb_substr(estoque_normalizar_nome($descricao), 0, 190, 'UTF-8');
+    if ($alias === '' || $itemId <= 0) { return; }
+    try {
+        $pdo->prepare("INSERT INTO estoque_item_aliases (alias, item_id) VALUES (:a, :i)
+                       ON DUPLICATE KEY UPDATE item_id = :i2")
+            ->execute([':a' => $alias, ':i' => $itemId, ':i2' => $itemId]);
+    } catch (\Throwable $e) { /* tabela ausente: ignora silenciosamente */ }
+}
+
+/**
+ * Casa um item da nota/cupom (código de barras + descrição) com um item do estoque.
+ * Prioridade: ALIAS aprendido > código de barras > semelhança de nome (>=60%) > nenhum.
+ * Recebe $itensCache (itens ativos) e $aliases (mapa aprendido) para não consultar por linha.
+ *
+ * @return array{item_id:?int, match:string}  match: 'alias'|'barcode'|'nome'|'nenhum'
+ */
+function estoque_casar_item(string $ean, string $descricao, array $itensCache, array $aliases = []): array
+{
+    // 1) Alias aprendido (a mesma descrição já foi casada antes).
+    $norm = estoque_normalizar_nome($descricao);
+    if ($norm !== '' && isset($aliases[$norm])) {
+        return ['item_id' => (int) $aliases[$norm], 'match' => 'alias'];
+    }
+    // 2) Código de barras exato.
     $ean = preg_replace('/\D/', '', $ean);
     if ($ean !== '') {
         foreach ($itensCache as $it) {

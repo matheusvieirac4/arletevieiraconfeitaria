@@ -85,7 +85,8 @@ require __DIR__ . '/_header.php';
                                         <div class="small text-muted">
                                             <?php if ($l['ean']): ?>cód. <?= htmlspecialchars($l['ean']) ?> · <?php endif; ?>
                                             <?= htmlspecialchars($l['unidade']) ?>
-                                            <?php if ($l['match'] === 'barcode'): ?><span class="badge bg-success">casou por código</span>
+                                            <?php if ($l['match'] === 'alias'): ?><span class="badge bg-info text-dark">casou pelo histórico</span>
+                                            <?php elseif ($l['match'] === 'barcode'): ?><span class="badge bg-success">casou por código</span>
                                             <?php elseif ($l['match'] === 'nome'): ?><span class="badge bg-warning text-dark">casou por nome — confira</span>
                                             <?php else: ?><span class="badge bg-secondary">sem correspondência</span><?php endif; ?>
                                         </div>

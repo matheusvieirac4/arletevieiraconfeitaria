@@ -61,9 +61,10 @@ if ($acao === 'entrada_xml' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     // Pré-casa cada item da nota com o estoque.
     $cache = estoque_listar($pdo);
+    $aliases = estoque_aliases_map($pdo);
     $linhas = [];
     foreach ($nota['itens'] as $it) {
-        $casa = estoque_casar_item($it['ean'] ?? '', $it['descricao'] ?? '', $cache);
+        $casa = estoque_casar_item($it['ean'] ?? '', $it['descricao'] ?? '', $cache, $aliases);
         $linhas[] = [
             'descricao' => $it['descricao'] ?? '',
             'ean'       => preg_replace('/\D/', '', (string) ($it['ean'] ?? '')),
@@ -101,11 +102,12 @@ if ($acao === 'entrada_cupom' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         estoque_redirect('danger', 'Falha ao ler o cupom: ' . $e->getMessage(), 'estoque_entrada.php');
     }
     $cache = estoque_listar($pdo);
+    $aliases = estoque_aliases_map($pdo);
     $linhas = [];
     foreach (($r['itens'] ?? []) as $it) {
         $desc = trim((string) ($it['descricao'] ?? ''));
         if ($desc === '') { continue; }
-        $casa = estoque_casar_item('', $desc, $cache);   // cupom não traz barcode confiável
+        $casa = estoque_casar_item('', $desc, $cache, $aliases);   // cupom não traz barcode confiável
         $linhas[] = [
             'descricao'  => $desc,
             'ean'        => '',
@@ -153,6 +155,9 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($ean !== '') { estoque_definir_barcode($pdo, $id, $ean); }
             }
             estoque_movimentar($pdo, $id, 'entrada', $qtd, $origem, '', estoque_responsavel_atual());
+            // Aprende: liga a descrição desta linha ao item escolhido, para casar
+            // automaticamente da próxima vez (mesmo fornecedor = mesma descrição).
+            estoque_alias_salvar($pdo, (string) ($descs[$i] ?? ''), $id);
             $aplicadas++;
         }
     } catch (\Throwable $e) {
