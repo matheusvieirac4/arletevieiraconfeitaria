@@ -66,13 +66,18 @@ class NFeParser
             ];
         }
 
-        // Itens (para referência/detalhe na revisão).
+        // Itens (para referência na revisão e para dar entrada no estoque).
         $itens = [];
         foreach ($xml->xpath('//n:infNFe/n:det/n:prod') ?: [] as $prod) {
+            $ean = self::val($prod, 'cEAN');
+            if (strtoupper($ean) === 'SEM GTIN') { $ean = ''; }
             $itens[] = [
                 'descricao'  => self::val($prod, 'xProd'),
                 'quantidade' => self::val($prod, 'qCom'),
                 'valor'      => self::val($prod, 'vProd'),
+                'ean'        => preg_replace('/\D/', '', $ean),   // código de barras (GTIN)
+                'codigo'     => self::val($prod, 'cProd'),        // código interno do fornecedor
+                'unidade'    => self::val($prod, 'uCom'),
             ];
         }
 

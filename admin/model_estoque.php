@@ -168,6 +168,47 @@ function estoque_movimentacoes(PDO $pdo, int $itemId, int $limite = 30): array
 }
 
 /**
+ * Casa um item da nota (código de barras + descrição) com um item do estoque.
+ * Prioridade: código de barras (exato) > semelhança de nome (>= 60%) > nenhum.
+ * Recebe $itensCache (lista de itens ativos) para não consultar a cada linha.
+ *
+ * @return array{item_id:?int, match:string}  match: 'barcode'|'nome'|'nenhum'
+ */
+function estoque_casar_item(string $ean, string $descricao, array $itensCache): array
+{
+    $ean = preg_replace('/\D/', '', $ean);
+    if ($ean !== '') {
+        foreach ($itensCache as $it) {
+            if (preg_replace('/\D/', '', (string) ($it['codigo_barras'] ?? '')) === $ean) {
+                return ['item_id' => (int) $it['id'], 'match' => 'barcode'];
+            }
+        }
+    }
+    $alvo = mb_strtolower(trim($descricao), 'UTF-8');
+    if ($alvo !== '') {
+        $melhorId = null; $melhorScore = 0.0;
+        foreach ($itensCache as $it) {
+            $pct = 0.0;
+            similar_text($alvo, mb_strtolower((string) $it['nome'], 'UTF-8'), $pct);
+            if ($pct > $melhorScore) { $melhorScore = $pct; $melhorId = (int) $it['id']; }
+        }
+        if ($melhorScore >= 60.0) {
+            return ['item_id' => $melhorId, 'match' => 'nome'];
+        }
+    }
+    return ['item_id' => null, 'match' => 'nenhum'];
+}
+
+/** Grava o código de barras num item se ele ainda não tiver. */
+function estoque_definir_barcode(PDO $pdo, int $itemId, string $ean): void
+{
+    $ean = preg_replace('/\D/', '', $ean);
+    if ($ean === '') { return; }
+    $pdo->prepare("UPDATE estoque_itens SET codigo_barras = :c WHERE id = :id AND (codigo_barras IS NULL OR codigo_barras = '')")
+        ->execute([':c' => $ean, ':id' => $itemId]);
+}
+
+/**
  * Lista de compra: itens com saldo abaixo do mínimo. Para cada um, calcula a
  * quantidade a comprar para chegar ao ideal e o custo estimado.
  */
