@@ -166,7 +166,13 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---- Auditoria: concilia a contagem contra o saldo e registra Δ + responsável ----
 if ($acao === 'auditoria' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $contagem = $_POST['contagem'] ?? [];
-    $resp = estoque_responsavel_atual();
+    // Responsável pela contagem: o admin logado ou um colaborador escolhido.
+    $respSel = (string) ($_POST['responsavel_id'] ?? '');
+    if ($respSel === 'admin' || $respSel === '') {
+        $resp = estoque_responsavel_atual();
+    } else {
+        $resp = estoque_colaborador_nome($pdo, (int) $respSel) ?: estoque_responsavel_atual();
+    }
     $ajustados = 0; $comDiferenca = 0;
     $fmt = fn($n) => rtrim(rtrim(number_format((float) $n, 3, ',', '.'), '0'), ',');
     try {

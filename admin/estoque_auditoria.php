@@ -13,6 +13,7 @@ if (!estoque_pronto($pdo)) {
 
 $busca = trim((string) ($_GET['busca'] ?? ''));
 $itens = estoque_listar($pdo, $busca);
+$colabs = estoque_colaboradores_listar($pdo);
 
 $flash = $_SESSION['estoque_flash'] ?? null;
 unset($_SESSION['estoque_flash']);
@@ -38,6 +39,7 @@ require __DIR__ . '/_header.php';
         </form>
 
         <form method="post" action="controller_estoque.php?acao=auditoria" id="form-auditoria">
+            <input type="hidden" name="responsavel_id" id="aud-resp">
             <div class="card">
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0 bg-white">
@@ -81,7 +83,16 @@ require __DIR__ . '/_header.php';
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
                     </div>
                     <div class="modal-body">
-                        Só os itens <strong>preenchidos</strong> serão ajustados; os deixados em branco não mudam.
+                        <p>Só os itens <strong>preenchidos</strong> serão ajustados; os deixados em branco não mudam.</p>
+                        <label class="form-label">Quem fez a contagem?</label>
+                        <select class="form-select" id="aud-resp-sel">
+                            <option value="">Selecione...</option>
+                            <option value="admin"><?= htmlspecialchars(($_SESSION['admin_nome'] ?? 'Eu') . ' (eu)') ?></option>
+                            <?php foreach ($colabs as $c): ?>
+                                <option value="<?= (int) $c['id'] ?>"><?= htmlspecialchars($c['nome']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">Fica registrado como responsável de cada ajuste.</div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -92,6 +103,9 @@ require __DIR__ . '/_header.php';
         </div>
         <script>
         document.getElementById('btn-conf-auditoria')?.addEventListener('click', function () {
+            const sel = document.getElementById('aud-resp-sel');
+            if (!sel.value) { sel.classList.add('is-invalid'); return; }
+            document.getElementById('aud-resp').value = sel.value;
             document.getElementById('form-auditoria').submit();
         });
         </script>
