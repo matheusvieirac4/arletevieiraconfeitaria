@@ -11,23 +11,6 @@ function estoque_redirect(string $tipo, string $texto, string $para = 'estoque.p
     exit;
 }
 
-/**
- * Qtde por embalagem de um item casado (para o "× fardo"). Só vale quando a
- * DESCRIÇÃO indica pacote de unidades (COM 20 UN, 25 Unid...) — itens pesados
- * (5 kg = 5) não são fardo, então devolve 0 e não oferece a multiplicação.
- */
-function estoque_embalagem_do_cache(array $cache, ?int $itemId): int
-{
-    if (!$itemId) { return 0; }
-    foreach ($cache as $c) {
-        if ((int) $c['id'] === (int) $itemId) {
-            if (estoque_qtde_da_descricao((string) $c['nome']) === null) { return 0; }
-            return (int) ($c['peso_gramas'] ?? 0);
-        }
-    }
-    return 0;
-}
-
 // ---- Salvar item (novo ou edição) ----
 if (($acao === 'salvar') && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int) ($_POST['id'] ?? 0);
@@ -92,7 +75,7 @@ if ($acao === 'entrada_xml' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'valor_unit'=> $q > 0 ? $vtot / $q : 0.0,
             'item_id'   => $casa['item_id'],
             'match'     => $casa['match'],
-            'embalagem' => estoque_embalagem_do_cache($cache, $casa['item_id']),
+            'embalagem' => estoque_qtde_da_descricao((string) ($it['descricao'] ?? '')) ?? 0,
         ];
     }
     $_SESSION['estoque_entrada'] = [
@@ -137,7 +120,7 @@ if ($acao === 'entrada_cupom' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'valor_unit' => (float) str_replace(',', '.', (string) ($it['valor_unit'] ?? '0')),
             'item_id'    => $casa['item_id'],
             'match'      => $casa['match'],
-            'embalagem'  => estoque_embalagem_do_cache($cache, $casa['item_id']),
+            'embalagem'  => estoque_qtde_da_descricao($desc) ?? 0,
         ];
     }
     if (!$linhas) {
@@ -187,13 +170,12 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Fardo: multiplica a quantidade pela qtde da embalagem do item;
                 // o preço por unidade é o da nota dividido pela embalagem.
                 if (isset($mults[$i])) {
-                    $itemSel = estoque_buscar($pdo, $id);
-                    // Só multiplica se for realmente fardo (descrição com UN/Unid).
-                    $ehFardo = estoque_qtde_da_descricao((string) ($itemSel['nome'] ?? '')) !== null;
-                    $emb = $ehFardo ? (int) ($itemSel['peso_gramas'] ?? 0) : 0;
+                    // A qtde do fardo vem da DESCRIÇÃO DA NOTA (ex.: "COM 20 UN").
+                    $emb = (int) (estoque_qtde_da_descricao((string) ($descs[$i] ?? '')) ?? 0);
                     if ($emb > 1) {
                         $qtd = $qtd * $emb;
                         if ($vunit > 0) { $vunit = $vunit / $emb; }
+                        estoque_atualizar_embalagem($pdo, $id, $emb);   // aprende o tamanho do fardo
                     }
                 }
             }

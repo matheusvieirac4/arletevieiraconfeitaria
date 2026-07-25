@@ -376,6 +376,14 @@ function estoque_detectar_embalagem_todos(PDO $pdo): int
     return $n;
 }
 
+/** Grava a qtde por embalagem (peso_gramas) do item — aprende o fardo na entrada. */
+function estoque_atualizar_embalagem(PDO $pdo, int $itemId, int $qtde): void
+{
+    if ($qtde <= 0 || $itemId <= 0) { return; }
+    $pdo->prepare("UPDATE estoque_itens SET peso_gramas = :q WHERE id = :id")
+        ->execute([':q' => $qtde, ':id' => $itemId]);
+}
+
 /** Atualiza o preço (valor unitário) de um item — usado na entrada por nota/cupom. */
 function estoque_atualizar_preco(PDO $pdo, int $itemId, float $preco): void
 {
