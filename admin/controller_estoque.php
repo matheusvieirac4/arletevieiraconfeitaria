@@ -11,6 +11,16 @@ function estoque_redirect(string $tipo, string $texto, string $para = 'estoque.p
     exit;
 }
 
+/** Qtde por embalagem (peso_gramas) de um item casado, a partir do cache. */
+function estoque_embalagem_do_cache(array $cache, ?int $itemId): int
+{
+    if (!$itemId) { return 0; }
+    foreach ($cache as $c) {
+        if ((int) $c['id'] === (int) $itemId) { return (int) ($c['peso_gramas'] ?? 0); }
+    }
+    return 0;
+}
+
 // ---- Salvar item (novo ou edição) ----
 if (($acao === 'salvar') && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int) ($_POST['id'] ?? 0);
@@ -75,6 +85,7 @@ if ($acao === 'entrada_xml' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'valor_unit'=> $q > 0 ? $vtot / $q : 0.0,
             'item_id'   => $casa['item_id'],
             'match'     => $casa['match'],
+            'embalagem' => estoque_embalagem_do_cache($cache, $casa['item_id']),
         ];
     }
     $_SESSION['estoque_entrada'] = [
@@ -119,6 +130,7 @@ if ($acao === 'entrada_cupom' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'valor_unit' => (float) str_replace(',', '.', (string) ($it['valor_unit'] ?? '0')),
             'item_id'    => $casa['item_id'],
             'match'      => $casa['match'],
+            'embalagem'  => estoque_embalagem_do_cache($cache, $casa['item_id']),
         ];
     }
     if (!$linhas) {
@@ -140,13 +152,15 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $eans    = $_POST['ean'] ?? [];
     $descs   = $_POST['descricao'] ?? [];
     $vunits  = $_POST['valor_unit'] ?? [];
+    $mults   = $_POST['mult'] ?? [];   // linhas que devem multiplicar pela embalagem
     $aplicadas = 0;
 
     try {
         foreach ($itemIds as $i => $sel) {
             $qtd = (float) str_replace(',', '.', (string) ($qtds[$i] ?? '0'));
             if ($qtd <= 0 || $sel === 'ignorar') { continue; }
-            $ean = preg_replace('/\D/', '', (string) ($eans[$i] ?? ''));
+            $ean   = preg_replace('/\D/', '', (string) ($eans[$i] ?? ''));
+            $vunit = (float) str_replace(',', '.', (string) ($vunits[$i] ?? '0'));
 
             if ($sel === 'novo') {
                 $id = estoque_criar($pdo, [
@@ -158,10 +172,19 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $id = (int) $sel;
                 if ($id <= 0) { continue; }
                 if ($ean !== '') { estoque_definir_barcode($pdo, $id, $ean); }
+                // Fardo: multiplica a quantidade pela qtde da embalagem do item;
+                // o preço por unidade é o da nota dividido pela embalagem.
+                if (isset($mults[$i])) {
+                    $itemSel = estoque_buscar($pdo, $id);
+                    $emb = (int) ($itemSel['peso_gramas'] ?? 0);
+                    if ($emb > 1) {
+                        $qtd = $qtd * $emb;
+                        if ($vunit > 0) { $vunit = $vunit / $emb; }
+                    }
+                }
             }
             estoque_movimentar($pdo, $id, 'entrada', $qtd, $origem, '', estoque_responsavel_atual());
             // Atualiza o preço unitário do item com o da nota/cupom (mantém atualizado).
-            $vunit = (float) str_replace(',', '.', (string) ($vunits[$i] ?? '0'));
             if ($vunit > 0) { estoque_atualizar_preco($pdo, $id, $vunit); }
             // Aprende: liga a descrição desta linha ao item escolhido, para casar
             // automaticamente da próxima vez (mesmo fornecedor = mesma descrição).
