@@ -137,14 +137,7 @@ require __DIR__ . '/_header.php';
                 </table>
             </div>
         </div>
-        <p class="text-muted small mt-2">
-            <?= count($itens) ?> item(ns)<?= $busca || $soMin || $forn ? ' (filtrado)' : '' ?>.
-            &nbsp;·&nbsp;
-            <a href="controller_estoque.php?acao=detectar_embalagem" class="text-decoration-none"
-               onclick="return confirm('Ler a quantidade por embalagem das descrições (COM 20 UN, 25 Unid...) e preencher nos itens?')">
-                Detectar qtde por embalagem das descrições
-            </a>
-        </p>
+        <p class="text-muted small mt-2"><?= count($itens) ?> item(ns)<?= $busca || $soMin || $forn ? ' (filtrado)' : '' ?>.</p>
 <script>
 // Cada opção do dropdown de Entrada abre o seletor de arquivo e já envia.
 (function () {
