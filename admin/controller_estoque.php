@@ -121,6 +121,24 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     estoque_redirect('success', "Entrada concluída: $aplicadas item(ns) atualizados.");
 }
 
+// ---- Auditoria: ajusta em lote os itens contados (só os preenchidos) ----
+if ($acao === 'auditoria' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $contagem = $_POST['contagem'] ?? [];
+    $ajustados = 0;
+    try {
+        foreach ($contagem as $itemId => $valor) {
+            $v = trim((string) $valor);
+            if ($v === '') { continue; }   // em branco não altera
+            $qtd = (float) str_replace(',', '.', str_replace('.', '', $v));
+            estoque_movimentar($pdo, (int) $itemId, 'ajuste', $qtd, 'auditoria');
+            $ajustados++;
+        }
+    } catch (\Throwable $e) {
+        estoque_redirect('danger', 'Falha na auditoria: ' . $e->getMessage(), 'estoque_auditoria.php');
+    }
+    estoque_redirect('success', "Auditoria salva: $ajustados item(ns) ajustados.", 'estoque_auditoria.php');
+}
+
 // ---- Descartar a entrada em revisão ----
 if ($acao === 'entrada_cancelar') {
     unset($_SESSION['estoque_entrada']);
