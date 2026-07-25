@@ -35,29 +35,27 @@ $flash = $_SESSION['estoque_flash'] ?? null;
 unset($_SESSION['estoque_flash']);
 require __DIR__ . '/_header.php';
 ?>
-        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-            <h1 class="mb-0">Estoque</h1>
-            <div class="d-flex gap-2">
-                <a href="estoque_kiosk.php" class="btn btn-dark"><i data-feather="camera" class="align-middle me-1" style="width:16px;height:16px;"></i>Modo quiosque</a>
-                <a href="estoque_colaboradores.php" class="btn btn-outline-secondary"><i data-feather="users" class="align-middle me-1" style="width:16px;height:16px;"></i>Colaboradores</a>
-                <a href="estoque_auditoria.php" class="btn btn-outline-primary"><i data-feather="clipboard" class="align-middle me-1" style="width:16px;height:16px;"></i>Auditoria</a>
-                <div class="dropdown">
-                    <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i data-feather="file-plus" class="align-middle me-1" style="width:16px;height:16px;"></i>Entrada
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="#" id="ent-xml">📄 XML da nota</a></li>
-                        <li><a class="dropdown-item" href="estoque_cupom_foto.php">📷 Foto do cupom</a></li>
-                    </ul>
-                </div>
-                <form id="form-ent-xml" method="post" action="controller_estoque.php?acao=entrada_xml" enctype="multipart/form-data" class="d-none">
-                    <input type="file" name="xml" id="file-xml" accept=".xml,text/xml,application/xml">
-                </form>
-                <a href="estoque_lista_compra.php" class="btn btn-outline-primary">
-                    Lista de compra <?php if ($abaixo): ?><span class="badge bg-danger"><?= $abaixo ?></span><?php endif; ?>
-                </a>
-                <a href="estoque_item.php" class="btn btn-success">Novo item</a>
+        <h1 class="mb-3">Estoque</h1>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+            <a href="estoque_item.php" class="btn btn-success btn-sm">+ Novo item</a>
+            <div class="dropdown">
+                <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i data-feather="file-plus" class="align-middle me-1" style="width:15px;height:15px;"></i>Entrada
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="#" id="ent-xml">📄 XML da nota</a></li>
+                    <li><a class="dropdown-item" href="estoque_cupom_foto.php">📷 Foto do cupom</a></li>
+                </ul>
             </div>
+            <a href="estoque_lista_compra.php" class="btn btn-outline-primary btn-sm">
+                Lista de compra <?php if ($abaixo): ?><span class="badge bg-danger"><?= $abaixo ?></span><?php endif; ?>
+            </a>
+            <a href="estoque_auditoria.php" class="btn btn-outline-primary btn-sm"><i data-feather="clipboard" class="align-middle me-1" style="width:15px;height:15px;"></i>Auditoria</a>
+            <a href="estoque_kiosk.php" class="btn btn-dark btn-sm"><i data-feather="camera" class="align-middle me-1" style="width:15px;height:15px;"></i>Quiosque</a>
+            <a href="estoque_colaboradores.php" class="btn btn-outline-secondary btn-sm"><i data-feather="users" class="align-middle me-1" style="width:15px;height:15px;"></i>Colaboradores</a>
+            <form id="form-ent-xml" method="post" action="controller_estoque.php?acao=entrada_xml" enctype="multipart/form-data" class="d-none">
+                <input type="file" name="xml" id="file-xml" accept=".xml,text/xml,application/xml">
+            </form>
         </div>
 
         <?php if ($flash): ?>
