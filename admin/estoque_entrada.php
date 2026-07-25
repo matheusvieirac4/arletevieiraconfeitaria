@@ -60,6 +60,7 @@ require __DIR__ . '/_header.php';
                                         <div class="small text-muted">
                                             <?php if ($l['ean']): ?>cód. <?= htmlspecialchars($l['ean']) ?> · <?php endif; ?>
                                             <?= htmlspecialchars($l['unidade']) ?>
+                                            <?php if (($l['valor_unit'] ?? 0) > 0): ?>· <strong>R$ <?= number_format((float) $l['valor_unit'], 2, ',', '.') ?></strong>/un<?php endif; ?>
                                             <?php if ($l['match'] === 'alias'): ?><span class="badge bg-info text-dark">casou pelo histórico</span>
                                             <?php elseif ($l['match'] === 'barcode'): ?><span class="badge bg-success">casou por código</span>
                                             <?php elseif ($l['match'] === 'nome'): ?><span class="badge bg-warning text-dark">casou por nome — confira</span>
@@ -67,6 +68,7 @@ require __DIR__ . '/_header.php';
                                         </div>
                                         <input type="hidden" name="ean[<?= $i ?>]" value="<?= htmlspecialchars($l['ean']) ?>">
                                         <input type="hidden" name="descricao[<?= $i ?>]" value="<?= htmlspecialchars($l['descricao'], ENT_QUOTES) ?>">
+                                        <input type="hidden" name="valor_unit[<?= $i ?>]" value="<?= htmlspecialchars(number_format((float) ($l['valor_unit'] ?? 0), 2, '.', '')) ?>">
                                     </td>
                                     <td>
                                         <select name="item_id[<?= $i ?>]" class="form-select">

@@ -197,6 +197,7 @@ class GeminiClient
                             'descricao'  => ['type' => 'string'],
                             'quantidade' => ['type' => 'string'],
                             'unidade'    => ['type' => 'string'],
+                            'valor_unit' => ['type' => 'string'],
                         ],
                         'required' => ['descricao', 'quantidade'],
                     ],
@@ -212,6 +213,8 @@ class GeminiClient
             '- quantidade: número como string, PONTO decimal (ex.: "2", "1.5"). Se o item é',
             '  vendido por peso, use o peso em kg. Se não achar, use "1".',
             '- unidade: "UN", "KG", "CX"... se aparecer; senão vazio.',
+            '- valor_unit: o preço UNITÁRIO do item (número string, PONTO decimal). Se o cupom',
+            '  só mostra o total da linha, divida pela quantidade. Se não achar, "0".',
             '- NÃO invente itens e ignore descontos, subtotal, total e formas de pagamento.',
         ]);
         return $this->chamar([

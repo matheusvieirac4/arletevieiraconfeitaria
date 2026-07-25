@@ -65,11 +65,14 @@ if ($acao === 'entrada_xml' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $linhas = [];
     foreach ($nota['itens'] as $it) {
         $casa = estoque_casar_item($it['ean'] ?? '', $it['descricao'] ?? '', $cache, $aliases);
+        $q    = (float) str_replace(',', '.', (string) ($it['quantidade'] ?? '0'));
+        $vtot = (float) str_replace(',', '.', (string) ($it['valor'] ?? '0'));   // vProd (total da linha)
         $linhas[] = [
             'descricao' => $it['descricao'] ?? '',
             'ean'       => preg_replace('/\D/', '', (string) ($it['ean'] ?? '')),
-            'quantidade'=> (float) str_replace(',', '.', (string) ($it['quantidade'] ?? '0')),
+            'quantidade'=> $q,
             'unidade'   => $it['unidade'] ?? '',
+            'valor_unit'=> $q > 0 ? $vtot / $q : 0.0,
             'item_id'   => $casa['item_id'],
             'match'     => $casa['match'],
         ];
@@ -113,6 +116,7 @@ if ($acao === 'entrada_cupom' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'ean'        => '',
             'quantidade' => (float) str_replace(',', '.', (string) ($it['quantidade'] ?? '1')),
             'unidade'    => $it['unidade'] ?? '',
+            'valor_unit' => (float) str_replace(',', '.', (string) ($it['valor_unit'] ?? '0')),
             'item_id'    => $casa['item_id'],
             'match'      => $casa['match'],
         ];
@@ -135,6 +139,7 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $qtds    = $_POST['quantidade'] ?? [];
     $eans    = $_POST['ean'] ?? [];
     $descs   = $_POST['descricao'] ?? [];
+    $vunits  = $_POST['valor_unit'] ?? [];
     $aplicadas = 0;
 
     try {
@@ -155,6 +160,9 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($ean !== '') { estoque_definir_barcode($pdo, $id, $ean); }
             }
             estoque_movimentar($pdo, $id, 'entrada', $qtd, $origem, '', estoque_responsavel_atual());
+            // Atualiza o preço unitário do item com o da nota/cupom (mantém atualizado).
+            $vunit = (float) str_replace(',', '.', (string) ($vunits[$i] ?? '0'));
+            if ($vunit > 0) { estoque_atualizar_preco($pdo, $id, $vunit); }
             // Aprende: liga a descrição desta linha ao item escolhido, para casar
             // automaticamente da próxima vez (mesmo fornecedor = mesma descrição).
             estoque_alias_salvar($pdo, (string) ($descs[$i] ?? ''), $id);

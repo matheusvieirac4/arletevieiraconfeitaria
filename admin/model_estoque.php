@@ -317,6 +317,14 @@ function estoque_casar_item(string $ean, string $descricao, array $itensCache, a
     return ['item_id' => null, 'match' => 'nenhum'];
 }
 
+/** Atualiza o preço (valor unitário) de um item — usado na entrada por nota/cupom. */
+function estoque_atualizar_preco(PDO $pdo, int $itemId, float $preco): void
+{
+    if ($preco <= 0 || $itemId <= 0) { return; }
+    $pdo->prepare("UPDATE estoque_itens SET preco = :p WHERE id = :id")
+        ->execute([':p' => round($preco, 2), ':id' => $itemId]);
+}
+
 /** Grava o código de barras num item se ele ainda não tiver. */
 function estoque_definir_barcode(PDO $pdo, int $itemId, string $ean): void
 {
