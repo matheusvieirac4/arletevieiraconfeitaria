@@ -40,11 +40,11 @@ $navItems = [
             </a>
             <ul class="sidebar-nav">
                 <li class="sidebar-header">Painel</li>
-<?php foreach ($navItems as $key => $item): ?>
-                <li class="sidebar-item<?= $active === $key ? ' active' : '' ?>">
-                    <a class="sidebar-link" href="<?= $item[0] ?>">
-                        <i class="align-middle" data-feather="<?= $item[2] ?>"></i>
-                        <span class="align-middle"><?= $item[1] ?></span>
+<?php foreach ($navItems as $navKey => $navItem): ?>
+                <li class="sidebar-item<?= $active === $navKey ? ' active' : '' ?>">
+                    <a class="sidebar-link" href="<?= $navItem[0] ?>">
+                        <i class="align-middle" data-feather="<?= $navItem[2] ?>"></i>
+                        <span class="align-middle"><?= $navItem[1] ?></span>
                     </a>
                 </li>
 <?php endforeach; ?>
