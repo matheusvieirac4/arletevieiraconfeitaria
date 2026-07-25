@@ -98,9 +98,9 @@ if ($acao === 'entrada_cupom' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         estoque_redirect('danger', 'Selecione uma foto válida do cupom.', 'estoque_entrada.php');
     }
     try {
+        @set_time_limit(300);   // leitura por IA pode demorar (+retentativas)
         $tmp  = $_FILES['foto']['tmp_name'];
-        $mime = mime_content_type($tmp) ?: 'image/jpeg';
-        $b64  = base64_encode((string) file_get_contents($tmp));
+        [$mime, $b64] = GeminiClient::imagemParaBase64($tmp, mime_content_type($tmp) ?: 'image/jpeg');
         $r    = financeiro_gemini()->extrairItensCupom($b64, $mime);
     } catch (\Throwable $e) {
         estoque_redirect('danger', 'Falha ao ler o cupom: ' . $e->getMessage(), 'estoque_entrada.php');

@@ -41,6 +41,35 @@ class GeminiClient
         ]);
     }
 
+    /**
+     * Prepara uma imagem para envio: reduz para no máx. 1600px e recomprime em
+     * JPEG, cortando o tamanho do upload (a foto do iPhone tem 3-4 MB e faz o
+     * Gemini estourar o timeout). Se o GD não estiver disponível, envia como veio.
+     * @return array{0:string,1:string} [mime, base64]
+     */
+    public static function imagemParaBase64(string $caminho, string $mimeOriginal = 'image/jpeg'): array
+    {
+        if (function_exists('imagecreatefromstring')) {
+            $raw = @file_get_contents($caminho);
+            $img = $raw !== false ? @imagecreatefromstring($raw) : false;
+            if ($img !== false) {
+                $w = imagesx($img); $h = imagesy($img);
+                $max = 1600;
+                if (max($w, $h) > $max) {
+                    $s = $max / max($w, $h);
+                    $nw = (int) round($w * $s); $nh = (int) round($h * $s);
+                    $dst = imagecreatetruecolor($nw, $nh);
+                    imagecopyresampled($dst, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
+                    imagedestroy($img); $img = $dst;
+                }
+                ob_start(); imagejpeg($img, null, 82); $jpg = ob_get_clean();
+                imagedestroy($img);
+                if (is_string($jpg) && $jpg !== '') { return ['image/jpeg', base64_encode($jpg)]; }
+            }
+        }
+        return [$mimeOriginal, base64_encode((string) @file_get_contents($caminho))];
+    }
+
     /** Extrai um lançamento a partir da imagem de um cupom (base64). */
     public function extrairImagem(string $base64, string $mime, array $ctx, string $textoExtra = ''): array
     {
@@ -241,22 +270,33 @@ class GeminiClient
         ], JSON_UNESCAPED_UNICODE);
 
         $url = self::BASE . '/models/' . rawurlencode($this->model) . ':generateContent';
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'x-goog-api-key: ' . $this->apiKey],
-            CURLOPT_POSTFIELDS     => $body,
-            CURLOPT_TIMEOUT        => 60,
-            CURLOPT_CONNECTTIMEOUT => 15,
-        ]);
-        $resp = curl_exec($ch);
-        if ($resp === false) {
-            $err = curl_error($ch); curl_close($ch);
-            throw new GeminiException("Erro de conexão com o Gemini: $err");
+
+        // Timeout de conexão às vezes estola ("0 bytes"): tenta até 3 vezes.
+        $tentativas = 3;
+        $ultimoErro = '';
+        for ($t = 1; $t <= $tentativas; $t++) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_POST           => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'x-goog-api-key: ' . $this->apiKey],
+                CURLOPT_POSTFIELDS     => $body,
+                CURLOPT_TIMEOUT        => 75,
+                CURLOPT_CONNECTTIMEOUT => 15,
+            ]);
+            $resp = curl_exec($ch);
+            $errno = curl_errno($ch);
+            $err   = curl_error($ch);
+            $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($resp !== false && $status > 0) { break; }   // resposta chegou
+            $ultimoErro = $err ?: "sem resposta (HTTP $status)";
+            if ($t < $tentativas) { sleep(2); }              // pequena pausa e tenta de novo
         }
-        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        if ($resp === false || $status === 0) {
+            throw new GeminiException("Erro de conexão com o Gemini após {$tentativas} tentativas: {$ultimoErro}");
+        }
 
         $json = json_decode($resp, true);
         if ($status < 200 || $status >= 300) {

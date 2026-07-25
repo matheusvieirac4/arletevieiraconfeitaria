@@ -147,9 +147,9 @@ if (($acao === 'texto' || $acao === 'cupom') && $_SERVER['REQUEST_METHOD'] === '
             if (!isset($_FILES['foto']) || $_FILES['foto']['error'] !== UPLOAD_ERR_OK) {
                 financeiro_redirect('danger', 'Selecione uma foto válida do cupom.');
             }
+            @set_time_limit(300);   // leitura por IA pode demorar (+retentativas)
             $tmp  = $_FILES['foto']['tmp_name'];
-            $mime = mime_content_type($tmp) ?: 'image/jpeg';
-            $b64  = base64_encode((string) file_get_contents($tmp));
+            [$mime, $b64] = GeminiClient::imagemParaBase64($tmp, mime_content_type($tmp) ?: 'image/jpeg');
             $lanc = $ia->extrairImagem($b64, $mime, $ctx, trim((string) ($_POST['texto'] ?? '')));
             $origem = 'Foto do cupom (IA)';
         }
