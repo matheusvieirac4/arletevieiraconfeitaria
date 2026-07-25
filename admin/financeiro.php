@@ -636,8 +636,8 @@ $datalist = function (string $id, array $opts): string {
                                     </div>
                                     <div class="row g-2" style="max-width: 760px;">
                                     <div class="col-sm-4">
-                                        <label class="form-label small mb-1">Conta</label>
-                                        <select name="account" class="form-select form-select-sm" required>
+                                        <label class="form-label">Conta</label>
+                                        <select name="account" class="form-select" required>
                                             <option value="">Selecione...</option>
                                             <?php foreach ($listas['contas'] as $c): ?>
                                                 <option value="<?= htmlspecialchars($c, ENT_QUOTES) ?>" <?= ($l['account'] === $c ? 'selected' : '') ?>><?= htmlspecialchars($c) ?></option>
@@ -645,8 +645,8 @@ $datalist = function (string $id, array $opts): string {
                                         </select>
                                     </div>
                                     <div class="col-sm-4">
-                                        <label class="form-label small mb-1">Forma de pagamento</label>
-                                        <select name="payment_method" class="form-select form-select-sm" required>
+                                        <label class="form-label">Forma de pagamento</label>
+                                        <select name="payment_method" class="form-select" required>
                                             <option value="">Selecione...</option>
                                             <?php foreach ($listas['formas'] as $fm): ?>
                                                 <option value="<?= htmlspecialchars($fm, ENT_QUOTES) ?>" <?= ($l['payment_method'] === $fm ? 'selected' : '') ?>><?= htmlspecialchars($fm) ?></option>
@@ -654,35 +654,35 @@ $datalist = function (string $id, array $opts): string {
                                         </select>
                                     </div>
                                     <div class="col-sm-4">
-                                        <label class="form-label small mb-1">Data do pagamento</label>
-                                        <input type="date" name="settlement_date" class="form-control form-control-sm"
+                                        <label class="form-label">Data do pagamento</label>
+                                        <input type="date" name="settlement_date" class="form-control"
                                                value="<?= htmlspecialchars($l['settlement_date'] ?: date('Y-m-d')) ?>" required>
                                     </div>
                                     <div class="col-sm-3">
-                                        <label class="form-label small mb-1">Valor original (R$)</label>
-                                        <input type="text" name="original_value" id="baixa-original" class="form-control form-control-sm js-baixa-num"
+                                        <label class="form-label">Valor original (R$)</label>
+                                        <input type="text" name="original_value" id="baixa-original" class="form-control js-baixa-num"
                                                value="<?= htmlspecialchars($valComprovante) ?>" placeholder="0,00" inputmode="decimal">
                                     </div>
                                     <div class="col-sm-3">
-                                        <label class="form-label small mb-1">Juros (R$)</label>
-                                        <input type="text" name="interest" class="form-control form-control-sm js-baixa-num" placeholder="0,00" inputmode="decimal">
+                                        <label class="form-label">Juros (R$)</label>
+                                        <input type="text" name="interest" class="form-control js-baixa-num" placeholder="0,00" inputmode="decimal">
                                     </div>
                                     <div class="col-sm-3">
-                                        <label class="form-label small mb-1">Multa (R$)</label>
-                                        <input type="text" name="fine" class="form-control form-control-sm js-baixa-num" placeholder="0,00" inputmode="decimal">
+                                        <label class="form-label">Multa (R$)</label>
+                                        <input type="text" name="fine" class="form-control js-baixa-num" placeholder="0,00" inputmode="decimal">
                                     </div>
                                     <div class="col-sm-3">
-                                        <label class="form-label small mb-1">Desconto (R$)</label>
-                                        <input type="text" name="discount" class="form-control form-control-sm js-baixa-num" placeholder="0,00" inputmode="decimal">
+                                        <label class="form-label">Desconto (R$)</label>
+                                        <input type="text" name="discount" class="form-control js-baixa-num" placeholder="0,00" inputmode="decimal">
                                     </div>
                                     <div class="col-sm-3">
-                                        <label class="form-label small mb-1 fw-semibold">Valor final (R$)</label>
-                                        <input type="text" id="baixa-final" class="form-control form-control-sm bg-light fw-semibold" value="" readonly tabindex="-1">
+                                        <label class="form-label fw-semibold">Valor final (R$)</label>
+                                        <input type="text" id="baixa-final" class="form-control bg-light fw-semibold" value="" readonly tabindex="-1">
                                     </div>
                                 </div>
-                                <div class="d-flex gap-2 mt-3">
-                                    <button type="submit" class="btn btn-success btn-sm">Marcar como paga (não duplica)</button>
-                                    <a href="controller_financeiro.php?acao=cancelar" class="btn btn-outline-secondary btn-sm">Cancelar</a>
+                                <div class="d-flex gap-2 mt-4">
+                                    <button type="submit" class="btn btn-success">Marcar como paga (não duplica)</button>
+                                    <a href="controller_financeiro.php?acao=cancelar" class="btn btn-outline-secondary">Cancelar</a>
                                 </div>
                                 <!-- gatilho oculto do modal (declarativo, não depende de JS global) -->
                                 <button type="button" id="abre-modal-baixa" class="d-none" data-bs-toggle="modal" data-bs-target="#modal-baixa"></button>
@@ -695,7 +695,7 @@ $datalist = function (string $id, array $opts): string {
                             </div>
                         </div>
                         <div class="text-center mb-4">
-                            <a href="#" id="ir-novo" class="small text-decoration-none">Não é essa conta? Criar um lançamento novo &rarr;</a>
+                            <a href="#" id="ir-novo" class="text-decoration-none fw-medium">Não é essa conta? Criar um lançamento novo &rarr;</a>
                         </div>
                         </div><!-- /pane-baixa -->
 
@@ -722,7 +722,7 @@ $datalist = function (string $id, array $opts): string {
 
                     <div id="pane-novo"<?= $contasAbertas ? ' class="d-none"' : '' ?>>
                     <?php if ($contasAbertas): ?>
-                        <div class="mb-3"><a href="#" id="voltar-baixa" class="small text-decoration-none">&larr; Voltar para dar baixa na conta existente</a></div>
+                        <div class="mb-3"><a href="#" id="voltar-baixa" class="text-decoration-none fw-medium">&larr; Voltar para dar baixa na conta existente</a></div>
                     <?php endif; ?>
                     <form method="post" action="controller_financeiro.php?acao=importar">
                         <input type="hidden" name="forcar" value="<?= $forcarEnvio ? '1' : '0' ?>">
