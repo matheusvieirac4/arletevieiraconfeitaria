@@ -47,14 +47,11 @@ require __DIR__ . '/_header.php';
                     </button>
                     <ul class="dropdown-menu">
                         <li><a class="dropdown-item" href="#" id="ent-xml">📄 XML da nota</a></li>
-                        <li><a class="dropdown-item" href="#" id="ent-cupom">📷 Foto do cupom</a></li>
+                        <li><a class="dropdown-item" href="estoque_cupom_foto.php">📷 Foto do cupom</a></li>
                     </ul>
                 </div>
                 <form id="form-ent-xml" method="post" action="controller_estoque.php?acao=entrada_xml" enctype="multipart/form-data" class="d-none">
                     <input type="file" name="xml" id="file-xml" accept=".xml,text/xml,application/xml">
-                </form>
-                <form id="form-ent-cupom" method="post" action="controller_estoque.php?acao=entrada_cupom" enctype="multipart/form-data" class="d-none">
-                    <input type="file" name="foto" id="file-cupom" accept="image/*" capture="environment">
                 </form>
                 <a href="estoque_lista_compra.php" class="btn btn-outline-primary">
                     Lista de compra <?php if ($abaixo): ?><span class="badge bg-danger"><?= $abaixo ?></span><?php endif; ?>
@@ -139,7 +136,6 @@ require __DIR__ . '/_header.php';
         file.addEventListener('change', () => { if (file.files.length) { form.submit(); } });
     };
     liga('ent-xml', 'file-xml', 'form-ent-xml');
-    liga('ent-cupom', 'file-cupom', 'form-ent-cupom');
 })();
 </script>
 <?php require __DIR__ . '/_footer.php'; ?>
