@@ -12,7 +12,9 @@ if (!estoque_pronto($pdo)) {
 }
 
 $busca = trim((string) ($_GET['busca'] ?? ''));
-$itens = estoque_listar($pdo, $busca);
+$forn  = trim((string) ($_GET['fornecedor'] ?? ''));
+$itens = estoque_listar($pdo, $busca, false, 'nome', 'asc', $forn);
+$fornecedores = estoque_fornecedores($pdo);
 $colabs = estoque_colaboradores_listar($pdo);
 
 $flash = $_SESSION['estoque_flash'] ?? null;
@@ -33,8 +35,16 @@ require __DIR__ . '/_header.php';
             <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
         <?php endif; ?>
 
-        <form method="get" class="row g-2 mb-3" style="max-width:560px;">
-            <div class="col"><input type="text" name="busca" class="form-control" placeholder="Filtrar por nome/fornecedor (ex.: prateleira)" value="<?= htmlspecialchars($busca) ?>"></div>
+        <form method="get" class="row g-2 mb-3" style="max-width:760px;">
+            <div class="col-12 col-md"><input type="text" name="busca" class="form-control" placeholder="Filtrar por nome" value="<?= htmlspecialchars($busca) ?>"></div>
+            <div class="col-auto">
+                <select name="fornecedor" class="form-select" onchange="this.form.submit()">
+                    <option value="">Todos os fornecedores</option>
+                    <?php foreach ($fornecedores as $f): ?>
+                        <option value="<?= htmlspecialchars($f, ENT_QUOTES) ?>" <?= $forn === $f ? 'selected' : '' ?>><?= htmlspecialchars($f) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="col-auto"><button class="btn btn-outline-secondary">Filtrar</button></div>
         </form>
 

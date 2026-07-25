@@ -29,13 +29,26 @@ function estoque_exigir_setup(): void
        . '</div></div>';
 }
 
-function estoque_listar(PDO $pdo, string $busca = '', bool $soAbaixoMinimo = false, string $ordem = 'nome', string $dir = 'asc'): array
+/** Fornecedores distintos cadastrados (para o filtro). */
+function estoque_fornecedores(PDO $pdo): array
+{
+    $rows = $pdo->query("SELECT DISTINCT fornecedor FROM estoque_itens
+                         WHERE ativo = 1 AND fornecedor IS NOT NULL AND fornecedor <> ''
+                         ORDER BY fornecedor")->fetchAll(PDO::FETCH_COLUMN);
+    return $rows ?: [];
+}
+
+function estoque_listar(PDO $pdo, string $busca = '', bool $soAbaixoMinimo = false, string $ordem = 'nome', string $dir = 'asc', string $fornecedor = ''): array
 {
     $sql = "SELECT * FROM estoque_itens WHERE ativo = 1";
     $params = [];
     if ($busca !== '') {
         $sql .= " AND (nome LIKE :b OR fornecedor LIKE :b OR codigo_barras LIKE :b)";
         $params[':b'] = '%' . $busca . '%';
+    }
+    if ($fornecedor !== '') {
+        $sql .= " AND fornecedor = :f";
+        $params[':f'] = $fornecedor;
     }
     if ($soAbaixoMinimo) {
         $sql .= " AND estoque_minimo IS NOT NULL AND estoque_atual < estoque_minimo";

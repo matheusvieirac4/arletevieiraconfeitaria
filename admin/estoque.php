@@ -16,17 +16,19 @@ if (!estoque_pronto($pdo)) {
 
 $busca  = trim((string) ($_GET['busca'] ?? ''));
 $soMin  = isset($_GET['abaixo']);
+$forn   = trim((string) ($_GET['fornecedor'] ?? ''));
 $ordem  = in_array($_GET['ordem'] ?? '', ['nome', 'fornecedor'], true) ? $_GET['ordem'] : 'nome';
 $dir    = (strtolower($_GET['dir'] ?? '') === 'desc') ? 'desc' : 'asc';
-$itens  = estoque_listar($pdo, $busca, $soMin, $ordem, $dir);
+$itens  = estoque_listar($pdo, $busca, $soMin, $ordem, $dir, $forn);
+$fornecedores = estoque_fornecedores($pdo);
 $abaixo = count(estoque_lista_compra($pdo));
 
 // Monta o link de ordenação de uma coluna, alternando a direção e mostrando a seta.
-$linkOrdem = function (string $col, string $rotulo) use ($ordem, $dir, $busca, $soMin) {
+$linkOrdem = function (string $col, string $rotulo) use ($ordem, $dir, $busca, $soMin, $forn) {
     $novaDir = ($ordem === $col && $dir === 'asc') ? 'desc' : 'asc';
     $seta = $ordem === $col ? ($dir === 'asc' ? ' ▲' : ' ▼') : '';
     $qs = http_build_query(array_filter([
-        'busca' => $busca, 'abaixo' => $soMin ? 1 : null, 'ordem' => $col, 'dir' => $novaDir,
+        'busca' => $busca, 'fornecedor' => $forn, 'abaixo' => $soMin ? 1 : null, 'ordem' => $col, 'dir' => $novaDir,
     ]));
     return '<a href="estoque.php?' . htmlspecialchars($qs) . '" class="text-decoration-none text-reset">' . htmlspecialchars($rotulo) . $seta . '</a>';
 };
@@ -62,15 +64,27 @@ require __DIR__ . '/_header.php';
             <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
         <?php endif; ?>
 
-        <form method="get" class="row g-2 mb-3" style="max-width:680px;">
-            <div class="col">
-                <input type="text" name="busca" class="form-control" placeholder="Buscar por nome, fornecedor ou código de barras" value="<?= htmlspecialchars($busca) ?>">
+        <?php
+        $qsAbaixo = http_build_query(array_filter(['busca' => $busca, 'fornecedor' => $forn, 'abaixo' => $soMin ? null : 1]));
+        ?>
+        <form method="get" class="row g-2 mb-3" style="max-width:900px;">
+            <?php if ($soMin): ?><input type="hidden" name="abaixo" value="1"><?php endif; ?>
+            <div class="col-12 col-md">
+                <input type="text" name="busca" class="form-control" placeholder="Buscar por nome, fornecedor ou código" value="<?= htmlspecialchars($busca) ?>">
+            </div>
+            <div class="col-auto">
+                <select name="fornecedor" class="form-select" onchange="this.form.submit()">
+                    <option value="">Todos os fornecedores</option>
+                    <?php foreach ($fornecedores as $f): ?>
+                        <option value="<?= htmlspecialchars($f, ENT_QUOTES) ?>" <?= $forn === $f ? 'selected' : '' ?>><?= htmlspecialchars($f) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div class="col-auto">
                 <button class="btn btn-outline-secondary">Buscar</button>
             </div>
             <div class="col-auto">
-                <a href="estoque.php<?= $soMin ? '' : '?abaixo=1' ?>" class="btn btn-outline-<?= $soMin ? 'danger' : 'secondary' ?>">
+                <a href="estoque.php<?= $qsAbaixo ? '?' . htmlspecialchars($qsAbaixo) : '' ?>" class="btn btn-outline-<?= $soMin ? 'danger' : 'secondary' ?>">
                     <?= $soMin ? '✓ ' : '' ?>Abaixo do mínimo
                 </a>
             </div>
