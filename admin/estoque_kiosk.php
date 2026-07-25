@@ -1,6 +1,6 @@
 <?php
 // Quiosque de baixa de estoque — página full-screen para o celular na porta.
-// Câmera sempre aberta (html5-qrcode lê QR e código de barras EAN). Lê 1x,
+// Câmera sempre aberta (ZXing lê código de barras EAN e QR). Lê 1x,
 // mostra foto+nome+quantidade+confirmar. Também tem busca para itens sem código.
 require_once __DIR__ . '/_auth.php';
 require_once 'model_estoque.php';
@@ -19,9 +19,7 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     .kx-top { position: fixed; top: 0; left: 0; right: 0; z-index: 20; display: flex; justify-content: space-between;
               align-items: center; padding: 12px 16px; background: rgba(0,0,0,.45); }
     .kx-top h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
-    #reader { position: fixed; inset: 0; width: 100vw; height: 100vh; background:#000; }
-    #reader video { width: 100vw !important; height: 100vh !important; object-fit: cover !important; }
-    #reader img { display: none; }   /* esconde o icone de "scan" da lib */
+    #video { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; background:#000; }
     .kx-hint { position: fixed; bottom: 24px; left: 0; right: 0; text-align: center; z-index: 15;
                font-size: 1.1rem; color: #dfe3e8; text-shadow: 0 1px 4px #000; }
     .kx-overlay { position: fixed; inset: 0; z-index: 30; background: rgba(10,12,16,.96);
@@ -57,7 +55,7 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     </div>
 </div>
 
-<div id="reader"></div>
+<video id="video" playsinline muted></video>
 <div class="kx-hint" id="hint">Aponte o código de barras para a câmera</div>
 
 <!-- Overlay: item encontrado (confirmar baixa) -->
@@ -106,7 +104,7 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js"></script>
 <script>
 (function () {
     const API = 'estoque_api.php';
@@ -117,38 +115,41 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
         busca: document.getElementById('ov-busca'),
         ok: document.getElementById('ov-ok'),
     };
-    let scanner = null, facing = 'user', pausado = false, ultimo = '', ultimoT = 0;
+    let leitor = null, controls = null, facing = 'environment', pausado = false, ultimo = '', ultimoT = 0;
     let itemAtual = null, codigoPendente = '';
 
     function fmt(n) { return (Math.round(n * 1000) / 1000).toLocaleString('pt-BR'); }
     function mostrar(el) { Object.values(ov).forEach(o => o.classList.remove('show')); if (el) { el.classList.add('show'); } }
-    function pausar() { pausado = true; try { scanner && scanner.pause(true); } catch (e) {} }
-    function retomar() { mostrar(null); pausado = false; try { scanner && scanner.resume(); } catch (e) {} }
+    function pausar() { pausado = true; }               // só ignora leituras; câmera fica viva
+    function retomar() { mostrar(null); pausado = false; }
 
-    // ---------- Câmera ----------
+    // ---------- Câmera (ZXing: bom em código de barras 1D) ----------
     function iniciarCamera() {
-        if (scanner) { scanner.stop().catch(()=>{}).then(comecar); } else { comecar(); }
-    }
-    function comecar() {
-        // Ativa explicitamente os códigos de barras 1D (EAN/UPC/CODE-128...),
-        // senão a lib tende a priorizar só QR e não lê a lata/embalagem.
-        const F = Html5QrcodeSupportedFormats;
-        const formatos = [
-            F.QR_CODE, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E,
-            F.CODE_128, F.CODE_39, F.ITF, F.CODABAR,
-        ];
-        scanner = new Html5Qrcode('reader', { formatsToSupport: formatos, verbose: false });
-        scanner.start(
-            { facingMode: facing },
-            { fps: 10, videoConstraints: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } } },
-            onScan,
-            function () {}   // falha de leitura por frame: silenciosa
-        ).catch(function (e) { hint.textContent = 'Não consegui abrir a câmera: ' + e; });
+        if (controls) { try { controls.stop(); } catch (e) {} controls = null; }
+        if (!leitor) { leitor = new ZXingBrowser.BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 120 }); }
+        leitor.decodeFromConstraints(
+            { video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } } },
+            document.getElementById('video'),
+            function (result) { if (result) { onScan(result.getText()); } }
+        ).then(function (c) { controls = c; })
+         .catch(function (e) { hint.textContent = 'Não consegui abrir a câmera: ' + e; });
     }
     document.getElementById('btn-cam').onclick = function () {
         facing = (facing === 'user') ? 'environment' : 'user';
         iniciarCamera();
     };
+
+    let audioCtx = null;
+    function bip() {
+        try {
+            audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.type = 'square'; o.frequency.value = 880; o.connect(g); g.connect(audioCtx.destination);
+            g.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+            o.start(); o.stop(audioCtx.currentTime + 0.15);
+        } catch (e) {}
+    }
 
     function onScan(texto) {
         if (pausado) { return; }
@@ -156,6 +157,7 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
         if (texto === ultimo && agora - ultimoT < 2500) { return; }   // anti-repetição
         ultimo = texto; ultimoT = agora;
         pausar();
+        bip();
         lookup(texto);
     }
 
