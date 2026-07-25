@@ -746,8 +746,26 @@ $datalist = function (string $id, array $opts): string {
                                 <div class="form-text">Despesa (conta a pagar). Use vírgula para os centavos.</div>
                             </div>
                             <div class="col-md-4">
+                                <?php
+                                $fpAtual = (string) $l['payment_method'];
+                                $fpNaLista = $fpAtual !== '' && in_array($fpAtual, $listas['formas'], true);
+                                ?>
                                 <label class="form-label">Forma de pagamento</label>
-                                <input type="text" name="payment_method" class="form-control" list="dl-formas" value="<?= htmlspecialchars($l['payment_method']) ?>">
+                                <?php if (!$erroListas && $listas['formas']): ?>
+                                    <select name="payment_method" class="form-select js-choice" data-placeholder="Forma de pagamento">
+                                        <option value=""></option>
+                                        <?php if ($fpAtual !== '' && !$fpNaLista): ?>
+                                            <optgroup label="Da nota">
+                                                <option value="<?= htmlspecialchars($fpAtual, ENT_QUOTES) ?>" selected><?= htmlspecialchars($fpAtual) ?></option>
+                                            </optgroup>
+                                        <?php endif; ?>
+                                        <?php foreach ($listas['formas'] as $fm): ?>
+                                            <option value="<?= htmlspecialchars($fm, ENT_QUOTES) ?>" <?= ($fpNaLista && $fpAtual === $fm ? 'selected' : '') ?>><?= htmlspecialchars($fm) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                <?php else: ?>
+                                    <input type="text" name="payment_method" class="form-control" list="dl-formas" value="<?= htmlspecialchars($fpAtual) ?>">
+                                <?php endif; ?>
                             </div>
 
                             <?php
