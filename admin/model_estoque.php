@@ -74,6 +74,17 @@ function estoque_mov_tem_responsavel(PDO $pdo): bool
     return $tem;
 }
 
+/** A coluna 'codigo_compra' (código da nota/fardo) já existe? (setup migra). */
+function estoque_tem_codigo_compra(PDO $pdo): bool
+{
+    static $tem = null;
+    if ($tem === null) {
+        try { $pdo->query("SELECT codigo_compra FROM estoque_itens LIMIT 1"); $tem = true; }
+        catch (\Throwable $e) { $tem = false; }
+    }
+    return $tem;
+}
+
 function estoque_buscar(PDO $pdo, int $id): ?array
 {
     $stmt = $pdo->prepare("SELECT * FROM estoque_itens WHERE id = :id");
@@ -95,11 +106,12 @@ function estoque_buscar_por_barcode(PDO $pdo, string $codigo): ?array
 
 function estoque_criar(PDO $pdo, array $d): int
 {
-    $stmt = $pdo->prepare("
-        INSERT INTO estoque_itens (nome, fornecedor, preco, peso_gramas, estoque_atual, estoque_minimo, estoque_ideal, codigo_barras, imagem)
-        VALUES (:nome, :forn, :preco, :peso, :atual, :minimo, :ideal, :barras, :imagem)
-    ");
-    $stmt->execute(estoque_params($d));
+    $p = estoque_params($d);
+    $cols = ['nome=:nome','fornecedor=:forn','preco=:preco','peso_gramas=:peso','estoque_atual=:atual',
+             'estoque_minimo=:minimo','estoque_ideal=:ideal','codigo_barras=:barras','imagem=:imagem'];
+    if (estoque_tem_codigo_compra($pdo)) { $cols[] = 'codigo_compra=:compra'; } else { unset($p[':compra']); }
+    $stmt = $pdo->prepare("INSERT INTO estoque_itens SET " . implode(', ', $cols));
+    $stmt->execute($p);
     return (int) $pdo->lastInsertId();
 }
 
@@ -107,12 +119,10 @@ function estoque_atualizar(PDO $pdo, int $id, array $d): bool
 {
     $p = estoque_params($d);
     $p[':id'] = $id;
-    $stmt = $pdo->prepare("
-        UPDATE estoque_itens SET nome=:nome, fornecedor=:forn, preco=:preco, peso_gramas=:peso,
-               estoque_atual=:atual, estoque_minimo=:minimo, estoque_ideal=:ideal,
-               codigo_barras=:barras, imagem=:imagem
-        WHERE id=:id
-    ");
+    $cols = ['nome=:nome','fornecedor=:forn','preco=:preco','peso_gramas=:peso','estoque_atual=:atual',
+             'estoque_minimo=:minimo','estoque_ideal=:ideal','codigo_barras=:barras','imagem=:imagem'];
+    if (estoque_tem_codigo_compra($pdo)) { $cols[] = 'codigo_compra=:compra'; } else { unset($p[':compra']); }
+    $stmt = $pdo->prepare("UPDATE estoque_itens SET " . implode(', ', $cols) . " WHERE id=:id");
     return $stmt->execute($p);
 }
 
@@ -127,6 +137,7 @@ function estoque_params(array $d): array
         return is_numeric($v) ? (float) $v : null;
     };
     $barras = preg_replace('/\D/', '', (string) ($d['codigo_barras'] ?? ''));
+    $compra = preg_replace('/\D/', '', (string) ($d['codigo_compra'] ?? ''));
     return [
         ':nome'   => trim((string) ($d['nome'] ?? '')),
         ':forn'   => ($f = trim((string) ($d['fornecedor'] ?? ''))) !== '' ? $f : null,
@@ -136,6 +147,7 @@ function estoque_params(array $d): array
         ':minimo' => $num($d['estoque_minimo'] ?? ''),
         ':ideal'  => $num($d['estoque_ideal'] ?? ''),
         ':barras' => $barras !== '' ? $barras : null,
+        ':compra' => $compra !== '' ? $compra : null,
         ':imagem' => ($im = trim((string) ($d['imagem'] ?? ''))) !== '' ? $im : null,
     ];
 }
@@ -306,11 +318,13 @@ function estoque_casar_item(string $ean, string $descricao, array $itensCache, a
     if ($norm !== '' && isset($aliases[$norm])) {
         return ['item_id' => (int) $aliases[$norm], 'match' => 'alias'];
     }
-    // 2) Código de barras exato.
+    // 2) Código exato: o da nota (fardo) pode estar no código de compra OU no de barras.
     $ean = preg_replace('/\D/', '', $ean);
     if ($ean !== '') {
         foreach ($itensCache as $it) {
-            if (preg_replace('/\D/', '', (string) ($it['codigo_barras'] ?? '')) === $ean) {
+            $cb = preg_replace('/\D/', '', (string) ($it['codigo_barras'] ?? ''));
+            $cc = preg_replace('/\D/', '', (string) ($it['codigo_compra'] ?? ''));
+            if (($cb !== '' && $cb === $ean) || ($cc !== '' && $cc === $ean)) {
                 return ['item_id' => (int) $it['id'], 'match' => 'barcode'];
             }
         }
@@ -338,12 +352,21 @@ function estoque_atualizar_preco(PDO $pdo, int $itemId, float $preco): void
         ->execute([':p' => round($preco, 2), ':id' => $itemId]);
 }
 
-/** Grava o código de barras num item se ele ainda não tiver. */
+/** Grava o código de barras (UNIDADE, escaneado no quiosque) se ainda não tiver. */
 function estoque_definir_barcode(PDO $pdo, int $itemId, string $ean): void
 {
     $ean = preg_replace('/\D/', '', $ean);
     if ($ean === '') { return; }
     $pdo->prepare("UPDATE estoque_itens SET codigo_barras = :c WHERE id = :id AND (codigo_barras IS NULL OR codigo_barras = '')")
+        ->execute([':c' => $ean, ':id' => $itemId]);
+}
+
+/** Grava o código de COMPRA (o que vem na nota/fardo) se ainda não tiver. */
+function estoque_definir_codigo_compra(PDO $pdo, int $itemId, string $ean): void
+{
+    $ean = preg_replace('/\D/', '', $ean);
+    if ($ean === '' || !estoque_tem_codigo_compra($pdo)) { return; }
+    $pdo->prepare("UPDATE estoque_itens SET codigo_compra = :c WHERE id = :id AND (codigo_compra IS NULL OR codigo_compra = '')")
         ->execute([':c' => $ean, ':id' => $itemId]);
 }
 

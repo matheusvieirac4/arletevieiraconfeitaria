@@ -50,9 +50,15 @@ require __DIR__ . '/_header.php';
                                     <label class="form-label">Fornecedor</label>
                                     <input type="text" name="fornecedor" class="form-control" value="<?= htmlspecialchars($item['fornecedor'] ?? '') ?>">
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Código de barras</label>
-                                    <input type="text" name="codigo_barras" class="form-control" value="<?= htmlspecialchars($item['codigo_barras'] ?? '') ?>" placeholder="lido na câmera ou digitado">
+                                <div class="col-md-3">
+                                    <label class="form-label">Código de barras (unidade)</label>
+                                    <input type="text" name="codigo_barras" class="form-control" value="<?= htmlspecialchars($item['codigo_barras'] ?? '') ?>" placeholder="escaneado na baixa">
+                                    <div class="form-text">O que se lê no quiosque.</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Código de compra (nota)</label>
+                                    <input type="text" name="codigo_compra" class="form-control" value="<?= htmlspecialchars($item['codigo_compra'] ?? '') ?>" placeholder="código do fardo/nota">
+                                    <div class="form-text">O que vem na nota (fardo).</div>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Preço (R$)</label>
@@ -61,7 +67,7 @@ require __DIR__ . '/_header.php';
                                 <div class="col-md-4">
                                     <label class="form-label">Qtde por embalagem</label>
                                     <input type="text" name="peso_gramas" class="form-control" value="<?= htmlspecialchars($item['peso_gramas'] ?? '') ?>" inputmode="numeric" placeholder="1">
-                                    <div class="form-text">Item avulso = <strong>1</strong>. Fardo/caixa = <strong>total de itens no fardo</strong>.</div>
+                                    <div class="form-text">Conteúdo: 1kg=<strong>1</strong>, 5kg=<strong>5</strong>, fardo de 10=<strong>10</strong>.</div>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Imagem (arquivo)</label>

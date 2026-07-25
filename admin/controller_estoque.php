@@ -165,13 +165,15 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($sel === 'novo') {
                 $id = estoque_criar($pdo, [
                     'nome'          => trim((string) ($descs[$i] ?? 'Novo item')),
-                    'codigo_barras' => $ean,
+                    'codigo_compra' => $ean,   // veio da nota = código de compra (fardo)
                     'estoque_atual' => 0,
                 ]);
             } else {
                 $id = (int) $sel;
                 if ($id <= 0) { continue; }
-                if ($ean !== '') { estoque_definir_barcode($pdo, $id, $ean); }
+                // O código da nota é o de COMPRA (fardo), não o da unidade — o
+                // quiosque escaneia a unidade, que é um código diferente.
+                if ($ean !== '') { estoque_definir_codigo_compra($pdo, $id, $ean); }
                 // Fardo: multiplica a quantidade pela qtde da embalagem do item;
                 // o preço por unidade é o da nota dividido pela embalagem.
                 if (isset($mults[$i])) {

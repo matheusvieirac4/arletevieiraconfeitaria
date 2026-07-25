@@ -20,6 +20,7 @@ try {
             estoque_minimo DECIMAL(10,3) NULL,
             estoque_ideal  DECIMAL(10,3) NULL,
             codigo_barras  VARCHAR(64) NULL,
+            codigo_compra  VARCHAR(64) NULL,
             imagem         VARCHAR(255) NULL,
             ativo          TINYINT(1) NOT NULL DEFAULT 1,
             criado_em      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -80,6 +81,19 @@ try {
         }
     } catch (\Throwable $e) {
         $log[] = 'ERRO ao migrar responsavel: ' . $e->getMessage();
+    }
+
+    // Migração: código de compra (o da nota/fardo, diferente do código da unidade).
+    try {
+        $tem = $pdo->query("SHOW COLUMNS FROM estoque_itens LIKE 'codigo_compra'")->fetch();
+        if (!$tem) {
+            $pdo->exec("ALTER TABLE estoque_itens ADD COLUMN codigo_compra VARCHAR(64) NULL AFTER codigo_barras");
+            $log[] = 'OK  coluna codigo_compra adicionada';
+        } else {
+            $log[] = '..  coluna codigo_compra já existe';
+        }
+    } catch (\Throwable $e) {
+        $log[] = 'ERRO ao migrar codigo_compra: ' . $e->getMessage();
     }
 
     // Importa o catálogo só se a tabela estiver vazia (não duplica em re-runs).
