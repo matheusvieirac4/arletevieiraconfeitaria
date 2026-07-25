@@ -179,6 +179,48 @@ class GeminiClient
         return $this->chamar([['text' => $instr]], $schema);
     }
 
+    /**
+     * Extrai a LISTA DE ITENS de um cupom/nota (foto), para dar entrada no
+     * estoque. Cada item: descrição, quantidade e unidade. Sem rede além do Gemini.
+     * @return array{itens: array<int,array{descricao:string,quantidade:string,unidade:string}>}
+     */
+    public function extrairItensCupom(string $base64, string $mime): array
+    {
+        $schema = [
+            'type' => 'object',
+            'properties' => [
+                'itens' => [
+                    'type'  => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'descricao'  => ['type' => 'string'],
+                            'quantidade' => ['type' => 'string'],
+                            'unidade'    => ['type' => 'string'],
+                        ],
+                        'required' => ['descricao', 'quantidade'],
+                    ],
+                ],
+            ],
+            'required' => ['itens'],
+        ];
+        $instr = implode("\n", [
+            'Você lê um CUPOM FISCAL (NFC-e) ou nota de compra e lista os ITENS comprados,',
+            'para dar entrada em estoque. Responda SOMENTE com o JSON do schema. Regras:',
+            '- Um objeto por item comprado (linha do cupom).',
+            '- descricao: o nome do produto como está no cupom, limpo (sem o código).',
+            '- quantidade: número como string, PONTO decimal (ex.: "2", "1.5"). Se o item é',
+            '  vendido por peso, use o peso em kg. Se não achar, use "1".',
+            '- unidade: "UN", "KG", "CX"... se aparecer; senão vazio.',
+            '- NÃO invente itens e ignore descontos, subtotal, total e formas de pagamento.',
+        ]);
+        return $this->chamar([
+            ['text' => $instr],
+            ['inline_data' => ['mime_type' => $mime, 'data' => $base64]],
+            ['text' => 'Liste os itens comprados neste cupom.'],
+        ], $schema);
+    }
+
     private function extrair(array $parts): array
     {
         return $this->normalizar($this->chamar($parts, $this->schema()));

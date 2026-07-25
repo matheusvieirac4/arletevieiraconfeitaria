@@ -31,23 +31,42 @@ require __DIR__ . '/_header.php';
         <?php endif; ?>
 
         <?php if (!$rev): ?>
-            <div class="card" style="max-width:640px;">
-                <div class="card-body">
-                    <p class="text-muted">Envie o <strong>XML da nota</strong> de compra. Os itens são casados com o estoque
-                       pelo código de barras (ou por nome), e você confere as quantidades antes de dar entrada.
-                       O código de barras da nota preenche automaticamente os itens que ainda não têm.</p>
-                    <form method="post" action="controller_estoque.php?acao=entrada_xml" enctype="multipart/form-data" class="d-flex gap-2">
-                        <input type="file" name="xml" accept=".xml,text/xml,application/xml" class="form-control" required>
-                        <button class="btn btn-primary">Ler nota</button>
-                    </form>
-                    <p class="text-muted small mb-0 mt-3">Foto de cupom (OCR) entra numa próxima etapa. Por ora, XML de NF-e.</p>
+            <p class="text-muted">Como você quer dar entrada? Nos dois casos você confere os itens e as quantidades antes de gravar.</p>
+            <div class="row g-4" style="max-width:820px;">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title"><i data-feather="file-text" class="align-middle me-1" style="width:18px;height:18px;"></i>XML da nota</h5>
+                            <p class="text-muted">O jeito mais preciso. Casa os itens pelo <strong>código de barras</strong> (ou nome) e preenche automaticamente os códigos que faltam.</p>
+                            <form method="post" action="controller_estoque.php?acao=entrada_xml" enctype="multipart/form-data" class="d-flex gap-2">
+                                <input type="file" name="xml" accept=".xml,text/xml,application/xml" class="form-control" required>
+                                <button class="btn btn-primary">Ler</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title"><i data-feather="camera" class="align-middle me-1" style="width:18px;height:18px;"></i>Foto do cupom</h5>
+                            <p class="text-muted">Compra sem XML (mercado, hortifruti). A IA lê os itens do cupom; casa por <strong>nome</strong> e você ajusta.</p>
+                            <form method="post" action="controller_estoque.php?acao=entrada_cupom" enctype="multipart/form-data" class="d-flex gap-2">
+                                <input type="file" name="foto" accept="image/*" capture="environment" class="form-control" required>
+                                <button class="btn btn-primary">Ler</button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </div>
         <?php else: ?>
             <div class="alert alert-info">
-                Nota <?= $rev['numero'] !== '' ? 'nº ' . htmlspecialchars($rev['numero']) : '' ?>
-                <?= $rev['fornecedor'] !== '' ? '· ' . htmlspecialchars($rev['fornecedor']) : '' ?>.
-                Confira o item do estoque e a quantidade de cada linha.
+                <?php if (($rev['origem'] ?? '') === 'cupom'): ?>
+                    Itens lidos do <strong>cupom</strong> pela IA. Confira o item do estoque e a quantidade — casou por nome, então revise.
+                <?php else: ?>
+                    Nota <?= $rev['numero'] !== '' ? 'nº ' . htmlspecialchars($rev['numero']) : '' ?>
+                    <?= $rev['fornecedor'] !== '' ? '· ' . htmlspecialchars($rev['fornecedor']) : '' ?>.
+                    Confira o item do estoque e a quantidade de cada linha.
+                <?php endif; ?>
             </div>
             <form method="post" action="controller_estoque.php?acao=entrada_confirmar">
                 <div class="card">

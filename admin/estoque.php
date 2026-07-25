@@ -41,7 +41,7 @@ require __DIR__ . '/_header.php';
                 <a href="estoque_kiosk.php" class="btn btn-dark"><i data-feather="camera" class="align-middle me-1" style="width:16px;height:16px;"></i>Modo quiosque</a>
                 <a href="estoque_colaboradores.php" class="btn btn-outline-secondary"><i data-feather="users" class="align-middle me-1" style="width:16px;height:16px;"></i>Colaboradores</a>
                 <a href="estoque_auditoria.php" class="btn btn-outline-primary"><i data-feather="clipboard" class="align-middle me-1" style="width:16px;height:16px;"></i>Auditoria</a>
-                <a href="estoque_entrada.php" class="btn btn-outline-primary"><i data-feather="file-plus" class="align-middle me-1" style="width:16px;height:16px;"></i>Entrada (XML)</a>
+                <a href="estoque_entrada.php" class="btn btn-outline-primary"><i data-feather="file-plus" class="align-middle me-1" style="width:16px;height:16px;"></i>Entrada</a>
                 <a href="estoque_lista_compra.php" class="btn btn-outline-primary">
                     Lista de compra <?php if ($abaixo): ?><span class="badge bg-danger"><?= $abaixo ?></span><?php endif; ?>
                 </a>

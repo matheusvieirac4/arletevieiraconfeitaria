@@ -82,10 +82,52 @@ if ($acao === 'entrada_xml' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+// ---- Entrada por CUPOM (foto): Gemini extrai os itens ----
+if ($acao === 'entrada_cupom' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_once __DIR__ . '/model_financeiro.php';      // reusa a chave/IA do Gemini
+    require_once __DIR__ . '/lib/gemini_client.php';
+    if (!financeiro_ia_configurada()) {
+        estoque_redirect('danger', 'A IA (Gemini) não está configurada.', 'estoque_entrada.php');
+    }
+    if (!isset($_FILES['foto']) || $_FILES['foto']['error'] !== UPLOAD_ERR_OK) {
+        estoque_redirect('danger', 'Selecione uma foto válida do cupom.', 'estoque_entrada.php');
+    }
+    try {
+        $tmp  = $_FILES['foto']['tmp_name'];
+        $mime = mime_content_type($tmp) ?: 'image/jpeg';
+        $b64  = base64_encode((string) file_get_contents($tmp));
+        $r    = financeiro_gemini()->extrairItensCupom($b64, $mime);
+    } catch (\Throwable $e) {
+        estoque_redirect('danger', 'Falha ao ler o cupom: ' . $e->getMessage(), 'estoque_entrada.php');
+    }
+    $cache = estoque_listar($pdo);
+    $linhas = [];
+    foreach (($r['itens'] ?? []) as $it) {
+        $desc = trim((string) ($it['descricao'] ?? ''));
+        if ($desc === '') { continue; }
+        $casa = estoque_casar_item('', $desc, $cache);   // cupom não traz barcode confiável
+        $linhas[] = [
+            'descricao'  => $desc,
+            'ean'        => '',
+            'quantidade' => (float) str_replace(',', '.', (string) ($it['quantidade'] ?? '1')),
+            'unidade'    => $it['unidade'] ?? '',
+            'item_id'    => $casa['item_id'],
+            'match'      => $casa['match'],
+        ];
+    }
+    if (!$linhas) {
+        estoque_redirect('warning', 'Não consegui identificar itens nesse cupom. Tente uma foto mais nítida.', 'estoque_entrada.php');
+    }
+    $_SESSION['estoque_entrada'] = ['fornecedor' => '', 'numero' => '', 'origem' => 'cupom', 'linhas' => $linhas];
+    header('Location: estoque_entrada.php');
+    exit;
+}
+
 // ---- Entrada: confirma as linhas revisadas e dá entrada no estoque ----
 if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $rev = $_SESSION['estoque_entrada'] ?? null;
     if (!$rev) { estoque_redirect('danger', 'Nada para confirmar.', 'estoque_entrada.php'); }
+    $origem = ($rev['origem'] ?? 'xml') === 'cupom' ? 'cupom' : 'xml';
 
     $itemIds = $_POST['item_id'] ?? [];
     $qtds    = $_POST['quantidade'] ?? [];
@@ -110,7 +152,7 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($id <= 0) { continue; }
                 if ($ean !== '') { estoque_definir_barcode($pdo, $id, $ean); }
             }
-            estoque_movimentar($pdo, $id, 'entrada', $qtd, 'xml', '', estoque_responsavel_atual());
+            estoque_movimentar($pdo, $id, 'entrada', $qtd, $origem, '', estoque_responsavel_atual());
             $aplicadas++;
         }
     } catch (\Throwable $e) {

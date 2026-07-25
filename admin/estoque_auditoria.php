@@ -37,7 +37,7 @@ require __DIR__ . '/_header.php';
             <div class="col-auto"><button class="btn btn-outline-secondary">Filtrar</button></div>
         </form>
 
-        <form method="post" action="controller_estoque.php?acao=auditoria">
+        <form method="post" action="controller_estoque.php?acao=auditoria" id="form-auditoria">
             <div class="card">
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0 bg-white">
@@ -68,8 +68,31 @@ require __DIR__ . '/_header.php';
             </div>
             <?php if ($itens): ?>
                 <div class="mt-3">
-                    <button class="btn btn-success" onclick="return confirm('Salvar a contagem? Só os itens preenchidos serão ajustados.')">Salvar contagem</button>
+                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modal-auditoria">Salvar contagem</button>
                 </div>
             <?php endif; ?>
         </form>
+
+        <div class="modal fade" id="modal-auditoria" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Salvar contagem</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    </div>
+                    <div class="modal-body">
+                        Só os itens <strong>preenchidos</strong> serão ajustados; os deixados em branco não mudam.
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-success" id="btn-conf-auditoria">Salvar contagem</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+        document.getElementById('btn-conf-auditoria')?.addEventListener('click', function () {
+            document.getElementById('form-auditoria').submit();
+        });
+        </script>
 <?php require __DIR__ . '/_footer.php'; ?>
