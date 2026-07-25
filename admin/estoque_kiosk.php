@@ -55,7 +55,7 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     </div>
 </div>
 
-<video id="video" playsinline muted></video>
+<video id="video" playsinline autoplay muted></video>
 <div class="kx-hint" id="hint">Aponte o código de barras para a câmera</div>
 
 <!-- Overlay: item encontrado (confirmar baixa) -->
@@ -104,7 +104,7 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
 <script>
 (function () {
     const API = 'estoque_api.php';
@@ -125,14 +125,14 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
 
     // ---------- Câmera (ZXing: bom em código de barras 1D) ----------
     function iniciarCamera() {
-        if (controls) { try { controls.stop(); } catch (e) {} controls = null; }
-        if (!leitor) { leitor = new ZXingBrowser.BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 120 }); }
+        if (typeof ZXing === 'undefined') { hint.textContent = 'Falha ao carregar o leitor. Verifique a internet e recarregue.'; return; }
+        if (!leitor) { leitor = new ZXing.BrowserMultiFormatReader(); }
+        try { leitor.reset(); } catch (e) {}
         leitor.decodeFromConstraints(
-            { video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } } },
+            { video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } } },
             document.getElementById('video'),
-            function (result) { if (result) { onScan(result.getText()); } }
-        ).then(function (c) { controls = c; })
-         .catch(function (e) { hint.textContent = 'Não consegui abrir a câmera: ' + e; });
+            function (result) { if (result && !pausado) { onScan(result.getText()); } }
+        ).catch(function (e) { hint.textContent = 'Não consegui abrir a câmera: ' + e; });
     }
     document.getElementById('btn-cam').onclick = function () {
         facing = (facing === 'user') ? 'environment' : 'user';
