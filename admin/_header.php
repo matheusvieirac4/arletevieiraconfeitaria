@@ -15,6 +15,7 @@ $navItems = [
     'links_bio' => ['links_bio.php', 'Links da bio', 'link'],
     'metricas'  => ['metricas.php',  'Métricas',     'bar-chart-2'],
     'financeiro'=> ['financeiro.php','Financeiro',   'dollar-sign'],
+    'estoque'   => ['estoque.php',   'Estoque',      'package'],
 ];
 ?>
 <!DOCTYPE html>

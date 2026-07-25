@@ -1,0 +1,82 @@
+<?php
+// Setup do módulo de estoque: cria as tabelas (se não existirem) e importa o
+// catálogo inicial da planilha. Idempotente — pode rodar de novo sem duplicar.
+// Acesse uma vez em /admin/estoque_setup.php estando logado.
+require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/../includes/banco.php';
+
+header('Content-Type: text/plain; charset=utf-8');
+$log = [];
+
+try {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS estoque_itens (
+            id             INT AUTO_INCREMENT PRIMARY KEY,
+            nome           VARCHAR(255) NOT NULL,
+            fornecedor     VARCHAR(255) NULL,
+            preco          DECIMAL(10,2) NULL,
+            peso_gramas    INT NULL,
+            estoque_atual  DECIMAL(10,3) NOT NULL DEFAULT 0,
+            estoque_minimo DECIMAL(10,3) NULL,
+            estoque_ideal  DECIMAL(10,3) NULL,
+            codigo_barras  VARCHAR(64) NULL,
+            imagem         VARCHAR(255) NULL,
+            ativo          TINYINT(1) NOT NULL DEFAULT 1,
+            criado_em      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX (codigo_barras),
+            INDEX (nome)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $log[] = 'OK  tabela estoque_itens';
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS estoque_movimentacoes (
+            id          INT AUTO_INCREMENT PRIMARY KEY,
+            item_id     INT NOT NULL,
+            tipo        ENUM('entrada','saida','ajuste') NOT NULL,
+            quantidade  DECIMAL(10,3) NOT NULL,
+            saldo_apos  DECIMAL(10,3) NULL,
+            origem      VARCHAR(32) NOT NULL DEFAULT 'manual',
+            observacao  VARCHAR(255) NULL,
+            criado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX (item_id),
+            INDEX (criado_em),
+            CONSTRAINT fk_mov_item FOREIGN KEY (item_id) REFERENCES estoque_itens(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $log[] = 'OK  tabela estoque_movimentacoes';
+
+    // Importa o catálogo só se a tabela estiver vazia (não duplica em re-runs).
+    $qtd = (int) $pdo->query("SELECT COUNT(*) FROM estoque_itens")->fetchColumn();
+    if ($qtd > 0) {
+        $log[] = "..  catálogo já tem $qtd itens — importação pulada.";
+    } else {
+        $seed = require __DIR__ . '/lib/estoque_seed.php';
+        $ins = $pdo->prepare("
+            INSERT INTO estoque_itens (nome, fornecedor, preco, peso_gramas, estoque_ideal, estoque_minimo, estoque_atual)
+            VALUES (:nome, :forn, :preco, :peso, :ideal, :minimo, 0)
+        ");
+        $n = 0;
+        foreach ($seed as $r) {
+            [$nome, $forn, $preco, $peso, $ideal] = $r;
+            $ins->execute([
+                ':nome'   => $nome,
+                ':forn'   => $forn !== '' ? $forn : null,
+                ':preco'  => $preco,
+                ':peso'   => $peso,
+                ':ideal'  => $ideal,
+                ':minimo' => $ideal,   // mínimo começa igual ao ideal; ajuste depois
+            ]);
+            $n++;
+        }
+        $log[] = "OK  importados $n itens (estoque_atual = 0, mínimo = ideal).";
+    }
+    $log[] = '';
+    $log[] = 'Pronto. Próximo: cadastre a contagem inicial e comece a usar o /admin/estoque.php';
+} catch (\Throwable $e) {
+    http_response_code(500);
+    $log[] = 'ERRO: ' . $e->getMessage();
+}
+
+echo implode("\n", $log) . "\n";
