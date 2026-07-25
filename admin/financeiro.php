@@ -615,7 +615,8 @@ $datalist = function (string $id, array $opts): string {
                                 <input type="hidden" name="supplier" value="<?= htmlspecialchars($l['supplier']) ?>">
                                 <?php foreach ($contasAbertas as $i => $c): ?>
                                     <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="transaction_id"
+                                        <input class="form-check-input js-baixa-conta" type="radio" name="transaction_id"
+                                               data-valor="<?= htmlspecialchars(financeiro_valor_br($c['valor']), ENT_QUOTES) ?>"
                                                id="conta-<?= (int) $c['id'] ?>" value="<?= (int) $c['id'] ?>" <?= $i === 0 ? 'checked' : '' ?>>
                                         <label class="form-check-label" for="conta-<?= (int) $c['id'] ?>">
                                             <?= htmlspecialchars($c['descricao'] ?: $c['fornecedor'] ?: 'Conta a pagar') ?>
@@ -651,17 +652,26 @@ $datalist = function (string $id, array $opts): string {
                                         <input type="date" name="settlement_date" class="form-control form-control-sm"
                                                value="<?= htmlspecialchars($l['settlement_date'] ?: date('Y-m-d')) ?>" required>
                                     </div>
-                                    <div class="col-sm-4">
+                                    <div class="col-sm-3">
+                                        <label class="form-label small mb-1">Valor original (R$)</label>
+                                        <input type="text" name="original_value" id="baixa-original" class="form-control form-control-sm js-baixa-num"
+                                               value="" placeholder="0,00" inputmode="decimal">
+                                    </div>
+                                    <div class="col-sm-3">
                                         <label class="form-label small mb-1">Juros (R$)</label>
-                                        <input type="text" name="interest" class="form-control form-control-sm" placeholder="0,00" inputmode="decimal">
+                                        <input type="text" name="interest" class="form-control form-control-sm js-baixa-num" placeholder="0,00" inputmode="decimal">
                                     </div>
-                                    <div class="col-sm-4">
+                                    <div class="col-sm-3">
                                         <label class="form-label small mb-1">Multa (R$)</label>
-                                        <input type="text" name="fine" class="form-control form-control-sm" placeholder="0,00" inputmode="decimal">
+                                        <input type="text" name="fine" class="form-control form-control-sm js-baixa-num" placeholder="0,00" inputmode="decimal">
                                     </div>
-                                    <div class="col-sm-4">
+                                    <div class="col-sm-3">
                                         <label class="form-label small mb-1">Desconto (R$)</label>
-                                        <input type="text" name="discount" class="form-control form-control-sm" placeholder="0,00" inputmode="decimal">
+                                        <input type="text" name="discount" class="form-control form-control-sm js-baixa-num" placeholder="0,00" inputmode="decimal">
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <label class="form-label small mb-1 fw-semibold">Valor final (R$)</label>
+                                        <input type="text" id="baixa-final" class="form-control form-control-sm bg-light fw-semibold" value="" readonly tabindex="-1">
                                     </div>
                                 </div>
                                 <button type="submit" class="btn btn-success btn-sm mt-3">
@@ -670,8 +680,9 @@ $datalist = function (string $id, array $opts): string {
                                 <!-- gatilho oculto do modal (declarativo, não depende de JS global) -->
                                 <button type="button" id="abre-modal-baixa" class="d-none" data-bs-toggle="modal" data-bs-target="#modal-baixa"></button>
                                 <div class="form-text mt-1">
-                                    O valor-base da conta não muda na baixa. Juros/multa (pago atrasado) e desconto entram aqui —
-                                    se o comprovante já discrimina, copie. Se o valor-base estiver muito diferente, ajuste-o direto no Cardápio Web.
+                                    <strong>Valor original</strong> = valor-base da conta (corrige se a fatura veio diferente, ex.: Celesc 600→647).
+                                    <strong>Juros/multa</strong> (pago atrasado) e <strong>desconto</strong> se o comprovante discriminar.
+                                    O <strong>valor final</strong> é o total pago (original + juros + multa − desconto).
                                 </div>
                             </form>
                         </div>
@@ -1045,6 +1056,29 @@ if (window.Choices) {
             if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
         });
     }
+
+    // Valor original segue o candidato marcado; valor final é calculado ao vivo.
+    const brNum = (v) => parseFloat(String(v || '').replace(/\./g, '').replace(',', '.')) || 0;
+    const brFmt = (n) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const orig  = document.getElementById('baixa-original');
+    const final = document.getElementById('baixa-final');
+    const getNum = (name) => brNum((form.querySelector('[name="' + name + '"]') || {}).value);
+    function recalc() {
+        if (!final) { return; }
+        final.value = brFmt(getNum('original_value') + getNum('interest') + getNum('fine') - getNum('discount'));
+    }
+    function setOriginalDoSelecionado() {
+        const sel = form.querySelector('.js-baixa-conta:checked');
+        if (sel && orig) { orig.value = sel.dataset.valor || ''; }
+        recalc();
+    }
+    form.querySelectorAll('.js-baixa-conta').forEach(function (r) {
+        r.addEventListener('change', setOriginalDoSelecionado);
+    });
+    form.querySelectorAll('.js-baixa-num').forEach(function (i) {
+        i.addEventListener('input', recalc);
+    });
+    setOriginalDoSelecionado();   // preenche no carregamento
 })();
 
 // Máscara de CNPJ/CPF (só visual — o servidor guarda apenas os dígitos).

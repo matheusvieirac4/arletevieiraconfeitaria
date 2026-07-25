@@ -329,13 +329,14 @@ if ($acao === 'pagar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         financeiro_redirect('danger', 'Para dar baixa, selecione a Conta e a Forma de pagamento.');
     }
 
-    // Juros/multa/desconto (opcionais, formato BR): valor positivo ou null.
+    // Valores em formato BR: positivo ou null.
     $valorOpc = function (string $k): ?float {
         $s = trim((string) ($_POST[$k] ?? ''));
         if ($s === '') { return null; }
         $n = abs((float) str_replace(',', '.', str_replace('.', '', $s)));
         return $n > 0 ? $n : null;
     };
+    $novoValor = $valorOpc('original_value');   // valor-base corrigido (ex.: 647)
     $extra = [
         'interest' => $valorOpc('interest'),   // juros
         'fine'     => $valorOpc('fine'),        // multa
@@ -348,6 +349,18 @@ if ($acao === 'pagar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $formaId = financeiro_id_por_nome($api->listarFormasPagamento(), $formaNome);
         if (!$contaId) { financeiro_redirect('danger', "Conta \"{$contaNome}\" não encontrada no Cardápio Web."); }
         if (!$formaId) { financeiro_redirect('danger', "Forma de pagamento \"{$formaNome}\" não encontrada no Cardápio Web."); }
+
+        // 1) Corrige o valor-base ANTES da baixa, se o usuário informou e mudou.
+        //    Se a edição falhar, aborta (não dá baixa com valor errado).
+        if ($novoValor !== null) {
+            $atual = $api->obterTransacao($tid);
+            $valAtual = abs((float) ($atual['original_value'] ?? $atual['value'] ?? 0));
+            if (abs($valAtual - $novoValor) > 0.005) {
+                $api->atualizarValorTransacao($tid, $atual, $novoValor);
+            }
+        }
+
+        // 2) Baixa (com juros/multa/desconto).
         $api->pagarTransacao($tid, $contaId, $formaId, $dataPg, $extra);
     } catch (\Throwable $e) {
         financeiro_redirect('danger', 'Falha ao marcar como paga: ' . $e->getMessage());

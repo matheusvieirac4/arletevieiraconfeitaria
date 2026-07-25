@@ -157,6 +157,54 @@ class CardapioWebApi
         return $this->get('/financial/transactions?' . http_build_query($query));
     }
 
+    /** Lê uma transação (com os IDs de conta/fornecedor/categoria) para edição. */
+    public function obterTransacao(int $id): array
+    {
+        return $this->get('/financial/transactions/' . $id);
+    }
+
+    /**
+     * Atualiza o VALOR-BASE (original_value) de uma transação existente,
+     * preservando todo o resto. Reaproveita $atual (resposta de obterTransacao)
+     * para reenviar os mesmos IDs e a MESMA linha de categoria (com seu id),
+     * senão o CW criaria uma categoria nova. Só trata categoria única — split
+     * de categorias não é mexido (lança), para nunca corromper o rateio.
+     */
+    public function atualizarValorTransacao(int $id, array $atual, float $novoValorPositivo): array
+    {
+        $val  = -abs($novoValorPositivo);   // despesa: negativo
+        $cats = $atual['categories'] ?? [];
+        if (count($cats) !== 1) {
+            throw new CardapioWebApiException('A conta tem mais de uma categoria (rateio) — ajuste o valor direto no Cardápio Web.');
+        }
+        $c = $cats[0];
+        $t = [
+            'activity_type'         => $atual['activity_type'] ?? 'out',
+            'due_date'              => $atual['due_date'] ?? null,
+            'competence_date'       => $atual['competence_date'] ?? null,
+            'original_value'        => $val,
+            'description'           => $atual['description'] ?? '',
+            'fin_account_id'        => $atual['fin_account_id'] ?? null,
+            'fin_supplier_id'       => $atual['fin_supplier_id'] ?? null,
+            'fin_payment_method_id' => $atual['fin_payment_method_id'] ?? null,
+            'settlement_date'       => $atual['settlement_date'] ?? null,
+            'fee'                   => null,
+            'fine'                  => null,
+            'interest'              => null,
+            'discount'              => null,
+            'status'                => $atual['status'] ?? 'pending',
+            'notes'                 => $atual['notes'] ?? null,
+            'recurrence_type'       => $atual['recurrence_type'] ?? 'single',
+            'fin_transaction_categories_attributes' => [[
+                'fin_category_id'    => $c['fin_category_id']    ?? ($c['fin_category']['id']    ?? null),
+                'fin_cost_center_id' => $c['fin_cost_center_id'] ?? ($c['fin_cost_center']['id'] ?? null),
+                'value'              => $val,
+                'id'                 => $c['id'] ?? null,
+            ]],
+        ];
+        return $this->put('/financial/transactions/' . $id, ['transaction' => $t]);
+    }
+
     /**
      * Dá baixa (marca como paga) numa conta a pagar existente.
      * PUT /financial/transactions/{id}/pay — o valor da conta NÃO muda aqui;
