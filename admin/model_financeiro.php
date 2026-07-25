@@ -303,7 +303,16 @@ function financeiro_casar_fornecedor(string $cnpj, string $razao, array $fornece
         }
     }
     if ($melhorScore >= 62.0) {
-        return ['name' => $melhorNome, 'match' => 'nome'];
+        // Trava anti-falso-positivo: o PRIMEIRO termo (a marca) precisa bater.
+        // Sem isso, "TOK FESTAS EMBALAGENS" casaria com "SOS EMBALAGENS" só pela
+        // palavra genérica em comum. "TOK" != "SOS" -> não casa.
+        $t1 = explode(' ', $alvo)[0] ?? '';
+        $t2 = explode(' ', financeiro_normalizar_nome($melhorNome))[0] ?? '';
+        $pctPrimeiro = 0.0;
+        if ($t1 !== '' && $t2 !== '') { similar_text($t1, $t2, $pctPrimeiro); }
+        if ($pctPrimeiro >= 70.0) {
+            return ['name' => $melhorNome, 'match' => 'nome'];
+        }
     }
     return ['name' => '', 'match' => 'nenhum'];
 }
