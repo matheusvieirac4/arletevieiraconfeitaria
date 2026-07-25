@@ -208,7 +208,7 @@ if ($acao === 'auditoria' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (\Throwable $e) {
         estoque_redirect('danger', 'Falha na auditoria: ' . $e->getMessage(), 'estoque_auditoria.php');
     }
-    estoque_redirect('success', "Auditoria salva: $ajustados conferido(s), $comDiferenca com diferença registrada.", 'estoque_auditoria.php');
+    estoque_redirect('success', "Auditoria salva: $ajustados conferido(s), $comDiferenca com diferença registrada.", 'estoque.php');
 }
 
 // ---- Descartar a entrada em revisão ----
