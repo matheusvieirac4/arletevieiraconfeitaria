@@ -344,6 +344,38 @@ function estoque_casar_item(string $ean, string $descricao, array $itensCache, a
     return ['item_id' => null, 'match' => 'nenhum'];
 }
 
+/**
+ * Extrai a quantidade por embalagem da DESCRIÇÃO (fardo/caixa costuma ter na
+ * descrição): "COM 20 UN", "25 Unid", "10 Unid.", "C/ 50 UN". Null se não achar.
+ */
+function estoque_qtde_da_descricao(string $desc): ?int
+{
+    $d = mb_strtoupper($desc, 'UTF-8');
+    if (preg_match('/\b(?:COM|C\/)\s*(\d{1,4})\s*UN/u', $d, $m)) { return (int) $m[1]; }  // COM 20 UN
+    if (preg_match('/(\d{1,4})\s*UNID/u', $d, $m))               { return (int) $m[1]; }  // 25 UNID
+    if (preg_match('/(\d{1,4})\s*UN\b/u', $d, $m))               { return (int) $m[1]; }  // 20 UN
+    return null;
+}
+
+/**
+ * Varre os itens ativos e, onde a descrição tiver a quantidade da embalagem,
+ * grava em peso_gramas. Devolve quantos foram atualizados.
+ */
+function estoque_detectar_embalagem_todos(PDO $pdo): int
+{
+    $itens = estoque_listar($pdo);
+    $up = $pdo->prepare("UPDATE estoque_itens SET peso_gramas = :q WHERE id = :id");
+    $n = 0;
+    foreach ($itens as $it) {
+        $q = estoque_qtde_da_descricao((string) $it['nome']);
+        if ($q !== null && $q > 0 && (int) ($it['peso_gramas'] ?? 0) !== $q) {
+            $up->execute([':q' => $q, ':id' => (int) $it['id']]);
+            $n++;
+        }
+    }
+    return $n;
+}
+
 /** Atualiza o preço (valor unitário) de um item — usado na entrada por nota/cupom. */
 function estoque_atualizar_preco(PDO $pdo, int $itemId, float $preco): void
 {

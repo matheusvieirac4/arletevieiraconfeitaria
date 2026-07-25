@@ -163,9 +163,12 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $vunit = (float) str_replace(',', '.', (string) ($vunits[$i] ?? '0'));
 
             if ($sel === 'novo') {
+                $nomeNovo = trim((string) ($descs[$i] ?? 'Novo item'));
+                $embNovo  = estoque_qtde_da_descricao($nomeNovo);   // fardo: qtde na descrição
                 $id = estoque_criar($pdo, [
-                    'nome'          => trim((string) ($descs[$i] ?? 'Novo item')),
+                    'nome'          => $nomeNovo,
                     'codigo_compra' => $ean,   // veio da nota = código de compra (fardo)
+                    'peso_gramas'   => $embNovo !== null ? (string) $embNovo : '',
                     'estoque_atual' => 0,
                 ]);
             } else {
@@ -263,6 +266,12 @@ if ($acao === 'colab_excluir') {
     $id = (int) ($_GET['id'] ?? 0);
     if ($id > 0) { estoque_colaborador_excluir($pdo, $id); }
     estoque_redirect('success', 'Colaborador removido.', 'estoque_colaboradores.php');
+}
+
+// ---- Detectar qtde por embalagem a partir das descrições (lote) ----
+if ($acao === 'detectar_embalagem') {
+    $n = estoque_detectar_embalagem_todos($pdo);
+    estoque_redirect('success', "Qtde por embalagem detectada em $n item(ns) pela descrição.");
 }
 
 // ---- Excluir (soft delete) ----
