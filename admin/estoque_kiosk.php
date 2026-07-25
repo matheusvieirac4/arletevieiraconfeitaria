@@ -273,13 +273,25 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
         } catch (e) {}
     }
 
-    function onScan(texto) {
+    // Fluxo único de leitura (usado pelo leitor de barras E pelo OCR).
+    function processarLeitura(codigo) {
         if (pausado) { return; }
         const agora = Date.now();
-        if (texto === ultimo && agora - ultimoT < 2500) { return; }
-        ultimo = texto; ultimoT = agora;
+        if (codigo === ultimo && agora - ultimoT < 2500) { return; }
+        ultimo = codigo; ultimoT = agora;
         pausado = true; clearInatividade(); bip();
-        lookup(texto);
+        lookup(codigo);
+    }
+    function onScan(texto) { processarLeitura(texto); }
+
+    // Valida o dígito verificador de EAN-8/UPC-A/EAN-13/GTIN-14 (padrão GTIN).
+    function barcodeValido(code) {
+        if (![8, 12, 13, 14].includes(code.length) || !/^\d+$/.test(code)) { return false; }
+        const d = code.split('').map(Number);
+        const check = d.pop();
+        let soma = 0, w = 3;
+        for (let i = d.length - 1; i >= 0; i--) { soma += d[i] * w; w = (w === 3 ? 1 : 3); }
+        return ((10 - (soma % 10)) % 10) === check;
     }
     function lookup(codigo) {
         fetch(API + '?acao=lookup&codigo=' + encodeURIComponent(codigo), { credentials: 'same-origin' })
@@ -289,23 +301,9 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     }
 
     // ---------- OCR (Tesseract) como 2ª via ----------
-    // Lê os DÍGITOS impressos sob o código de barras. Só age se o número casar
-    // com um item cadastrado (se não casar, ignora — evita baixa por leitura torta).
+    // Lê os DÍGITOS impressos sob o código de barras. Aceita item novo também;
+    // a proteção contra leitura torta é o dígito verificador (barcodeValido).
     let ocrWorker = null, ocrBusy = false;
-    function ocrCheck(codigo) {
-        if (pausado || !colaboradorId) { return; }
-        const agora = Date.now();
-        if (codigo === ultimo && agora - ultimoT < 2500) { return; }
-        fetch(API + '?acao=lookup&codigo=' + encodeURIComponent(codigo), { credentials: 'same-origin' })
-            .then(r => r.json())
-            .then(function (d) {
-                if (d.found && !pausado) {
-                    ultimo = codigo; ultimoT = Date.now();
-                    pausado = true; clearInatividade(); bip();
-                    abrirItem(d.item);
-                }
-            }).catch(function () {});
-    }
     async function iniciarOcr() {
         if (typeof Tesseract === 'undefined') { return; }
         try {
@@ -328,7 +326,7 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
             const res = await ocrWorker.recognize(cv);
             const runs = (res.data.text.match(/\d{8,14}/g) || []);
             for (const run of runs) {
-                if ([8, 12, 13, 14].includes(run.length)) { ocrCheck(run); }
+                if (!pausado && barcodeValido(run)) { processarLeitura(run); break; }
             }
         } catch (e) {}
         ocrBusy = false;
