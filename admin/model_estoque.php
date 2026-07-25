@@ -181,6 +181,59 @@ function estoque_responsavel_atual(): string
     return trim((string) ($_SESSION['admin_nome'] ?? ''));
 }
 
+// ------------------- Colaboradores (identificação no quiosque) ----------
+// Cada colaborador tem um PIN de 4 dígitos (guardado com hash). No quiosque a
+// pessoa escolhe o nome e digita o PIN antes de dar baixa; o nome vira o
+// "responsável" da movimentação.
+
+function estoque_colaboradores_listar(PDO $pdo, bool $soAtivos = true): array
+{
+    $sql = "SELECT id, nome, ativo FROM estoque_colaboradores";
+    if ($soAtivos) { $sql .= " WHERE ativo = 1"; }
+    $sql .= " ORDER BY nome";
+    return $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function estoque_colaborador_criar(PDO $pdo, string $nome, string $pin): void
+{
+    $pin = preg_replace('/\D/', '', $pin);
+    if (mb_strlen(trim($nome)) < 2) { throw new InvalidArgumentException('Informe o nome.'); }
+    if (strlen($pin) !== 4)         { throw new InvalidArgumentException('O PIN deve ter 4 dígitos.'); }
+    $pdo->prepare("INSERT INTO estoque_colaboradores (nome, pin_hash) VALUES (:n, :p)")
+        ->execute([':n' => trim($nome), ':p' => password_hash($pin, PASSWORD_DEFAULT)]);
+}
+
+function estoque_colaborador_atualizar_pin(PDO $pdo, int $id, string $pin): void
+{
+    $pin = preg_replace('/\D/', '', $pin);
+    if (strlen($pin) !== 4) { throw new InvalidArgumentException('O PIN deve ter 4 dígitos.'); }
+    $pdo->prepare("UPDATE estoque_colaboradores SET pin_hash = :p WHERE id = :id")
+        ->execute([':p' => password_hash($pin, PASSWORD_DEFAULT), ':id' => $id]);
+}
+
+function estoque_colaborador_excluir(PDO $pdo, int $id): void
+{
+    $pdo->prepare("UPDATE estoque_colaboradores SET ativo = 0 WHERE id = :id")->execute([':id' => $id]);
+}
+
+/** Verifica o PIN. Devolve o nome se bater, senão null. */
+function estoque_colaborador_verificar(PDO $pdo, int $id, string $pin): ?string
+{
+    $pin = preg_replace('/\D/', '', $pin);
+    $stmt = $pdo->prepare("SELECT nome, pin_hash FROM estoque_colaboradores WHERE id = :id AND ativo = 1");
+    $stmt->execute([':id' => $id]);
+    $c = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($c && password_verify($pin, $c['pin_hash'])) { return $c['nome']; }
+    return null;
+}
+
+function estoque_colaborador_nome(PDO $pdo, int $id): string
+{
+    $stmt = $pdo->prepare("SELECT nome FROM estoque_colaboradores WHERE id = :id");
+    $stmt->execute([':id' => $id]);
+    return (string) ($stmt->fetchColumn() ?: '');
+}
+
 /** Últimas movimentações de um item. */
 function estoque_movimentacoes(PDO $pdo, int $itemId, int $limite = 30): array
 {

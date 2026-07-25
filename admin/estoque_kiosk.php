@@ -1,7 +1,8 @@
 <?php
 // Quiosque de baixa de estoque — página full-screen para o celular na porta.
-// Câmera sempre aberta (ZXing lê código de barras EAN e QR). Lê 1x,
-// mostra foto+nome+quantidade+confirmar. Também tem busca para itens sem código.
+// Fluxo: escolhe o nome -> digita o PIN -> câmera lê o código -> confirma a
+// quantidade -> sucesso -> volta para a lista de nomes. Cada baixa fica
+// atribuída ao colaborador. ZXing lê código de barras EAN e QR.
 require_once __DIR__ . '/_auth.php';
 require_once 'model_estoque.php';
 if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
@@ -22,26 +23,33 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     #video { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; background:#000; }
     .kx-hint { position: fixed; bottom: 24px; left: 0; right: 0; text-align: center; z-index: 15;
                font-size: 1.1rem; color: #dfe3e8; text-shadow: 0 1px 4px #000; }
-    .kx-overlay { position: fixed; inset: 0; z-index: 30; background: rgba(10,12,16,.96);
-                  display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+    .kx-overlay { position: fixed; inset: 0; z-index: 30; background: rgba(10,12,16,.97);
+                  display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; overflow:auto; }
     .kx-overlay.show { display: flex; }
-    .kx-card { width: 100%; max-width: 520px; text-align: center; }
+    .kx-card { width: 100%; max-width: 560px; text-align: center; }
     .kx-foto { width: 190px; height: 190px; border-radius: 20px; object-fit: cover; background: #232830;
                display: flex; align-items: center; justify-content: center; margin: 0 auto 18px;
                font-size: 4rem; color: #6c757d; }
     .kx-nome { font-size: 2rem; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
     .kx-saldo { color: #adb5bd; font-size: 1.1rem; margin-bottom: 22px; }
     .kx-qtd { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 26px; }
-    .kx-qtd button { width: 68px; height: 68px; border-radius: 50%; border: none; font-size: 2rem; font-weight: 700;
-                     background: #2a3038; color: #fff; }
-    .kx-qtd input { width: 130px; height: 74px; text-align: center; font-size: 2.4rem; font-weight: 700;
-                    border-radius: 14px; border: 2px solid #3a424c; background: #1b1f26; color: #fff; }
+    .kx-qtd button { width: 68px; height: 68px; border-radius: 50%; border: none; font-size: 2rem; font-weight: 700; background: #2a3038; color: #fff; }
+    .kx-qtd input { width: 130px; height: 74px; text-align: center; font-size: 2.4rem; font-weight: 700; border-radius: 14px; border: 2px solid #3a424c; background: #1b1f26; color: #fff; }
     .btn-kx { font-size: 1.4rem; font-weight: 700; padding: 18px; border-radius: 16px; width: 100%; }
     .kx-check { font-size: 5rem; }
-    .kx-grade { width: 100%; max-width: 560px; }
-    .kx-grade .item { background: #1b1f26; border: 1px solid #2a3038; border-radius: 14px; padding: 14px;
-                      text-align: left; width: 100%; color: #fff; font-size: 1.15rem; margin-bottom: 10px; }
+    .kx-grade { width: 100%; max-width: 620px; }
+    .kx-grade .item { background: #1b1f26; border: 1px solid #2a3038; border-radius: 14px; padding: 14px; text-align: left; width: 100%; color: #fff; font-size: 1.15rem; margin-bottom: 10px; }
     .kx-busca { font-size: 1.3rem; padding: 16px; border-radius: 14px; }
+    /* lista de nomes */
+    .kx-nomes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .kx-nomes button { background: #1b1f26; border: 2px solid #2a3038; color: #fff; border-radius: 16px;
+                       padding: 26px 12px; font-size: 1.5rem; font-weight: 700; }
+    /* teclado de PIN */
+    .pin-dots { font-size: 2.6rem; letter-spacing: .4rem; margin-bottom: 20px; height: 40px; }
+    .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; max-width: 340px; margin: 0 auto; }
+    .pin-pad button { background: #1b1f26; border: 2px solid #2a3038; color: #fff; border-radius: 16px; padding: 22px 0; font-size: 2rem; font-weight: 700; }
+    .shake { animation: shake .35s; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-10px)} 75%{transform:translateX(10px)} }
 </style>
 </head>
 <body>
@@ -51,14 +59,35 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     <div class="d-flex gap-2">
         <button class="btn btn-light btn-sm" id="btn-buscar">🔍 Buscar item</button>
         <button class="btn btn-outline-light btn-sm" id="btn-cam">↺ Câmera</button>
-        <a class="btn btn-outline-light btn-sm" href="estoque.php">Sair</a>
+        <button class="btn btn-outline-light btn-sm" id="btn-trocar">Trocar usuário</button>
     </div>
 </div>
 
 <video id="video" playsinline autoplay muted></video>
 <div class="kx-hint" id="hint">Aponte o código de barras para a câmera</div>
 
-<!-- Overlay: item encontrado (confirmar baixa) -->
+<!-- Passo 1: escolher o colaborador -->
+<div class="kx-overlay show" id="ov-nomes">
+    <div class="kx-card kx-grade">
+        <div class="kx-nome mb-3">Quem está retirando?</div>
+        <div id="nomes-lista" class="kx-nomes"></div>
+        <div id="nomes-vazio" class="kx-saldo d-none">Nenhum colaborador cadastrado. Cadastre em Estoque → Colaboradores.</div>
+        <a href="estoque.php" class="btn btn-outline-light btn-kx mt-3">Sair do quiosque</a>
+    </div>
+</div>
+
+<!-- Passo 2: PIN -->
+<div class="kx-overlay" id="ov-pin">
+    <div class="kx-card">
+        <div class="kx-nome mb-1" id="pin-nome"></div>
+        <div class="kx-saldo mb-2">Digite seu PIN de 4 dígitos</div>
+        <div class="pin-dots" id="pin-dots">○ ○ ○ ○</div>
+        <div class="pin-pad" id="pin-pad"></div>
+        <button class="btn btn-outline-light btn-kx mt-3" id="pin-voltar" style="max-width:340px;margin:16px auto 0;">Voltar</button>
+    </div>
+</div>
+
+<!-- Item encontrado (confirmar baixa) -->
 <div class="kx-overlay" id="ov-item">
     <div class="kx-card">
         <div class="kx-foto" id="it-foto">📦</div>
@@ -74,7 +103,7 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     </div>
 </div>
 
-<!-- Overlay: código desconhecido (associar a um item) -->
+<!-- Código desconhecido (associar) -->
 <div class="kx-overlay" id="ov-novo">
     <div class="kx-card kx-grade">
         <div class="kx-nome mb-1">Código não cadastrado</div>
@@ -85,17 +114,17 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     </div>
 </div>
 
-<!-- Overlay: busca manual (itens sem código) -->
+<!-- Busca manual (itens sem código) -->
 <div class="kx-overlay" id="ov-busca">
     <div class="kx-card kx-grade">
         <div class="kx-nome mb-3">Buscar item</div>
-        <input type="text" class="form-control kx-busca mb-3" id="bs-busca" placeholder="Digite o nome do item…" autofocus>
+        <input type="text" class="form-control kx-busca mb-3" id="bs-busca" placeholder="Digite o nome do item…">
         <div id="bs-lista"></div>
-        <button class="btn btn-outline-light btn-kx mt-2" id="bs-cancelar">Fechar</button>
+        <button class="btn btn-outline-light btn-kx mt-2" id="bs-cancelar">Cancelar</button>
     </div>
 </div>
 
-<!-- Overlay: sucesso -->
+<!-- Sucesso -->
 <div class="kx-overlay" id="ov-ok">
     <div class="kx-card">
         <div class="kx-check">✅</div>
@@ -110,22 +139,105 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     const API = 'estoque_api.php';
     const hint = document.getElementById('hint');
     const ov = {
+        nomes: document.getElementById('ov-nomes'),
+        pin: document.getElementById('ov-pin'),
         item: document.getElementById('ov-item'),
         novo: document.getElementById('ov-novo'),
         busca: document.getElementById('ov-busca'),
         ok: document.getElementById('ov-ok'),
     };
-    let leitor = null, controls = null, facing = 'environment', pausado = false, ultimo = '', ultimoT = 0;
+    let leitor = null, facing = 'environment', pausado = true, ultimo = '', ultimoT = 0;
     let itemAtual = null, codigoPendente = '';
+    let colaboradorId = null, colaboradorNome = '', pinBuffer = '', pinSel = null;
+    let inatividade = null;
 
     function fmt(n) { return (Math.round(n * 1000) / 1000).toLocaleString('pt-BR'); }
     function mostrar(el) { Object.values(ov).forEach(o => o.classList.remove('show')); if (el) { el.classList.add('show'); } }
-    function pausar() { pausado = true; }               // só ignora leituras; câmera fica viva
-    function retomar() { mostrar(null); pausado = false; }
 
-    // ---------- Câmera (ZXing: bom em código de barras 1D) ----------
+    // Volta para a captura (mesmo colaborador) — após cancelar um card.
+    function voltarParaScan() { mostrar(null); pausado = false; resetInatividade(); }
+    // Volta para a lista de nomes (encerra o colaborador) — após sucesso/timeout.
+    function voltarParaNomes() {
+        colaboradorId = null; colaboradorNome = ''; clearInatividade();
+        pausado = true; mostrar(ov.nomes);
+    }
+    function resetInatividade() {
+        clearInatividade();
+        // Segurança: se ninguém interagir por 30s durante a captura, volta aos nomes.
+        inatividade = setTimeout(voltarParaNomes, 30000);
+    }
+    function clearInatividade() { if (inatividade) { clearTimeout(inatividade); inatividade = null; } }
+
+    // ---------- Passo 1: nomes ----------
+    function carregarNomes() {
+        fetch(API + '?acao=colaboradores', { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(function (d) {
+                const lista = document.getElementById('nomes-lista');
+                lista.innerHTML = '';
+                const cs = d.colaboradores || [];
+                document.getElementById('nomes-vazio').classList.toggle('d-none', cs.length > 0);
+                cs.forEach(function (c) {
+                    const b = document.createElement('button');
+                    b.textContent = c.nome;
+                    b.onclick = function () { abrirPin(c.id, c.nome); };
+                    lista.appendChild(b);
+                });
+            });
+    }
+
+    // ---------- Passo 2: PIN ----------
+    function abrirPin(id, nome) {
+        pinSel = id; pinBuffer = '';
+        document.getElementById('pin-nome').textContent = nome;
+        renderDots();
+        mostrar(ov.pin);
+    }
+    function renderDots() {
+        let s = '';
+        for (let i = 0; i < 4; i++) { s += (i < pinBuffer.length ? '●' : '○') + ' '; }
+        document.getElementById('pin-dots').textContent = s.trim();
+    }
+    (function montarPad() {
+        const pad = document.getElementById('pin-pad');
+        const teclas = ['1','2','3','4','5','6','7','8','9','⌫','0',''];
+        teclas.forEach(function (t) {
+            const b = document.createElement('button');
+            b.textContent = t;
+            if (t === '') { b.style.visibility = 'hidden'; }
+            b.onclick = function () {
+                if (t === '⌫') { pinBuffer = pinBuffer.slice(0, -1); renderDots(); return; }
+                if (t === '') { return; }
+                if (pinBuffer.length >= 4) { return; }
+                pinBuffer += t; renderDots();
+                if (pinBuffer.length === 4) { verificarPin(); }
+            };
+            pad.appendChild(b);
+        });
+    })();
+    document.getElementById('pin-voltar').onclick = voltarParaNomes;
+
+    function verificarPin() {
+        const fd = new FormData();
+        fd.append('colaborador_id', pinSel); fd.append('pin', pinBuffer);
+        fetch(API + '?acao=pin', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(function (d) {
+                if (d.ok) {
+                    colaboradorId = pinSel; colaboradorNome = d.nome;
+                    voltarParaScan();
+                    hint.textContent = colaboradorNome + ' — aponte o código de barras';
+                } else {
+                    pinBuffer = ''; renderDots();
+                    const dots = document.getElementById('pin-dots');
+                    dots.classList.add('shake'); setTimeout(() => dots.classList.remove('shake'), 400);
+                }
+            });
+    }
+
+    // ---------- Câmera (ZXing) ----------
     function iniciarCamera() {
-        if (typeof ZXing === 'undefined') { hint.textContent = 'Falha ao carregar o leitor. Verifique a internet e recarregue.'; return; }
+        if (typeof ZXing === 'undefined') { hint.textContent = 'Falha ao carregar o leitor. Recarregue.'; return; }
         if (!leitor) { leitor = new ZXing.BrowserMultiFormatReader(); }
         try { leitor.reset(); } catch (e) {}
         leitor.decodeFromConstraints(
@@ -134,10 +246,8 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
             function (result) { if (result && !pausado) { onScan(result.getText()); } }
         ).catch(function (e) { hint.textContent = 'Não consegui abrir a câmera: ' + e; });
     }
-    document.getElementById('btn-cam').onclick = function () {
-        facing = (facing === 'user') ? 'environment' : 'user';
-        iniciarCamera();
-    };
+    document.getElementById('btn-cam').onclick = function () { facing = (facing === 'user') ? 'environment' : 'user'; iniciarCamera(); };
+    document.getElementById('btn-trocar').onclick = voltarParaNomes;
 
     let audioCtx = null;
     function bip() {
@@ -154,25 +264,19 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     function onScan(texto) {
         if (pausado) { return; }
         const agora = Date.now();
-        if (texto === ultimo && agora - ultimoT < 2500) { return; }   // anti-repetição
+        if (texto === ultimo && agora - ultimoT < 2500) { return; }
         ultimo = texto; ultimoT = agora;
-        pausar();
-        bip();
+        pausado = true; clearInatividade(); bip();
         lookup(texto);
     }
-
-    // ---------- Lookup ----------
     function lookup(codigo) {
         fetch(API + '?acao=lookup&codigo=' + encodeURIComponent(codigo), { credentials: 'same-origin' })
             .then(r => r.json())
-            .then(function (d) {
-                if (d.found) { abrirItem(d.item); }
-                else { abrirNovo(d.codigo || codigo); }
-            })
-            .catch(() => retomar());
+            .then(function (d) { if (d.found) { abrirItem(d.item); } else { abrirNovo(d.codigo || codigo); } })
+            .catch(() => voltarParaScan());
     }
 
-    // ---------- Card do item (confirmar baixa) ----------
+    // ---------- Card do item ----------
     function abrirItem(item) {
         itemAtual = item;
         const foto = document.getElementById('it-foto');
@@ -183,20 +287,16 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
         document.getElementById('q-valor').value = '1';
         mostrar(ov.item);
     }
-    function passo(d) {
-        const el = document.getElementById('q-valor');
-        let v = parseInt(el.value, 10) || 0; v += d; if (v < 1) { v = 1; }
-        el.value = v;
-    }
+    function passo(d) { const el = document.getElementById('q-valor'); let v = parseInt(el.value, 10) || 0; v += d; if (v < 1) { v = 1; } el.value = v; }
     document.getElementById('q-menos').onclick = () => passo(-1);
     document.getElementById('q-mais').onclick = () => passo(1);
-    document.getElementById('btn-cancelar').onclick = retomar;
+    document.getElementById('btn-cancelar').onclick = voltarParaScan;
 
     document.getElementById('btn-confirmar').onclick = function () {
         if (!itemAtual) { return; }
         const qtd = parseInt(document.getElementById('q-valor').value, 10) || 1;
         const fd = new FormData();
-        fd.append('item_id', itemAtual.id); fd.append('quantidade', qtd);
+        fd.append('item_id', itemAtual.id); fd.append('quantidade', qtd); fd.append('colaborador_id', colaboradorId || '');
         this.disabled = true;
         fetch(API + '?acao=baixa', { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(r => r.json())
@@ -206,12 +306,12 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
                 document.getElementById('ok-msg').textContent = '−' + qtd + ' · ' + itemAtual.nome;
                 document.getElementById('ok-saldo').textContent = 'Novo saldo: ' + fmt(d.saldo);
                 mostrar(ov.ok);
-                setTimeout(retomar, 1600);
+                setTimeout(voltarParaNomes, 1600);
             })
             .catch(function () { document.getElementById('btn-confirmar').disabled = false; alert('Falha ao dar baixa.'); });
     };
 
-    // ---------- Código desconhecido (associar) ----------
+    // ---------- Código desconhecido ----------
     function abrirNovo(codigo) {
         codigoPendente = codigo;
         document.getElementById('nv-cod').textContent = codigo;
@@ -220,31 +320,27 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
         mostrar(ov.novo);
         document.getElementById('nv-busca').focus();
     }
-    document.getElementById('nv-cancelar').onclick = retomar;
+    document.getElementById('nv-cancelar').onclick = voltarParaScan;
     ligarBusca('nv-busca', 'nv-lista', function (item) {
-        // associa o código pendente e já abre a baixa
         const fd = new FormData();
         fd.append('item_id', item.id); fd.append('codigo', codigoPendente);
         fetch(API + '?acao=associar', { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(r => r.json())
-            .then(function (d) {
-                if (d.error) { alert(d.error); return; }
-                abrirItem(d.item);
-            });
+            .then(function (d) { if (d.error) { alert(d.error); return; } abrirItem(d.item); });
     });
 
-    // ---------- Busca manual (itens sem código) ----------
+    // ---------- Busca manual ----------
     document.getElementById('btn-buscar').onclick = function () {
-        pausar();
+        if (!colaboradorId) { return; }
+        pausado = true; clearInatividade();
         document.getElementById('bs-busca').value = '';
         document.getElementById('bs-lista').innerHTML = '';
         mostrar(ov.busca);
         document.getElementById('bs-busca').focus();
     };
-    document.getElementById('bs-cancelar').onclick = retomar;
+    document.getElementById('bs-cancelar').onclick = voltarParaScan;
     ligarBusca('bs-busca', 'bs-lista', abrirItem);
 
-    // Liga um campo de busca a uma lista; onEscolher(item) ao tocar.
     function ligarBusca(inputId, listaId, onEscolher) {
         const input = document.getElementById(inputId);
         const lista = document.getElementById(listaId);
@@ -270,6 +366,7 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
         });
     }
 
+    carregarNomes();
     iniciarCamera();
 })();
 </script>

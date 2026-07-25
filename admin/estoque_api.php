@@ -40,13 +40,30 @@ if ($acao === 'buscar') {
     api_out(['itens' => array_map('estoque_item_publico', $itens)]);
 }
 
+// ---- Colaboradores (lista para a 1ª tela do quiosque) ----
+if ($acao === 'colaboradores') {
+    api_out(['colaboradores' => estoque_colaboradores_listar($pdo)]);
+}
+
+// ---- Verifica o PIN do colaborador ----
+if ($acao === 'pin' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $id  = (int) ($_POST['colaborador_id'] ?? 0);
+    $pin = (string) ($_POST['pin'] ?? '');
+    $nome = estoque_colaborador_verificar($pdo, $id, $pin);
+    if ($nome === null) { api_out(['ok' => false]); }
+    api_out(['ok' => true, 'nome' => $nome]);
+}
+
 // ---- Baixa (saída) ----
 if ($acao === 'baixa' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $id  = (int) ($_POST['item_id'] ?? 0);
-    $qtd = (float) str_replace(',', '.', (string) ($_POST['quantidade'] ?? '0'));
+    $id    = (int) ($_POST['item_id'] ?? 0);
+    $qtd   = (float) str_replace(',', '.', (string) ($_POST['quantidade'] ?? '0'));
+    $colab = (int) ($_POST['colaborador_id'] ?? 0);
     if ($id <= 0 || $qtd <= 0) { api_erro('Item ou quantidade inválidos.'); }
+    // O responsável vem do id do colaborador (o cliente não injeta o nome).
+    $resp = $colab > 0 ? estoque_colaborador_nome($pdo, $colab) : '';
     try {
-        $saldo = estoque_movimentar($pdo, $id, 'saida', $qtd, 'quiosque');
+        $saldo = estoque_movimentar($pdo, $id, 'saida', $qtd, 'quiosque', '', $resp);
         api_out(['ok' => true, 'saldo' => $saldo]);
     } catch (\Throwable $e) {
         api_erro('Falha na baixa: ' . $e->getMessage(), 500);

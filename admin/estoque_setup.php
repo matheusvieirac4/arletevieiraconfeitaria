@@ -48,6 +48,17 @@ try {
     ");
     $log[] = 'OK  tabela estoque_movimentacoes';
 
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS estoque_colaboradores (
+            id        INT AUTO_INCREMENT PRIMARY KEY,
+            nome      VARCHAR(120) NOT NULL,
+            pin_hash  VARCHAR(255) NOT NULL,
+            ativo     TINYINT(1) NOT NULL DEFAULT 1,
+            criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $log[] = 'OK  tabela estoque_colaboradores';
+
     // Migração: adiciona 'responsavel' se a tabela veio de uma versão anterior.
     try {
         $tem = $pdo->query("SHOW COLUMNS FROM estoque_movimentacoes LIKE 'responsavel'")->fetch();

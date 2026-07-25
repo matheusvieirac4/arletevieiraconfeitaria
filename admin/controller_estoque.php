@@ -156,6 +156,29 @@ if ($acao === 'entrada_cancelar') {
     estoque_redirect('info', 'Entrada descartada.', 'estoque_entrada.php');
 }
 
+// ---- Colaboradores: criar / trocar PIN / excluir ----
+if ($acao === 'colab_salvar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $id  = (int) ($_POST['id'] ?? 0);
+    $nome = trim((string) ($_POST['nome'] ?? ''));
+    $pin  = (string) ($_POST['pin'] ?? '');
+    try {
+        if ($id > 0) {
+            if ($pin !== '') { estoque_colaborador_atualizar_pin($pdo, $id, $pin); }
+            estoque_redirect('success', 'PIN atualizado.', 'estoque_colaboradores.php');
+        } else {
+            estoque_colaborador_criar($pdo, $nome, $pin);
+            estoque_redirect('success', 'Colaborador cadastrado.', 'estoque_colaboradores.php');
+        }
+    } catch (\Throwable $e) {
+        estoque_redirect('danger', $e->getMessage(), 'estoque_colaboradores.php');
+    }
+}
+if ($acao === 'colab_excluir') {
+    $id = (int) ($_GET['id'] ?? 0);
+    if ($id > 0) { estoque_colaborador_excluir($pdo, $id); }
+    estoque_redirect('success', 'Colaborador removido.', 'estoque_colaboradores.php');
+}
+
 // ---- Excluir (soft delete) ----
 if ($acao === 'excluir') {
     $id = (int) ($_GET['id'] ?? 0);
