@@ -655,7 +655,7 @@ $datalist = function (string $id, array $opts): string {
                                     <div class="col-sm-3">
                                         <label class="form-label small mb-1">Valor original (R$)</label>
                                         <input type="text" name="original_value" id="baixa-original" class="form-control form-control-sm js-baixa-num"
-                                               value="" placeholder="0,00" inputmode="decimal">
+                                               value="<?= htmlspecialchars($valComprovante) ?>" placeholder="0,00" inputmode="decimal">
                                     </div>
                                     <div class="col-sm-3">
                                         <label class="form-label small mb-1">Juros (R$)</label>
@@ -1060,25 +1060,18 @@ if (window.Choices) {
     // Valor original segue o candidato marcado; valor final é calculado ao vivo.
     const brNum = (v) => parseFloat(String(v || '').replace(/\./g, '').replace(',', '.')) || 0;
     const brFmt = (n) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const orig  = document.getElementById('baixa-original');
     const final = document.getElementById('baixa-final');
     const getNum = (name) => brNum((form.querySelector('[name="' + name + '"]') || {}).value);
     function recalc() {
         if (!final) { return; }
+        // Valor original já vem com o valor do comprovante; corrige a conta para
+        // ele (ex.: Celesc 600 cadastrada → 647 pago). Juros/multa/desconto somam.
         final.value = brFmt(getNum('original_value') + getNum('interest') + getNum('fine') - getNum('discount'));
     }
-    function setOriginalDoSelecionado() {
-        const sel = form.querySelector('.js-baixa-conta:checked');
-        if (sel && orig) { orig.value = sel.dataset.valor || ''; }
-        recalc();
-    }
-    form.querySelectorAll('.js-baixa-conta').forEach(function (r) {
-        r.addEventListener('change', setOriginalDoSelecionado);
-    });
     form.querySelectorAll('.js-baixa-num').forEach(function (i) {
         i.addEventListener('input', recalc);
     });
-    setOriginalDoSelecionado();   // preenche no carregamento
+    recalc();   // calcula no carregamento
 })();
 
 // Máscara de CNPJ/CPF (só visual — o servidor guarda apenas os dígitos).
