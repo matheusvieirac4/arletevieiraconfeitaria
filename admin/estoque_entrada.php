@@ -49,7 +49,7 @@ require __DIR__ . '/_header.php';
                             <thead><tr>
                                 <th>Item na nota</th>
                                 <th style="min-width:280px;">Casar com o estoque</th>
-                                <th class="text-end" style="width:120px;">Qtde</th>
+                                <th class="text-center" style="width:110px;">Qtde</th>
                                 <th style="width:44px;"></th>
                             </tr></thead>
                             <tbody>
@@ -82,7 +82,8 @@ require __DIR__ . '/_header.php';
                                         </select>
                                     </td>
                                     <td>
-                                        <input type="text" name="quantidade[<?= $i ?>]" class="form-control text-end"
+                                        <input type="text" name="quantidade[<?= $i ?>]" class="form-control text-center"
+                                               style="min-width:70px;font-size:16px;"
                                                value="<?= $fmt($l['quantidade']) ?>" inputmode="decimal">
                                     </td>
                                     <td class="text-center">
