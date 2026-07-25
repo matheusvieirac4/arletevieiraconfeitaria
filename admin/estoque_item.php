@@ -59,8 +59,9 @@ require __DIR__ . '/_header.php';
                                     <input type="text" name="preco" class="form-control" value="<?= $fmt2($item['preco'] ?? '') ?>" placeholder="0,00" inputmode="decimal">
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="form-label">Peso/conteúdo (g)</label>
-                                    <input type="text" name="peso_gramas" class="form-control" value="<?= htmlspecialchars($item['peso_gramas'] ?? '') ?>" inputmode="numeric">
+                                    <label class="form-label">Qtde por embalagem</label>
+                                    <input type="text" name="peso_gramas" class="form-control" value="<?= htmlspecialchars($item['peso_gramas'] ?? '') ?>" inputmode="numeric" placeholder="1">
+                                    <div class="form-text">Item avulso = <strong>1</strong>. Fardo/caixa = <strong>total de itens no fardo</strong>.</div>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Imagem (arquivo)</label>
