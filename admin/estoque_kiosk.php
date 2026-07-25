@@ -19,8 +19,9 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     .kx-top { position: fixed; top: 0; left: 0; right: 0; z-index: 20; display: flex; justify-content: space-between;
               align-items: center; padding: 12px 16px; background: rgba(0,0,0,.45); }
     .kx-top h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
-    #reader { width: 100vw; height: 100vh; }
-    #reader video { object-fit: cover !important; }
+    #reader { position: fixed; inset: 0; width: 100vw; height: 100vh; background:#000; }
+    #reader video { width: 100vw !important; height: 100vh !important; object-fit: cover !important; }
+    #reader img { display: none; }   /* esconde o icone de "scan" da lib */
     .kx-hint { position: fixed; bottom: 24px; left: 0; right: 0; text-align: center; z-index: 15;
                font-size: 1.1rem; color: #dfe3e8; text-shadow: 0 1px 4px #000; }
     .kx-overlay { position: fixed; inset: 0; z-index: 30; background: rgba(10,12,16,.96);
@@ -129,9 +130,20 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
         if (scanner) { scanner.stop().catch(()=>{}).then(comecar); } else { comecar(); }
     }
     function comecar() {
-        scanner = new Html5Qrcode('reader', { verbose: false });
-        scanner.start({ facingMode: facing }, { fps: 10, qrbox: { width: 280, height: 200 } }, onScan)
-            .catch(function (e) { hint.textContent = 'Não consegui abrir a câmera: ' + e; });
+        // Ativa explicitamente os códigos de barras 1D (EAN/UPC/CODE-128...),
+        // senão a lib tende a priorizar só QR e não lê a lata/embalagem.
+        const F = Html5QrcodeSupportedFormats;
+        const formatos = [
+            F.QR_CODE, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E,
+            F.CODE_128, F.CODE_39, F.ITF, F.CODABAR,
+        ];
+        scanner = new Html5Qrcode('reader', { formatsToSupport: formatos, verbose: false });
+        scanner.start(
+            { facingMode: facing },
+            { fps: 10, videoConstraints: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } } },
+            onScan,
+            function () {}   // falha de leitura por frame: silenciosa
+        ).catch(function (e) { hint.textContent = 'Não consegui abrir a câmera: ' + e; });
     }
     document.getElementById('btn-cam').onclick = function () {
         facing = (facing === 'user') ? 'environment' : 'user';
