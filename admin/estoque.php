@@ -16,8 +16,20 @@ if (!estoque_pronto($pdo)) {
 
 $busca  = trim((string) ($_GET['busca'] ?? ''));
 $soMin  = isset($_GET['abaixo']);
-$itens  = estoque_listar($pdo, $busca, $soMin);
+$ordem  = in_array($_GET['ordem'] ?? '', ['nome', 'fornecedor'], true) ? $_GET['ordem'] : 'nome';
+$dir    = (strtolower($_GET['dir'] ?? '') === 'desc') ? 'desc' : 'asc';
+$itens  = estoque_listar($pdo, $busca, $soMin, $ordem, $dir);
 $abaixo = count(estoque_lista_compra($pdo));
+
+// Monta o link de ordenação de uma coluna, alternando a direção e mostrando a seta.
+$linkOrdem = function (string $col, string $rotulo) use ($ordem, $dir, $busca, $soMin) {
+    $novaDir = ($ordem === $col && $dir === 'asc') ? 'desc' : 'asc';
+    $seta = $ordem === $col ? ($dir === 'asc' ? ' ▲' : ' ▼') : '';
+    $qs = http_build_query(array_filter([
+        'busca' => $busca, 'abaixo' => $soMin ? 1 : null, 'ordem' => $col, 'dir' => $novaDir,
+    ]));
+    return '<a href="estoque.php?' . htmlspecialchars($qs) . '" class="text-decoration-none text-reset">' . htmlspecialchars($rotulo) . $seta . '</a>';
+};
 
 $flash = $_SESSION['estoque_flash'] ?? null;
 unset($_SESSION['estoque_flash']);
@@ -59,8 +71,8 @@ require __DIR__ . '/_header.php';
                 <table class="table table-hover align-middle mb-0 bg-white">
                     <thead>
                         <tr>
-                            <th>Item</th>
-                            <th>Fornecedor</th>
+                            <th><?= $linkOrdem('nome', 'Item') ?></th>
+                            <th><?= $linkOrdem('fornecedor', 'Fornecedor') ?></th>
                             <th class="text-end">Atual</th>
                             <th class="text-end">Mín.</th>
                             <th class="text-end">Ideal</th>

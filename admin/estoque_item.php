@@ -138,7 +138,10 @@ require __DIR__ . '/_header.php';
                                     <tr>
                                         <td class="text-nowrap small text-muted"><?= htmlspecialchars(date('d/m H:i', strtotime($m['criado_em']))) ?></td>
                                         <td class="<?= $cor ?> fw-semibold"><?= $sinal ?> <?= $fmt($m['quantidade']) ?></td>
-                                        <td class="small text-muted"><?= htmlspecialchars($m['origem']) ?><?= $m['observacao'] ? ' · ' . htmlspecialchars($m['observacao']) : '' ?></td>
+                                        <td class="small text-muted">
+                                            <?= htmlspecialchars($m['origem']) ?><?= $m['observacao'] ? ' · ' . htmlspecialchars($m['observacao']) : '' ?>
+                                            <?php if (!empty($m['responsavel'])): ?><div class="text-muted">por <?= htmlspecialchars($m['responsavel']) ?></div><?php endif; ?>
+                                        </td>
                                         <td class="text-end small">→ <?= $fmt($m['saldo_apos']) ?></td>
                                     </tr>
                                 <?php endforeach; ?>

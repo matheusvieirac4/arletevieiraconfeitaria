@@ -29,7 +29,7 @@ function estoque_exigir_setup(): void
        . '</div></div>';
 }
 
-function estoque_listar(PDO $pdo, string $busca = '', bool $soAbaixoMinimo = false): array
+function estoque_listar(PDO $pdo, string $busca = '', bool $soAbaixoMinimo = false, string $ordem = 'nome', string $dir = 'asc'): array
 {
     $sql = "SELECT * FROM estoque_itens WHERE ativo = 1";
     $params = [];
@@ -40,10 +40,25 @@ function estoque_listar(PDO $pdo, string $busca = '', bool $soAbaixoMinimo = fal
     if ($soAbaixoMinimo) {
         $sql .= " AND estoque_minimo IS NOT NULL AND estoque_atual < estoque_minimo";
     }
-    $sql .= " ORDER BY nome";
+    // ORDER BY não aceita bind — whitelist rígida de coluna e direção.
+    $col = in_array($ordem, ['nome', 'fornecedor'], true) ? $ordem : 'nome';
+    $dir = strtolower($dir) === 'desc' ? 'DESC' : 'ASC';
+    // Fornecedor pode ser NULL; desempata pelo nome.
+    $sql .= $col === 'fornecedor' ? " ORDER BY fornecedor $dir, nome ASC" : " ORDER BY nome $dir";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** A coluna 'responsavel' já existe em estoque_movimentacoes? (setup migra). */
+function estoque_mov_tem_responsavel(PDO $pdo): bool
+{
+    static $tem = null;
+    if ($tem === null) {
+        try { $pdo->query("SELECT responsavel FROM estoque_movimentacoes LIMIT 1"); $tem = true; }
+        catch (\Throwable $e) { $tem = false; }
+    }
+    return $tem;
 }
 
 function estoque_buscar(PDO $pdo, int $id): ?array
@@ -123,11 +138,12 @@ function estoque_deletar(PDO $pdo, int $id): bool
  * $tipo: 'entrada' soma, 'saida' subtrai, 'ajuste' define o saldo absoluto.
  * Devolve o novo saldo.
  */
-function estoque_movimentar(PDO $pdo, int $itemId, string $tipo, float $qtd, string $origem = 'manual', string $obs = ''): float
+function estoque_movimentar(PDO $pdo, int $itemId, string $tipo, float $qtd, string $origem = 'manual', string $obs = '', string $responsavel = ''): float
 {
     if (!in_array($tipo, ['entrada', 'saida', 'ajuste'], true)) {
         throw new InvalidArgumentException('Tipo de movimentação inválido.');
     }
+    $temResp = estoque_mov_tem_responsavel($pdo);
     $pdo->beginTransaction();
     try {
         $stmt = $pdo->prepare("SELECT estoque_atual FROM estoque_itens WHERE id = :id FOR UPDATE");
@@ -143,13 +159,13 @@ function estoque_movimentar(PDO $pdo, int $itemId, string $tipo, float $qtd, str
         $pdo->prepare("UPDATE estoque_itens SET estoque_atual = :s WHERE id = :id")
             ->execute([':s' => $novo, ':id' => $itemId]);
 
-        $pdo->prepare("
-            INSERT INTO estoque_movimentacoes (item_id, tipo, quantidade, saldo_apos, origem, observacao)
-            VALUES (:item, :tipo, :qtd, :saldo, :origem, :obs)
-        ")->execute([
-            ':item' => $itemId, ':tipo' => $tipo, ':qtd' => abs($qtd),
-            ':saldo' => $novo, ':origem' => $origem, ':obs' => $obs !== '' ? $obs : null,
-        ]);
+        $cols = ['item_id', 'tipo', 'quantidade', 'saldo_apos', 'origem', 'observacao'];
+        $vals = [':item' => $itemId, ':tipo' => $tipo, ':qtd' => abs($qtd),
+                 ':saldo' => $novo, ':origem' => $origem, ':obs' => $obs !== '' ? $obs : null];
+        $ph   = [':item', ':tipo', ':qtd', ':saldo', ':origem', ':obs'];
+        if ($temResp) { $cols[] = 'responsavel'; $ph[] = ':resp'; $vals[':resp'] = $responsavel !== '' ? $responsavel : null; }
+        $pdo->prepare("INSERT INTO estoque_movimentacoes (" . implode(',', $cols) . ") VALUES (" . implode(',', $ph) . ")")
+            ->execute($vals);
 
         $pdo->commit();
         return (float) $novo;
@@ -157,6 +173,12 @@ function estoque_movimentar(PDO $pdo, int $itemId, string $tipo, float $qtd, str
         $pdo->rollBack();
         throw $e;
     }
+}
+
+/** Nome do admin logado, para registrar como responsável pela movimentação. */
+function estoque_responsavel_atual(): string
+{
+    return trim((string) ($_SESSION['admin_nome'] ?? ''));
 }
 
 /** Últimas movimentações de um item. */

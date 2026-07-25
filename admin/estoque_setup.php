@@ -39,6 +39,7 @@ try {
             saldo_apos  DECIMAL(10,3) NULL,
             origem      VARCHAR(32) NOT NULL DEFAULT 'manual',
             observacao  VARCHAR(255) NULL,
+            responsavel VARCHAR(120) NULL,
             criado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX (item_id),
             INDEX (criado_em),
@@ -46,6 +47,19 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
     $log[] = 'OK  tabela estoque_movimentacoes';
+
+    // Migração: adiciona 'responsavel' se a tabela veio de uma versão anterior.
+    try {
+        $tem = $pdo->query("SHOW COLUMNS FROM estoque_movimentacoes LIKE 'responsavel'")->fetch();
+        if (!$tem) {
+            $pdo->exec("ALTER TABLE estoque_movimentacoes ADD COLUMN responsavel VARCHAR(120) NULL AFTER observacao");
+            $log[] = 'OK  coluna responsavel adicionada';
+        } else {
+            $log[] = '..  coluna responsavel já existe';
+        }
+    } catch (\Throwable $e) {
+        $log[] = 'ERRO ao migrar responsavel: ' . $e->getMessage();
+    }
 
     // Importa o catálogo só se a tabela estiver vazia (não duplica em re-runs).
     $qtd = (int) $pdo->query("SELECT COUNT(*) FROM estoque_itens")->fetchColumn();

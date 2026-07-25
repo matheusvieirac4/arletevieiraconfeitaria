@@ -41,7 +41,7 @@ if ($acao === 'movimentar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         estoque_redirect('danger', 'Informe uma quantidade válida.', $volta);
     }
     try {
-        $novo = estoque_movimentar($pdo, $id, $tipo, $qtd, 'manual', $obs);
+        $novo = estoque_movimentar($pdo, $id, $tipo, $qtd, 'manual', $obs, estoque_responsavel_atual());
         estoque_redirect('success', 'Saldo atualizado para ' . rtrim(rtrim(number_format($novo, 3, ',', '.'), '0'), ',') . '.', $volta);
     } catch (\Throwable $e) {
         estoque_redirect('danger', 'Falha na movimentação: ' . $e->getMessage(), $volta);
@@ -110,7 +110,7 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($id <= 0) { continue; }
                 if ($ean !== '') { estoque_definir_barcode($pdo, $id, $ean); }
             }
-            estoque_movimentar($pdo, $id, 'entrada', $qtd, 'xml');
+            estoque_movimentar($pdo, $id, 'entrada', $qtd, 'xml', '', estoque_responsavel_atual());
             $aplicadas++;
         }
     } catch (\Throwable $e) {
@@ -121,22 +121,33 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     estoque_redirect('success', "Entrada concluída: $aplicadas item(ns) atualizados.");
 }
 
-// ---- Auditoria: ajusta em lote os itens contados (só os preenchidos) ----
+// ---- Auditoria: concilia a contagem contra o saldo e registra Δ + responsável ----
 if ($acao === 'auditoria' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $contagem = $_POST['contagem'] ?? [];
-    $ajustados = 0;
+    $resp = estoque_responsavel_atual();
+    $ajustados = 0; $comDiferenca = 0;
+    $fmt = fn($n) => rtrim(rtrim(number_format((float) $n, 3, ',', '.'), '0'), ',');
     try {
         foreach ($contagem as $itemId => $valor) {
             $v = trim((string) $valor);
             if ($v === '') { continue; }   // em branco não altera
-            $qtd = (float) str_replace(',', '.', str_replace('.', '', $v));
-            estoque_movimentar($pdo, (int) $itemId, 'ajuste', $qtd, 'auditoria');
+            $contado = (float) str_replace(',', '.', str_replace('.', '', $v));
+            $item = estoque_buscar($pdo, (int) $itemId);
+            if (!$item) { continue; }
+            $antes = (float) $item['estoque_atual'];
+            $delta = $contado - $antes;
             $ajustados++;
+            if (abs($delta) < 0.0005) { continue; }   // bateu: nada a registrar
+            $comDiferenca++;
+            $sinal = $delta > 0 ? '+' : '−';
+            $obs = 'Auditoria: sistema ' . $fmt($antes) . ' → contagem ' . $fmt($contado)
+                 . ' (' . $sinal . $fmt(abs($delta)) . ')';
+            estoque_movimentar($pdo, (int) $itemId, 'ajuste', $contado, 'auditoria', $obs, $resp);
         }
     } catch (\Throwable $e) {
         estoque_redirect('danger', 'Falha na auditoria: ' . $e->getMessage(), 'estoque_auditoria.php');
     }
-    estoque_redirect('success', "Auditoria salva: $ajustados item(ns) ajustados.", 'estoque_auditoria.php');
+    estoque_redirect('success', "Auditoria salva: $ajustados conferido(s), $comDiferenca com diferença registrada.", 'estoque_auditoria.php');
 }
 
 // ---- Descartar a entrada em revisão ----
