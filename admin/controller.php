@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/_auth.php';   // exige sessão de admin (antes era público!)
 require_once 'model.php';
 
 $acao = isset($_GET['acao']) ? $_GET['acao'] : '';
