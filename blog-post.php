@@ -1,29 +1,33 @@
 <?php
+require_once __DIR__ . '/includes/banco.php';        // $pdo (antes do top.php)
+require_once __DIR__ . '/includes/blog_html.php';    // blog_sanitizar_html
 
-$page_title = ($post['titulo'] ?? 'Blog') . ' | Arlete Vieira Confeitaria & Doceria';
-$page_description = ($post['conteudo_resumido'] ?? 'Conteúdo do blog da Arlete Vieira Confeitaria & Doceria.');
-$page_keywords = 'blog, confeitaria, doceria, dicas, novidades, presentes corporativos, eventos, São José, SC, Arlete Vieira Confeitaria & Doceria';
-$page_image = 'https://arletevieiraconfeitaria.com.br/img/imagens/blog/' . ($post['imagem'] ?? 'metatag-img.jpg');
-include "includes/top.php";
-
-// ====== VERIFICA SE O ID FOI PASSADO ======
-$id = $_GET['id'] ?? null;
-
-if (!$id) {
-    echo "Post não encontrado.";
-    exit;
+// ====== CONSULTA O POST ANTES do top.php, para o SEO refletir o post ======
+$id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+$post = null;
+if ($id > 0) {
+    $stmt = $pdo->prepare("SELECT * FROM posts WHERE id = :id");
+    $stmt->execute([':id' => $id]);
+    $post = $stmt->fetch(PDO::FETCH_ASSOC);
 }
-
-// ====== CONSULTA O POST ======
-require_once __DIR__ . '/includes/blog_html.php';   // blog_sanitizar_html
-$stmt = $pdo->prepare("SELECT * FROM posts WHERE id = :id");
-$stmt->execute([':id' => $id]);
-$post = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$post) {
-    echo "Post não encontrado.";
+    http_response_code(404);
+    $page_title = 'Post não encontrado | Arlete Vieira Confeitaria & Doceria';
+    include "includes/top.php";
+    echo '<div class="container py-5 my-5 text-center"><h1 class="mb-4">Post não encontrado</h1>'
+       . '<a href="blog.php" class="btn btn-primary">Voltar ao blog</a></div>';
+    include "includes/footer.php";
     exit;
 }
+
+// ====== SEO dinâmico, agora que o post existe ======
+$page_title = $post['titulo'] . ' | Arlete Vieira Confeitaria & Doceria';
+$page_description = $post['conteudo_resumido'] !== '' ? $post['conteudo_resumido'] : 'Conteúdo do blog da Arlete Vieira Confeitaria & Doceria.';
+$page_keywords = 'blog, confeitaria, doceria, dicas, novidades, presentes corporativos, eventos, São José, SC, Arlete Vieira Confeitaria & Doceria';
+$page_image = 'https://arletevieiraconfeitaria.com.br/img/imagens/blog/' . ($post['imagem'] ?: 'metatag-img.jpg');
+$page_url = 'https://arletevieiraconfeitaria.com.br/blog-post.php?id=' . $id;
+include "includes/top.php";
 ?>
                 <section class="section section-with-shape-divider section-height-3 overlay overlay-show border-0 m-0" data-plugin-parallax data-plugin-options="{'speed': 1.5, 'parallaxHeight': '120%', 'fadeIn': true}" data-image-src="img/imagens/background-3.png">
                     <div class="container pt-3 pb-5 mb-5">
@@ -63,11 +67,11 @@ if (!$post) {
 
 									<div class="post-content ms-0">
 
-										<h2 class="font-weight-semi-bold"><a  style="color:#484848"href="blog-post.html"><?= htmlspecialchars($post['titulo']) ?></a></h2>
+										<h2 class="font-weight-semi-bold" style="color:#484848"><?= htmlspecialchars($post['titulo']) ?></h2>
 
 										<div class="post-meta">
-											<span><i class="far fa-user"></i> Por <a >Matheus Vieira</a> </span>
-											<span><i class="far fa-folder"></i> <a ><?= htmlspecialchars($post['categoria']) ?></a></span>
+											<span><i class="far fa-user"></i> Por <span class="text-color-primary">Matheus Vieira</span> </span>
+											<span><i class="far fa-folder"></i> <a href="blog.php" class="text-decoration-none"><?= htmlspecialchars($post['categoria']) ?></a></span>
 										</div><img src="img/imagens/blog/<?= htmlspecialchars($post['imagem']) ?>" class="img-fluid float-start me-4 mt-2" alt="<?= htmlspecialchars($post['titulo']) ?>" style="width:550px">
 										<?php
 										// Post novo (editor rich text): renderiza o HTML sanitizado.

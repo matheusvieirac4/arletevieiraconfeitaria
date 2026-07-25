@@ -69,8 +69,8 @@ include "includes/top.php" ?>
 														<p><?= htmlspecialchars($post['conteudo_resumido']) ?></p>
 
 														<div class="post-meta">
-															<span><i class="far fa-user"></i> Por <a style="color:#ccc;">Matheus Vieira</a> </span>
-															<span><i class="far fa-folder"></i> <a style="color:#ccc;"><?= htmlspecialchars($post['categoria']) ?></a></span>
+															<span><i class="far fa-user"></i> Por <span style="color:#ccc;">Matheus Vieira</span> </span>
+															<span><i class="far fa-folder"></i> <span style="color:#ccc;"><?= htmlspecialchars($post['categoria']) ?></span></span>
 															<span class="d-block mt-2"><a href="blog-post.php?id=<?= htmlspecialchars($post['id']) ?>" class="btn btn-xs btn-light text-1 text-uppercase">Ler Mais</a></span>
 														</div>
 
