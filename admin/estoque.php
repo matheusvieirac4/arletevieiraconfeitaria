@@ -41,7 +41,21 @@ require __DIR__ . '/_header.php';
                 <a href="estoque_kiosk.php" class="btn btn-dark"><i data-feather="camera" class="align-middle me-1" style="width:16px;height:16px;"></i>Modo quiosque</a>
                 <a href="estoque_colaboradores.php" class="btn btn-outline-secondary"><i data-feather="users" class="align-middle me-1" style="width:16px;height:16px;"></i>Colaboradores</a>
                 <a href="estoque_auditoria.php" class="btn btn-outline-primary"><i data-feather="clipboard" class="align-middle me-1" style="width:16px;height:16px;"></i>Auditoria</a>
-                <a href="estoque_entrada.php" class="btn btn-outline-primary"><i data-feather="file-plus" class="align-middle me-1" style="width:16px;height:16px;"></i>Entrada</a>
+                <div class="dropdown">
+                    <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i data-feather="file-plus" class="align-middle me-1" style="width:16px;height:16px;"></i>Entrada
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" id="ent-xml">📄 XML da nota</a></li>
+                        <li><a class="dropdown-item" href="#" id="ent-cupom">📷 Foto do cupom</a></li>
+                    </ul>
+                </div>
+                <form id="form-ent-xml" method="post" action="controller_estoque.php?acao=entrada_xml" enctype="multipart/form-data" class="d-none">
+                    <input type="file" name="xml" id="file-xml" accept=".xml,text/xml,application/xml">
+                </form>
+                <form id="form-ent-cupom" method="post" action="controller_estoque.php?acao=entrada_cupom" enctype="multipart/form-data" class="d-none">
+                    <input type="file" name="foto" id="file-cupom" accept="image/*" capture="environment">
+                </form>
                 <a href="estoque_lista_compra.php" class="btn btn-outline-primary">
                     Lista de compra <?php if ($abaixo): ?><span class="badge bg-danger"><?= $abaixo ?></span><?php endif; ?>
                 </a>
@@ -115,4 +129,17 @@ require __DIR__ . '/_header.php';
             </div>
         </div>
         <p class="text-muted small mt-2"><?= count($itens) ?> item(ns)<?= $busca || $soMin ? ' (filtrado)' : '' ?>.</p>
+<script>
+// Cada opção do dropdown de Entrada abre o seletor de arquivo e já envia.
+(function () {
+    const liga = (btnId, fileId, formId) => {
+        const btn = document.getElementById(btnId), file = document.getElementById(fileId), form = document.getElementById(formId);
+        if (!btn || !file || !form) { return; }
+        btn.addEventListener('click', e => { e.preventDefault(); file.click(); });
+        file.addEventListener('change', () => { if (file.files.length) { form.submit(); } });
+    };
+    liga('ent-xml', 'file-xml', 'form-ent-xml');
+    liga('ent-cupom', 'file-cupom', 'form-ent-cupom');
+})();
+</script>
 <?php require __DIR__ . '/_footer.php'; ?>

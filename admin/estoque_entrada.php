@@ -12,9 +12,12 @@ if (!estoque_pronto($pdo)) {
 }
 
 $rev = $_SESSION['estoque_entrada'] ?? null;
+// Sem revisão em andamento não há o que mostrar aqui — a entrada começa pelo
+// dropdown "Entrada" na tela de estoque.
+if (!$rev) { header('Location: estoque.php'); exit; }
 $flash = $_SESSION['estoque_flash'] ?? null;
 unset($_SESSION['estoque_flash']);
-$itensTodos = $rev ? estoque_listar($pdo) : [];
+$itensTodos = estoque_listar($pdo);
 
 $page_title = 'Entrada de estoque';
 $active = 'estoque';
@@ -30,35 +33,6 @@ require __DIR__ . '/_header.php';
             <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
         <?php endif; ?>
 
-        <?php if (!$rev): ?>
-            <p class="text-muted">Como você quer dar entrada? Nos dois casos você confere os itens e as quantidades antes de gravar.</p>
-            <div class="row g-4" style="max-width:820px;">
-                <div class="col-md-6">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <h5 class="card-title"><i data-feather="file-text" class="align-middle me-1" style="width:18px;height:18px;"></i>XML da nota</h5>
-                            <p class="text-muted">O jeito mais preciso. Casa os itens pelo <strong>código de barras</strong> (ou nome) e preenche automaticamente os códigos que faltam.</p>
-                            <form method="post" action="controller_estoque.php?acao=entrada_xml" enctype="multipart/form-data" class="d-flex gap-2">
-                                <input type="file" name="xml" accept=".xml,text/xml,application/xml" class="form-control" required>
-                                <button class="btn btn-primary">Ler</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <h5 class="card-title"><i data-feather="camera" class="align-middle me-1" style="width:18px;height:18px;"></i>Foto do cupom</h5>
-                            <p class="text-muted">Compra sem XML (mercado, hortifruti). A IA lê os itens do cupom; casa por <strong>nome</strong> e você ajusta.</p>
-                            <form method="post" action="controller_estoque.php?acao=entrada_cupom" enctype="multipart/form-data" class="d-flex gap-2">
-                                <input type="file" name="foto" accept="image/*" capture="environment" class="form-control" required>
-                                <button class="btn btn-primary">Ler</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        <?php else: ?>
             <div class="alert alert-info">
                 <?php if (($rev['origem'] ?? '') === 'cupom'): ?>
                     Itens lidos do <strong>cupom</strong> pela IA. Confira o item do estoque e a quantidade — casou por nome, então revise.
@@ -121,5 +95,4 @@ require __DIR__ . '/_header.php';
                     <a href="controller_estoque.php?acao=entrada_cancelar" class="btn btn-outline-secondary">Descartar</a>
                 </div>
             </form>
-        <?php endif; ?>
 <?php require __DIR__ . '/_footer.php'; ?>
