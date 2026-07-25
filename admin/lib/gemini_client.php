@@ -143,13 +143,55 @@ class GeminiClient
         ];
     }
 
+    /**
+     * Revisa um post de blog: ortografia/gramática, SEO e legibilidade.
+     * Devolve texto reescrito + sugestões, sem alterar nada por conta própria.
+     */
+    public function revisarBlog(string $titulo, string $html): array
+    {
+        $schema = [
+            'type' => 'object',
+            'properties' => [
+                'conteudo_revisado_html' => ['type' => 'string'],
+                'titulo_sugerido'        => ['type' => 'string'],
+                'resumo_sugerido'        => ['type' => 'string'],
+                'palavras_chave'         => ['type' => 'array', 'items' => ['type' => 'string']],
+                'sugestoes'              => ['type' => 'array', 'items' => ['type' => 'string']],
+            ],
+            'required' => ['conteudo_revisado_html', 'resumo_sugerido'],
+        ];
+        $instr = implode("\n", [
+            'Você é editor de um blog de uma confeitaria brasileira. Revise o post abaixo.',
+            'Responda SOMENTE com o JSON do schema. Regras:',
+            '- conteudo_revisado_html: o MESMO texto corrigido (ortografia, gramática, pontuação,',
+            '  clareza e divisão de parágrafos). Mantenha o SENTIDO e o tom; não invente fatos.',
+            '  Devolva HTML simples: <p>, <h2>, <h3>, <strong>, <em>, <ul>/<li>, <blockquote>, <a>.',
+            '  NÃO use <script>, style inline, classes ou tags fora dessa lista.',
+            '- titulo_sugerido: um título melhor para SEO (deixe vazio se o atual já é bom).',
+            '- resumo_sugerido: meta description de até 160 caracteres, atraente e com a palavra-chave.',
+            '- palavras_chave: 3 a 6 termos de SEO relevantes.',
+            '- sugestoes: bullets curtos de melhorias (SEO, legibilidade, estrutura) que o autor pode aplicar.',
+            '',
+            'TÍTULO ATUAL: ' . $titulo,
+            'CONTEÚDO (HTML):',
+            $html,
+        ]);
+        return $this->chamar([['text' => $instr]], $schema);
+    }
+
     private function extrair(array $parts): array
+    {
+        return $this->normalizar($this->chamar($parts, $this->schema()));
+    }
+
+    /** Faz a chamada ao Gemini com um schema e devolve o JSON decodificado. */
+    private function chamar(array $parts, array $schema): array
     {
         $body = json_encode([
             'contents' => [['parts' => $parts]],
             'generationConfig' => [
                 'responseMimeType' => 'application/json',
-                'responseSchema'   => $this->schema(),
+                'responseSchema'   => $schema,
             ],
         ], JSON_UNESCAPED_UNICODE);
 
@@ -182,7 +224,7 @@ class GeminiClient
         if (!is_array($dados)) {
             throw new GeminiException('O Gemini não devolveu um JSON válido.');
         }
-        return $this->normalizar($dados);
+        return $dados;
     }
 
     /** Garante todas as chaves do lançamento e datas padrão. */

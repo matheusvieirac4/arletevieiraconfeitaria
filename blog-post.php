@@ -15,7 +15,8 @@ if (!$id) {
 }
 
 // ====== CONSULTA O POST ======
-$stmt = $pdo->prepare("SELECT id, titulo, conteudo, conteudo_resumido, categoria, criado_em, imagem, conteudo_dois, conteudo_tres, conteudo_quatro FROM posts WHERE id = :id");
+require_once __DIR__ . '/includes/blog_html.php';   // blog_sanitizar_html
+$stmt = $pdo->prepare("SELECT * FROM posts WHERE id = :id");
 $stmt->execute([':id' => $id]);
 $post = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -68,10 +69,19 @@ if (!$post) {
 											<span><i class="far fa-user"></i> Por <a >Matheus Vieira</a> </span>
 											<span><i class="far fa-folder"></i> <a ><?= htmlspecialchars($post['categoria']) ?></a></span>
 										</div><img src="img/imagens/blog/<?= htmlspecialchars($post['imagem']) ?>" class="img-fluid float-start me-4 mt-2" alt="<?= htmlspecialchars($post['titulo']) ?>" style="width:550px">
-										<p><?= htmlspecialchars($post['conteudo']) ?></p>
-										<p><?= htmlspecialchars($post['conteudo_dois']) ?></p>
-										<p><?= htmlspecialchars($post['conteudo_tres']) ?></p>
-										<p><?= htmlspecialchars($post['conteudo_quatro']) ?></p>
+										<?php
+										// Post novo (editor rich text): renderiza o HTML sanitizado.
+										// Post antigo: cai no formato de 4 parágrafos em texto puro.
+										$htmlPost = trim((string) ($post['conteudo_html'] ?? ''));
+										if ($htmlPost !== '') {
+										    echo '<div class="blog-conteudo">' . blog_sanitizar_html($htmlPost) . '</div>';
+										} else {
+										    foreach (['conteudo','conteudo_dois','conteudo_tres','conteudo_quatro'] as $campo) {
+										        $t = trim((string) ($post[$campo] ?? ''));
+										        if ($t !== '') { echo '<p>' . htmlspecialchars($t) . '</p>'; }
+										    }
+										}
+										?>
 
 										<div class="post-block mt-4 pt-2 post-author">
 											<h4 class="mb-3">Autor</h4>
