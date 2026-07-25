@@ -606,29 +606,35 @@ $datalist = function (string $id, array $opts): string {
 
                     <?php if ($contasAbertas): ?>
                         <?php $valComprovante = financeiro_valor_br($revisao['valor_total'] ?? $l['value']); ?>
-                        <div class="alert alert-warning">
-                            <div class="fw-semibold mb-1">⚠ Esta conta provavelmente já existe no Cardápio Web (recorrência).</div>
-                            Encontrei <?= count($contasAbertas) ?> conta(s) do <strong>mesmo fornecedor</strong>, <strong>em aberto</strong>,
-                            vencendo neste período. Conta fixa costuma vir uma vez por mês, então marque a existente como
-                            <strong>paga</strong> em vez de criar outra. <span class="text-muted">Valor do comprovante: <strong>R$ <?= htmlspecialchars($valComprovante) ?></strong>.</span>
-                            <form method="post" action="controller_financeiro.php?acao=pagar" class="mt-3" data-no-loading="1" id="form-baixa">
-                                <input type="hidden" name="supplier" value="<?= htmlspecialchars($l['supplier']) ?>">
-                                <?php foreach ($contasAbertas as $i => $c): ?>
-                                    <div class="form-check">
-                                        <input class="form-check-input js-baixa-conta" type="radio" name="transaction_id"
-                                               data-valor="<?= htmlspecialchars(financeiro_valor_br($c['valor']), ENT_QUOTES) ?>"
-                                               id="conta-<?= (int) $c['id'] ?>" value="<?= (int) $c['id'] ?>" <?= $i === 0 ? 'checked' : '' ?>>
-                                        <label class="form-check-label" for="conta-<?= (int) $c['id'] ?>">
-                                            <?= htmlspecialchars($c['descricao'] ?: $c['fornecedor'] ?: 'Conta a pagar') ?>
-                                            — cadastrada em <strong>R$ <?= htmlspecialchars(financeiro_valor_br($c['valor'])) ?></strong>
-                                            <?php if ($c['vencimento']): ?>· vence <?= htmlspecialchars(financeiro_data_br($c['vencimento'])) ?><?php endif; ?>
-                                            <?php if (!$c['valor_bate']): ?>
-                                                <span class="badge bg-warning text-dark">valor difere do comprovante</span>
-                                            <?php endif; ?>
+                        <div id="pane-baixa">
+                        <div class="card shadow-sm mb-3 border-0" style="border-left: 4px solid #a51d32 !important;">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i data-feather="refresh-cw" class="text-danger me-2" style="width:20px;height:20px;"></i>
+                                    <h5 class="mb-0">Conta recorrente já cadastrada</h5>
+                                </div>
+                                <p class="text-muted mb-3">
+                                    Encontrei <strong><?= count($contasAbertas) ?></strong> conta em aberto do <strong>mesmo fornecedor</strong>
+                                    vencendo neste período — conta fixa vem uma vez por mês. Dê baixa na existente em vez de criar outra.
+                                    Valor do comprovante: <strong>R$ <?= htmlspecialchars($valComprovante) ?></strong>.
+                                </p>
+                                <form method="post" action="controller_financeiro.php?acao=pagar" data-no-loading="1" id="form-baixa">
+                                    <input type="hidden" name="supplier" value="<?= htmlspecialchars($l['supplier']) ?>">
+                                    <div class="list-group mb-3">
+                                    <?php foreach ($contasAbertas as $i => $c): ?>
+                                        <label class="list-group-item d-flex align-items-center gap-2" style="cursor:pointer;">
+                                            <input class="form-check-input flex-shrink-0 m-0 js-baixa-conta" type="radio" name="transaction_id"
+                                                   data-valor="<?= htmlspecialchars(financeiro_valor_br($c['valor']), ENT_QUOTES) ?>"
+                                                   value="<?= (int) $c['id'] ?>" <?= $i === 0 ? 'checked' : '' ?>>
+                                            <span>
+                                                <strong><?= htmlspecialchars($c['descricao'] ?: $c['fornecedor'] ?: 'Conta a pagar') ?></strong>
+                                                <span class="text-muted">— cadastrada em R$ <?= htmlspecialchars(financeiro_valor_br($c['valor'])) ?><?php if ($c['vencimento']): ?> · vence <?= htmlspecialchars(financeiro_data_br($c['vencimento'])) ?><?php endif; ?></span>
+                                                <?php if (!$c['valor_bate']): ?><span class="badge bg-warning text-dark ms-1">valor difere</span><?php endif; ?>
+                                            </span>
                                         </label>
+                                    <?php endforeach; ?>
                                     </div>
-                                <?php endforeach; ?>
-                                <div class="row g-2 mt-2" style="max-width: 720px;">
+                                    <div class="row g-2" style="max-width: 760px;">
                                     <div class="col-sm-4">
                                         <label class="form-label small mb-1">Conta</label>
                                         <select name="account" class="form-select form-select-sm" required>
@@ -674,9 +680,10 @@ $datalist = function (string $id, array $opts): string {
                                         <input type="text" id="baixa-final" class="form-control form-control-sm bg-light fw-semibold" value="" readonly tabindex="-1">
                                     </div>
                                 </div>
-                                <button type="submit" class="btn btn-success btn-sm mt-3">
-                                    Marcar como paga (não duplica)
-                                </button>
+                                <div class="d-flex gap-2 mt-3">
+                                    <button type="submit" class="btn btn-success btn-sm">Marcar como paga (não duplica)</button>
+                                    <a href="controller_financeiro.php?acao=cancelar" class="btn btn-outline-secondary btn-sm">Cancelar</a>
+                                </div>
                                 <!-- gatilho oculto do modal (declarativo, não depende de JS global) -->
                                 <button type="button" id="abre-modal-baixa" class="d-none" data-bs-toggle="modal" data-bs-target="#modal-baixa"></button>
                                 <div class="form-text mt-1">
@@ -684,9 +691,13 @@ $datalist = function (string $id, array $opts): string {
                                     <strong>Juros/multa</strong> (pago atrasado) e <strong>desconto</strong> se o comprovante discriminar.
                                     O <strong>valor final</strong> é o total pago (original + juros + multa − desconto).
                                 </div>
-                            </form>
+                                </form>
+                            </div>
                         </div>
-                        <p class="text-muted small">Não é a mesma conta? Ignore o aviso acima e crie o lançamento normalmente abaixo.</p>
+                        <div class="text-center mb-4">
+                            <a href="#" id="ir-novo" class="small text-decoration-none">Não é essa conta? Criar um lançamento novo &rarr;</a>
+                        </div>
+                        </div><!-- /pane-baixa -->
 
                         <!-- Confirmação da baixa (no lugar do alert nativo) -->
                         <div class="modal fade" id="modal-baixa" tabindex="-1" aria-hidden="true">
@@ -709,6 +720,10 @@ $datalist = function (string $id, array $opts): string {
                         </div>
                     <?php endif; ?>
 
+                    <div id="pane-novo"<?= $contasAbertas ? ' class="d-none"' : '' ?>>
+                    <?php if ($contasAbertas): ?>
+                        <div class="mb-3"><a href="#" id="voltar-baixa" class="small text-decoration-none">&larr; Voltar para dar baixa na conta existente</a></div>
+                    <?php endif; ?>
                     <form method="post" action="controller_financeiro.php?acao=importar">
                         <input type="hidden" name="forcar" value="<?= $forcarEnvio ? '1' : '0' ?>">
                         <div class="row g-3">
@@ -889,6 +904,7 @@ $datalist = function (string $id, array $opts): string {
                             <a href="controller_financeiro.php?acao=cancelar" class="btn btn-outline-secondary">Cancelar</a>
                         </div>
                     </form>
+                    </div><!-- /pane-novo -->
 
                     <?= $datalist('dl-categorias', $listas['categorias']) ?>
                     <?= $datalist('dl-centros', $listas['centros']) ?>
@@ -1072,6 +1088,26 @@ if (window.Choices) {
         i.addEventListener('input', recalc);
     });
     recalc();   // calcula no carregamento
+
+    // Um caminho de cada vez: dar baixa OU criar novo lançamento (nunca os dois).
+    const paneBaixa = document.getElementById('pane-baixa');
+    const paneNovo  = document.getElementById('pane-novo');
+    const irNovo    = document.getElementById('ir-novo');
+    const voltar    = document.getElementById('voltar-baixa');
+    if (irNovo && paneBaixa && paneNovo) {
+        irNovo.addEventListener('click', function (e) {
+            e.preventDefault();
+            paneBaixa.classList.add('d-none');
+            paneNovo.classList.remove('d-none');
+        });
+    }
+    if (voltar && paneBaixa && paneNovo) {
+        voltar.addEventListener('click', function (e) {
+            e.preventDefault();
+            paneNovo.classList.add('d-none');
+            paneBaixa.classList.remove('d-none');
+        });
+    }
 })();
 
 // Máscara de CNPJ/CPF (só visual — o servidor guarda apenas os dígitos).
