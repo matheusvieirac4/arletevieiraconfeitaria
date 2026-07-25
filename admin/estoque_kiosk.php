@@ -134,6 +134,7 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script>
 (function () {
     const API = 'estoque_api.php';
@@ -238,7 +239,18 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
     // ---------- Câmera (ZXing) ----------
     function iniciarCamera() {
         if (typeof ZXing === 'undefined') { hint.textContent = 'Falha ao carregar o leitor. Recarregue.'; return; }
-        if (!leitor) { leitor = new ZXing.BrowserMultiFormatReader(); }
+        if (!leitor) {
+            // TRY_HARDER + formatos de barras 1D melhoram muito a leitura de EAN.
+            const hints = new Map();
+            hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+                ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+                ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+                ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.QR_CODE,
+            ]);
+            leitor = new ZXing.BrowserMultiFormatReader(hints);
+        }
         try { leitor.reset(); } catch (e) {}
         leitor.decodeFromConstraints(
             { video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } } },
@@ -274,6 +286,52 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
             .then(r => r.json())
             .then(function (d) { if (d.found) { abrirItem(d.item); } else { abrirNovo(d.codigo || codigo); } })
             .catch(() => voltarParaScan());
+    }
+
+    // ---------- OCR (Tesseract) como 2ª via ----------
+    // Lê os DÍGITOS impressos sob o código de barras. Só age se o número casar
+    // com um item cadastrado (se não casar, ignora — evita baixa por leitura torta).
+    let ocrWorker = null, ocrBusy = false;
+    function ocrCheck(codigo) {
+        if (pausado || !colaboradorId) { return; }
+        const agora = Date.now();
+        if (codigo === ultimo && agora - ultimoT < 2500) { return; }
+        fetch(API + '?acao=lookup&codigo=' + encodeURIComponent(codigo), { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(function (d) {
+                if (d.found && !pausado) {
+                    ultimo = codigo; ultimoT = Date.now();
+                    pausado = true; clearInatividade(); bip();
+                    abrirItem(d.item);
+                }
+            }).catch(function () {});
+    }
+    async function iniciarOcr() {
+        if (typeof Tesseract === 'undefined') { return; }
+        try {
+            ocrWorker = await Tesseract.createWorker('eng');
+            await ocrWorker.setParameters({ tessedit_char_whitelist: '0123456789' });
+            setInterval(tickOcr, 1500);
+        } catch (e) {}
+    }
+    async function tickOcr() {
+        const v = document.getElementById('video');
+        if (!ocrWorker || ocrBusy || pausado || !colaboradorId || !v.videoWidth) { return; }
+        ocrBusy = true;
+        try {
+            // Recorta a faixa central (onde a pessoa aponta) — mais rápido e preciso.
+            const cw = v.videoWidth, ch = v.videoHeight;
+            const rw = Math.floor(cw * 0.8), rh = Math.floor(ch * 0.4);
+            const rx = Math.floor((cw - rw) / 2), ry = Math.floor((ch - rh) / 2);
+            const cv = document.createElement('canvas'); cv.width = rw; cv.height = rh;
+            cv.getContext('2d').drawImage(v, rx, ry, rw, rh, 0, 0, rw, rh);
+            const res = await ocrWorker.recognize(cv);
+            const runs = (res.data.text.match(/\d{8,14}/g) || []);
+            for (const run of runs) {
+                if ([8, 12, 13, 14].includes(run.length)) { ocrCheck(run); }
+            }
+        } catch (e) {}
+        ocrBusy = false;
     }
 
     // ---------- Card do item ----------
@@ -368,6 +426,7 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
 
     carregarNomes();
     iniciarCamera();
+    iniciarOcr();
 })();
 </script>
 </body>
