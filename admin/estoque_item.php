@@ -2,6 +2,15 @@
 require_once __DIR__ . '/_auth.php';
 require_once 'model_estoque.php';
 
+if (!estoque_pronto($pdo)) {
+    $page_title = 'Estoque'; $active = 'estoque';
+    require __DIR__ . '/_header.php';
+    echo '<h1 class="mb-4">Estoque</h1>';
+    estoque_exigir_setup();
+    require __DIR__ . '/_footer.php';
+    exit;
+}
+
 $id   = (int) ($_GET['id'] ?? 0);
 $item = $id ? estoque_buscar($pdo, $id) : null;
 if ($id && !$item) { header('Location: estoque.php'); exit; }

@@ -2,6 +2,18 @@
 require_once __DIR__ . '/_auth.php';
 require_once 'model_estoque.php';
 
+$page_title = 'Estoque';
+$active = 'estoque';
+$fmt = fn($n) => $n === null ? '—' : rtrim(rtrim(number_format((float) $n, 3, ',', '.'), '0'), ',');
+
+if (!estoque_pronto($pdo)) {
+    require __DIR__ . '/_header.php';
+    echo '<h1 class="mb-4">Estoque</h1>';
+    estoque_exigir_setup();
+    require __DIR__ . '/_footer.php';
+    exit;
+}
+
 $busca  = trim((string) ($_GET['busca'] ?? ''));
 $soMin  = isset($_GET['abaixo']);
 $itens  = estoque_listar($pdo, $busca, $soMin);
@@ -9,10 +21,6 @@ $abaixo = count(estoque_lista_compra($pdo));
 
 $flash = $_SESSION['estoque_flash'] ?? null;
 unset($_SESSION['estoque_flash']);
-
-$page_title = 'Estoque';
-$active = 'estoque';
-$fmt = fn($n) => $n === null ? '—' : rtrim(rtrim(number_format((float) $n, 3, ',', '.'), '0'), ',');
 require __DIR__ . '/_header.php';
 ?>
         <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">

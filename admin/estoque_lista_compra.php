@@ -2,6 +2,15 @@
 require_once __DIR__ . '/_auth.php';
 require_once 'model_estoque.php';
 
+if (!estoque_pronto($pdo)) {
+    $page_title = 'Lista de compra'; $active = 'estoque';
+    require __DIR__ . '/_header.php';
+    echo '<h1 class="mb-4">Lista de compra</h1>';
+    estoque_exigir_setup();
+    require __DIR__ . '/_footer.php';
+    exit;
+}
+
 $itens = estoque_lista_compra($pdo);
 
 // Agrupa por fornecedor e soma custo estimado.

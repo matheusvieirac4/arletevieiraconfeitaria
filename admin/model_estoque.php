@@ -7,6 +7,28 @@ require_once __DIR__ . '/../includes/banco.php';
 // estoque_movimentacoes, para rastreabilidade e reconstrução.
 // ============================================================================
 
+/** As tabelas do estoque já existem? (o setup precisa ter rodado uma vez). */
+function estoque_pronto(PDO $pdo): bool
+{
+    try {
+        $pdo->query("SELECT 1 FROM estoque_itens LIMIT 1");
+        return true;
+    } catch (\Throwable $e) {
+        return false;
+    }
+}
+
+/** Mostra um aviso pedindo para rodar o setup e encerra a página. */
+function estoque_exigir_setup(): void
+{
+    echo '<div class="card" style="max-width:640px;"><div class="card-body">'
+       . '<h5 class="mb-2">Módulo de estoque ainda não inicializado</h5>'
+       . '<p class="text-muted">As tabelas do estoque precisam ser criadas uma vez. '
+       . 'Clique abaixo para criar as tabelas e importar o catálogo da planilha.</p>'
+       . '<a href="estoque_setup.php" class="btn btn-primary">Inicializar estoque agora</a>'
+       . '</div></div>';
+}
+
 function estoque_listar(PDO $pdo, string $busca = '', bool $soAbaixoMinimo = false): array
 {
     $sql = "SELECT * FROM estoque_itens WHERE ativo = 1";
