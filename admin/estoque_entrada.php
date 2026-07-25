@@ -89,8 +89,8 @@ require __DIR__ . '/_header.php';
                                                value="<?= $fmt($l['quantidade']) ?>" inputmode="decimal">
                                         <?php if ((int) ($l['embalagem'] ?? 0) > 1): ?>
                                             <div class="form-check mt-1" style="min-width:110px;">
-                                                <input class="form-check-input" type="checkbox" name="mult[<?= $i ?>]" value="1" id="mult-<?= $i ?>">
-                                                <label class="form-check-label small text-nowrap" for="mult-<?= $i ?>">× <?= (int) $l['embalagem'] ?> (fardo)</label>
+                                                <input class="form-check-input" type="checkbox" name="mult[<?= $i ?>]" value="1" id="mult-<?= $i ?>" checked>
+                                                <label class="form-check-label small text-nowrap" for="mult-<?= $i ?>">converter fardo (× <?= (int) $l['embalagem'] ?>)</label>
                                             </div>
                                         <?php endif; ?>
                                     </td>
