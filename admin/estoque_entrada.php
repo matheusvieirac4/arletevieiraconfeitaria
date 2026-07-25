@@ -50,6 +50,7 @@ require __DIR__ . '/_header.php';
                                 <th>Item na nota</th>
                                 <th style="min-width:280px;">Casar com o estoque</th>
                                 <th class="text-end" style="width:120px;">Qtde</th>
+                                <th style="width:44px;"></th>
                             </tr></thead>
                             <tbody>
                             <?php foreach ($rev['linhas'] as $i => $l): ?>
@@ -83,6 +84,10 @@ require __DIR__ . '/_header.php';
                                     <td>
                                         <input type="text" name="quantidade[<?= $i ?>]" class="form-control text-end"
                                                value="<?= $fmt($l['quantidade']) ?>" inputmode="decimal">
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-outline-danger btn-sm" title="Remover da lista (compra pessoal)"
+                                                onclick="this.closest('tr').remove()">&times;</button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
