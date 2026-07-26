@@ -98,6 +98,7 @@ require __DIR__ . '/_header.php';
                             <th><?= $linkOrdem('nome', 'Item') ?></th>
                             <th><?= $linkOrdem('fornecedor', 'Fornecedor') ?></th>
                             <th>Medida</th>
+                            <th class="text-end">Preço/un</th>
                             <th class="text-end">Atual</th>
                             <th class="text-end">Mín.</th>
                             <th class="text-end">Ideal</th>
@@ -107,7 +108,7 @@ require __DIR__ . '/_header.php';
                     </thead>
                     <tbody>
                     <?php if (!$itens): ?>
-                        <tr><td colspan="8" class="text-muted text-center py-4">Nenhum item.</td></tr>
+                        <tr><td colspan="9" class="text-muted text-center py-4">Nenhum item.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($itens as $it):
                         $min = $it['estoque_minimo'];
@@ -130,6 +131,7 @@ require __DIR__ . '/_header.php';
                                     <div class="text-muted">R$ <?= number_format($pb['valor'], 4, ',', '.') ?>/<?= $pb['rotulo'] ?></div>
                                 <?php endif; ?>
                             </td>
+                            <td class="text-end text-nowrap"><?= $it['preco'] !== null ? 'R$ ' . number_format((float) $it['preco'], 2, ',', '.') : '—' ?></td>
                             <td class="text-end fw-semibold"><?= $fmt($it['estoque_atual']) ?></td>
                             <td class="text-end text-muted"><?= $fmt($min) ?></td>
                             <td class="text-end text-muted"><?= $fmt($it['estoque_ideal']) ?></td>
