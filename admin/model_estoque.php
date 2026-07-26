@@ -337,11 +337,45 @@ function estoque_casar_item(string $ean, string $descricao, array $itensCache, a
             similar_text($alvo, mb_strtolower((string) $it['nome'], 'UTF-8'), $pct);
             if ($pct > $melhorScore) { $melhorScore = $pct; $melhorId = (int) $it['id']; }
         }
-        if ($melhorScore >= 60.0) {
-            return ['item_id' => $melhorId, 'match' => 'nome'];
+        if ($melhorScore >= 60.0 && $melhorId !== null) {
+            // Trava anti-falso-positivo: o 1º termo precisa bater (igual financeiro),
+            // pra "COCA 2L" não casar com "SOS EMBALAGENS" só por palavra genérica.
+            $t1 = explode(' ', $alvo)[0] ?? '';
+            $nomeM = '';
+            foreach ($itensCache as $it) { if ((int) $it['id'] === $melhorId) { $nomeM = (string) $it['nome']; break; } }
+            $t2 = explode(' ', mb_strtolower($nomeM, 'UTF-8'))[0] ?? '';
+            $pctP = 0.0;
+            if ($t1 !== '' && $t2 !== '') { similar_text($t1, $t2, $pctP); }
+            if ($pctP >= 70.0) {
+                return ['item_id' => $melhorId, 'match' => 'nome'];
+            }
         }
     }
     return ['item_id' => null, 'match' => 'nenhum'];
+}
+
+/** A nota (chave de acesso) já foi lançada no estoque? Devolve a data ou null. */
+function estoque_nota_processada(PDO $pdo, string $chave): ?string
+{
+    $chave = preg_replace('/\D/', '', $chave);
+    if ($chave === '') { return null; }
+    try {
+        $stmt = $pdo->prepare("SELECT criado_em FROM estoque_notas_processadas WHERE chave = :c");
+        $stmt->execute([':c' => $chave]);
+        $r = $stmt->fetchColumn();
+        return $r ?: null;
+    } catch (\Throwable $e) { return null; }
+}
+
+/** Registra a nota como processada (evita dobrar o estoque em reenvio). */
+function estoque_nota_registrar(PDO $pdo, string $chave, string $desc = ''): void
+{
+    $chave = preg_replace('/\D/', '', $chave);
+    if ($chave === '') { return; }
+    try {
+        $pdo->prepare("INSERT IGNORE INTO estoque_notas_processadas (chave, descricao) VALUES (:c, :d)")
+            ->execute([':c' => $chave, ':d' => $desc !== '' ? mb_substr($desc, 0, 250) : null]);
+    } catch (\Throwable $e) { /* tabela ausente: ignora */ }
 }
 
 /**

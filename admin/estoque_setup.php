@@ -70,6 +70,15 @@ try {
     ");
     $log[] = 'OK  tabela estoque_item_aliases';
 
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS estoque_notas_processadas (
+            chave     VARCHAR(64) NOT NULL PRIMARY KEY,
+            descricao VARCHAR(255) NULL,
+            criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $log[] = 'OK  tabela estoque_notas_processadas';
+
     // Migração: adiciona 'responsavel' se a tabela veio de uma versão anterior.
     try {
         $tem = $pdo->query("SHOW COLUMNS FROM estoque_movimentacoes LIKE 'responsavel'")->fetch();

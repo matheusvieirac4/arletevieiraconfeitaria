@@ -78,9 +78,13 @@ if ($acao === 'entrada_xml' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'embalagem' => estoque_qtde_da_descricao((string) ($it['descricao'] ?? '')) ?? 0,
         ];
     }
+    $chave = $nota['chave'] ?? '';
+    $jaLancada = $chave !== '' ? estoque_nota_processada($pdo, $chave) : null;
     $_SESSION['estoque_entrada'] = [
         'fornecedor' => $nota['fornecedor']['nome'] ?? '',
         'numero'     => $nota['numero'] ?? '',
+        'chave'      => $chave,
+        'duplicada'  => $jaLancada,   // data do lançamento anterior, se houver
         'linhas'     => $linhas,
     ];
     header('Location: estoque_entrada.php');
@@ -157,6 +161,7 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $embNovo  = estoque_qtde_da_descricao($nomeNovo);   // fardo: qtde na descrição
                 $id = estoque_criar($pdo, [
                     'nome'          => $nomeNovo,
+                    'fornecedor'    => (string) ($rev['fornecedor'] ?? ''),   // puxa o fornecedor da nota
                     'codigo_compra' => $ean,   // veio da nota = código de compra (fardo)
                     'peso_gramas'   => $embNovo !== null ? (string) $embNovo : '',
                     'estoque_atual' => 0,
@@ -191,6 +196,10 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         estoque_redirect('danger', 'Falha ao dar entrada: ' . $e->getMessage(), 'estoque_entrada.php');
     }
 
+    // Registra a nota como processada (dedup: reenviar o mesmo XML vai avisar).
+    if (($rev['chave'] ?? '') !== '') {
+        estoque_nota_registrar($pdo, (string) $rev['chave'], (string) ($rev['fornecedor'] ?? ''));
+    }
     unset($_SESSION['estoque_entrada']);
     estoque_redirect('success', "Entrada concluída: $aplicadas item(ns) atualizados.");
 }

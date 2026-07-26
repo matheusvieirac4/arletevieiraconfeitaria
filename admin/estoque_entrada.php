@@ -33,6 +33,12 @@ require __DIR__ . '/_header.php';
             <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
         <?php endif; ?>
 
+            <?php if (!empty($rev['duplicada'])): ?>
+                <div class="alert alert-danger">
+                    ⚠ <strong>Esta nota já foi lançada no estoque</strong> em <?= htmlspecialchars(date('d/m/Y H:i', strtotime($rev['duplicada']))) ?>.
+                    Confirmar de novo vai <strong>somar as quantidades outra vez</strong>. Se não for intencional, descarte.
+                </div>
+            <?php endif; ?>
             <div class="alert alert-info">
                 <?php if (($rev['origem'] ?? '') === 'cupom'): ?>
                     Itens lidos do <strong>cupom</strong> pela IA. Confira o item do estoque e a quantidade — casou por nome, então revise.
