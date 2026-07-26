@@ -97,6 +97,7 @@ require __DIR__ . '/_header.php';
                         <tr>
                             <th><?= $linkOrdem('nome', 'Item') ?></th>
                             <th><?= $linkOrdem('fornecedor', 'Fornecedor') ?></th>
+                            <th>Medida</th>
                             <th class="text-end">Atual</th>
                             <th class="text-end">Mín.</th>
                             <th class="text-end">Ideal</th>
@@ -106,7 +107,7 @@ require __DIR__ . '/_header.php';
                     </thead>
                     <tbody>
                     <?php if (!$itens): ?>
-                        <tr><td colspan="7" class="text-muted text-center py-4">Nenhum item.</td></tr>
+                        <tr><td colspan="8" class="text-muted text-center py-4">Nenhum item.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($itens as $it):
                         $min = $it['estoque_minimo'];
@@ -118,6 +119,17 @@ require __DIR__ . '/_header.php';
                                 <?php if (empty($it['codigo_barras'])): ?><span class="badge bg-light text-muted ms-1" title="Sem código de barras">sem cód.</span><?php endif; ?>
                             </td>
                             <td class="text-muted"><?= htmlspecialchars($it['fornecedor'] ?? '—') ?></td>
+                            <td class="small">
+                                <?php
+                                $un = $it['unidade_medida'] ?? 'UN';
+                                $cont = $it['conteudo'];
+                                echo ($un === 'UN' && ($cont === null || (float) $cont <= 1))
+                                    ? 'UN'
+                                    : htmlspecialchars($fmt($cont) . ' ' . $un);
+                                if ($pb = estoque_preco_por_base($it)): ?>
+                                    <div class="text-muted">R$ <?= number_format($pb['valor'], 4, ',', '.') ?>/<?= $pb['rotulo'] ?></div>
+                                <?php endif; ?>
+                            </td>
                             <td class="text-end fw-semibold"><?= $fmt($it['estoque_atual']) ?></td>
                             <td class="text-end text-muted"><?= $fmt($min) ?></td>
                             <td class="text-end text-muted"><?= $fmt($it['estoque_ideal']) ?></td>

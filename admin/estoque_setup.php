@@ -4,6 +4,7 @@
 // Acesse uma vez em /admin/estoque_setup.php estando logado.
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../includes/banco.php';
+require_once __DIR__ . '/model_estoque.php';   // estoque_medida_da_descricao
 
 header('Content-Type: text/plain; charset=utf-8');
 $log = [];
@@ -21,6 +22,8 @@ try {
             estoque_ideal  DECIMAL(10,3) NULL,
             codigo_barras  VARCHAR(64) NULL,
             codigo_compra  VARCHAR(64) NULL,
+            unidade_medida VARCHAR(4) NOT NULL DEFAULT 'UN',
+            conteudo       DECIMAL(10,3) NULL,
             imagem         VARCHAR(255) NULL,
             ativo          TINYINT(1) NOT NULL DEFAULT 1,
             criado_em      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -105,6 +108,20 @@ try {
         $log[] = 'ERRO ao migrar codigo_compra: ' . $e->getMessage();
     }
 
+    // Migração: unidade de medida + conteúdo (modelo novo; substitui peso_gramas).
+    try {
+        $tem = $pdo->query("SHOW COLUMNS FROM estoque_itens LIKE 'unidade_medida'")->fetch();
+        if (!$tem) {
+            $pdo->exec("ALTER TABLE estoque_itens ADD COLUMN unidade_medida VARCHAR(4) NOT NULL DEFAULT 'UN' AFTER codigo_compra");
+            $pdo->exec("ALTER TABLE estoque_itens ADD COLUMN conteudo DECIMAL(10,3) NULL AFTER unidade_medida");
+            $log[] = 'OK  colunas unidade_medida e conteudo adicionadas';
+        } else {
+            $log[] = '..  colunas unidade_medida/conteudo já existem';
+        }
+    } catch (\Throwable $e) {
+        $log[] = 'ERRO ao migrar unidade_medida: ' . $e->getMessage();
+    }
+
     // Importa o catálogo só se a tabela estiver vazia (não duplica em re-runs).
     $qtd = (int) $pdo->query("SELECT COUNT(*) FROM estoque_itens")->fetchColumn();
     if ($qtd > 0) {
@@ -112,23 +129,25 @@ try {
     } else {
         $seed = require __DIR__ . '/lib/estoque_seed.php';
         $ins = $pdo->prepare("
-            INSERT INTO estoque_itens (nome, fornecedor, preco, peso_gramas, estoque_ideal, estoque_minimo, estoque_atual)
-            VALUES (:nome, :forn, :preco, :peso, :ideal, :minimo, 0)
+            INSERT INTO estoque_itens (nome, fornecedor, preco, unidade_medida, conteudo, estoque_ideal, estoque_minimo, estoque_atual)
+            VALUES (:nome, :forn, :preco, :un, :cont, :ideal, :minimo, 0)
         ");
         $n = 0;
         foreach ($seed as $r) {
             [$nome, $forn, $preco, $peso, $ideal] = $r;
+            $medida = estoque_medida_da_descricao($nome);   // unidade + conteúdo da descrição
             $ins->execute([
                 ':nome'   => $nome,
                 ':forn'   => $forn !== '' ? $forn : null,
                 ':preco'  => $preco,
-                ':peso'   => $peso,
+                ':un'     => $medida[0] ?? 'UN',
+                ':cont'   => $medida !== null ? $medida[1] : null,
                 ':ideal'  => $ideal,
                 ':minimo' => $ideal,   // mínimo começa igual ao ideal; ajuste depois
             ]);
             $n++;
         }
-        $log[] = "OK  importados $n itens (estoque_atual = 0, mínimo = ideal).";
+        $log[] = "OK  importados $n itens (unidade/conteúdo pela descrição; estoque=0, mínimo=ideal).";
     }
     $log[] = '';
     $log[] = 'Pronto. Próximo: cadastre a contagem inicial e comece a usar o /admin/estoque.php';

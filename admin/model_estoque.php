@@ -85,6 +85,58 @@ function estoque_tem_codigo_compra(PDO $pdo): bool
     return $tem;
 }
 
+/** As colunas 'unidade_medida'/'conteudo' já existem? (setup migra). */
+function estoque_tem_unidade(PDO $pdo): bool
+{
+    static $tem = null;
+    if ($tem === null) {
+        try { $pdo->query("SELECT conteudo FROM estoque_itens LIMIT 1"); $tem = true; }
+        catch (\Throwable $e) { $tem = false; }
+    }
+    return $tem;
+}
+
+/** Unidades de medida aceitas (grandeza do conteúdo do item). */
+function estoque_unidades_medida(): array
+{
+    return ['UN' => 'Unidade', 'KG' => 'Quilo (kg)', 'G' => 'Grama (g)', 'L' => 'Litro (L)', 'ML' => 'Mililitro (ml)'];
+}
+
+/**
+ * Extrai unidade de medida + conteúdo da descrição ("5 KG", "1 LT", "200ML",
+ * "30g", "2,05KG"). Devolve [unidade, conteudo] ou null. Usado no item novo.
+ */
+function estoque_medida_da_descricao(string $desc): ?array
+{
+    $d = mb_strtoupper($desc, 'UTF-8');
+    if (preg_match('/(\d+(?:[.,]\d+)?)\s*ML\b/u', $d, $m))        { return ['ML', (float) str_replace(',', '.', $m[1])]; }
+    if (preg_match('/(\d+(?:[.,]\d+)?)\s*L(?:T|TS)?\b/u', $d, $m)) { return ['L',  (float) str_replace(',', '.', $m[1])]; }
+    if (preg_match('/(\d+(?:[.,]\d+)?)\s*KG\b/u', $d, $m))        { return ['KG', (float) str_replace(',', '.', $m[1])]; }
+    if (preg_match('/(\d+(?:[.,]\d+)?)\s*G\b/u', $d, $m))         { return ['G',  (float) str_replace(',', '.', $m[1])]; }
+    return null;
+}
+
+/**
+ * Preço por unidade base (grama/ml/unidade interna), derivado de preço + conteúdo.
+ * @return array{valor:float, rotulo:string}|null  ex.: ['valor'=>0.004,'rotulo'=>'g']
+ */
+function estoque_preco_por_base(array $item): ?array
+{
+    $preco = $item['preco'] ?? null;
+    $cont  = (float) ($item['conteudo'] ?? 0);
+    $un    = strtoupper((string) ($item['unidade_medida'] ?? 'UN'));
+    if ($preco === null || $cont <= 0) { return null; }
+    $preco = (float) $preco;
+    switch ($un) {
+        case 'KG': return ['valor' => $preco / ($cont * 1000), 'rotulo' => 'g'];
+        case 'G':  return ['valor' => $preco / $cont,          'rotulo' => 'g'];
+        case 'L':  return ['valor' => $preco / ($cont * 1000), 'rotulo' => 'ml'];
+        case 'ML': return ['valor' => $preco / $cont,          'rotulo' => 'ml'];
+        case 'UN': return $cont > 1 ? ['valor' => $preco / $cont, 'rotulo' => 'un'] : null;
+    }
+    return null;
+}
+
 function estoque_buscar(PDO $pdo, int $id): ?array
 {
     $stmt = $pdo->prepare("SELECT * FROM estoque_itens WHERE id = :id");
@@ -104,14 +156,23 @@ function estoque_buscar_por_barcode(PDO $pdo, string $codigo): ?array
     return $r ?: null;
 }
 
+function estoque_cols_editaveis(PDO $pdo, array &$p): array
+{
+    $cols = ['nome=:nome','fornecedor=:forn','preco=:preco','estoque_atual=:atual',
+             'estoque_minimo=:minimo','estoque_ideal=:ideal','codigo_barras=:barras','imagem=:imagem'];
+    if (estoque_tem_codigo_compra($pdo)) { $cols[] = 'codigo_compra=:compra'; } else { unset($p[':compra']); }
+    if (estoque_tem_unidade($pdo)) {
+        $cols[] = 'unidade_medida=:unidade';
+        $cols[] = 'conteudo=:conteudo';
+    } else { unset($p[':unidade'], $p[':conteudo']); }
+    return $cols;
+}
+
 function estoque_criar(PDO $pdo, array $d): int
 {
     $p = estoque_params($d);
-    $cols = ['nome=:nome','fornecedor=:forn','preco=:preco','peso_gramas=:peso','estoque_atual=:atual',
-             'estoque_minimo=:minimo','estoque_ideal=:ideal','codigo_barras=:barras','imagem=:imagem'];
-    if (estoque_tem_codigo_compra($pdo)) { $cols[] = 'codigo_compra=:compra'; } else { unset($p[':compra']); }
-    $stmt = $pdo->prepare("INSERT INTO estoque_itens SET " . implode(', ', $cols));
-    $stmt->execute($p);
+    $cols = estoque_cols_editaveis($pdo, $p);
+    $pdo->prepare("INSERT INTO estoque_itens SET " . implode(', ', $cols))->execute($p);
     return (int) $pdo->lastInsertId();
 }
 
@@ -119,11 +180,8 @@ function estoque_atualizar(PDO $pdo, int $id, array $d): bool
 {
     $p = estoque_params($d);
     $p[':id'] = $id;
-    $cols = ['nome=:nome','fornecedor=:forn','preco=:preco','peso_gramas=:peso','estoque_atual=:atual',
-             'estoque_minimo=:minimo','estoque_ideal=:ideal','codigo_barras=:barras','imagem=:imagem'];
-    if (estoque_tem_codigo_compra($pdo)) { $cols[] = 'codigo_compra=:compra'; } else { unset($p[':compra']); }
-    $stmt = $pdo->prepare("UPDATE estoque_itens SET " . implode(', ', $cols) . " WHERE id=:id");
-    return $stmt->execute($p);
+    $cols = estoque_cols_editaveis($pdo, $p);
+    return $pdo->prepare("UPDATE estoque_itens SET " . implode(', ', $cols) . " WHERE id=:id")->execute($p);
 }
 
 /** Normaliza campos do formulário para os binds. */
@@ -138,17 +196,20 @@ function estoque_params(array $d): array
     };
     $barras = preg_replace('/\D/', '', (string) ($d['codigo_barras'] ?? ''));
     $compra = preg_replace('/\D/', '', (string) ($d['codigo_compra'] ?? ''));
+    $un     = strtoupper(trim((string) ($d['unidade_medida'] ?? 'UN')));
+    if (!isset(estoque_unidades_medida()[$un])) { $un = 'UN'; }
     return [
-        ':nome'   => trim((string) ($d['nome'] ?? '')),
-        ':forn'   => ($f = trim((string) ($d['fornecedor'] ?? ''))) !== '' ? $f : null,
-        ':preco'  => $num($d['preco'] ?? ''),
-        ':peso'   => ($pe = $num($d['peso_gramas'] ?? '')) !== null ? (int) $pe : null,
-        ':atual'  => $num($d['estoque_atual'] ?? '') ?? 0,
-        ':minimo' => $num($d['estoque_minimo'] ?? ''),
-        ':ideal'  => $num($d['estoque_ideal'] ?? ''),
-        ':barras' => $barras !== '' ? $barras : null,
-        ':compra' => $compra !== '' ? $compra : null,
-        ':imagem' => ($im = trim((string) ($d['imagem'] ?? ''))) !== '' ? $im : null,
+        ':nome'     => trim((string) ($d['nome'] ?? '')),
+        ':forn'     => ($f = trim((string) ($d['fornecedor'] ?? ''))) !== '' ? $f : null,
+        ':preco'    => $num($d['preco'] ?? ''),
+        ':atual'    => $num($d['estoque_atual'] ?? '') ?? 0,
+        ':minimo'   => $num($d['estoque_minimo'] ?? ''),
+        ':ideal'    => $num($d['estoque_ideal'] ?? ''),
+        ':barras'   => $barras !== '' ? $barras : null,
+        ':compra'   => $compra !== '' ? $compra : null,
+        ':unidade'  => $un,
+        ':conteudo' => $num($d['conteudo'] ?? ''),
+        ':imagem'   => ($im = trim((string) ($d['imagem'] ?? ''))) !== '' ? $im : null,
     ];
 }
 
@@ -391,32 +452,6 @@ function estoque_qtde_da_descricao(string $desc): ?int
     return null;
 }
 
-/**
- * Varre os itens ativos e, onde a descrição tiver a quantidade da embalagem,
- * grava em peso_gramas. Devolve quantos foram atualizados.
- */
-function estoque_detectar_embalagem_todos(PDO $pdo): int
-{
-    $itens = estoque_listar($pdo);
-    $up = $pdo->prepare("UPDATE estoque_itens SET peso_gramas = :q WHERE id = :id");
-    $n = 0;
-    foreach ($itens as $it) {
-        $q = estoque_qtde_da_descricao((string) $it['nome']);
-        if ($q !== null && $q > 0 && (int) ($it['peso_gramas'] ?? 0) !== $q) {
-            $up->execute([':q' => $q, ':id' => (int) $it['id']]);
-            $n++;
-        }
-    }
-    return $n;
-}
-
-/** Grava a qtde por embalagem (peso_gramas) do item — aprende o fardo na entrada. */
-function estoque_atualizar_embalagem(PDO $pdo, int $itemId, int $qtde): void
-{
-    if ($qtde <= 0 || $itemId <= 0) { return; }
-    $pdo->prepare("UPDATE estoque_itens SET peso_gramas = :q WHERE id = :id")
-        ->execute([':q' => $qtde, ':id' => $itemId]);
-}
 
 /** Atualiza o preço (valor unitário) de um item — usado na entrada por nota/cupom. */
 function estoque_atualizar_preco(PDO $pdo, int $itemId, float $preco): void

@@ -64,10 +64,22 @@ require __DIR__ . '/_header.php';
                                     <label class="form-label">Preço (R$)</label>
                                     <input type="text" name="preco" class="form-control" value="<?= $fmt2($item['preco'] ?? '') ?>" placeholder="0,00" inputmode="decimal">
                                 </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Qtde por embalagem</label>
-                                    <input type="text" name="peso_gramas" class="form-control" value="<?= htmlspecialchars($item['peso_gramas'] ?? '') ?>" inputmode="numeric" placeholder="1">
-                                    <div class="form-text">Conteúdo: 1kg=<strong>1</strong>, 5kg=<strong>5</strong>, fardo de 10=<strong>10</strong>.</div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Unidade</label>
+                                    <select name="unidade_medida" class="form-select">
+                                        <?php foreach (estoque_unidades_medida() as $sig => $rot): ?>
+                                            <option value="<?= $sig ?>" <?= (($item['unidade_medida'] ?? 'UN') === $sig ? 'selected' : '') ?>><?= $sig ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Conteúdo</label>
+                                    <input type="text" name="conteudo" class="form-control" value="<?= $fmt($item['conteudo'] ?? '') ?>" inputmode="decimal" placeholder="1">
+                                    <?php if ($item && ($pb = estoque_preco_por_base($item))): ?>
+                                        <div class="form-text">R$ <?= number_format($pb['valor'], 4, ',', '.') ?>/<?= $pb['rotulo'] ?></div>
+                                    <?php else: ?>
+                                        <div class="form-text">Ex.: 5 (para 5 KG).</div>
+                                    <?php endif; ?>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Imagem (arquivo)</label>
