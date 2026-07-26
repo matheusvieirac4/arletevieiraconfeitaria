@@ -156,9 +156,6 @@ $datalist = function (string $id, array $opts): string {
             sem digitar uma por uma. As contas a receber continuam sendo geradas pelo sistema de pedidos.
         </p>
 
-        <?php if ($flash): ?>
-            <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
-        <?php endif; ?>
 
         <!-- Credenciais: só no pop-up da engrenagem -->
         <div class="modal fade" id="modal-credenciais" tabindex="-1" aria-hidden="true">
@@ -238,7 +235,7 @@ $datalist = function (string $id, array $opts): string {
                                     <td><?= htmlspecialchars($nt['emissao']) ?></td>
                                     <td class="text-end text-nowrap">
                                         <a class="btn btn-primary btn-sm" href="controller_financeiro.php?acao=pendente_revisar&chave=<?= urlencode($ch) ?>">Revisar</a>
-                                        <a class="btn btn-outline-danger btn-sm" href="controller_financeiro.php?acao=pendente_descartar&chave=<?= urlencode($ch) ?>" onclick="return confirm('Descartar esta nota recebida?')">Descartar</a>
+                                        <a class="btn btn-outline-danger btn-sm js-confirm" href="controller_financeiro.php?acao=pendente_descartar&chave=<?= urlencode($ch) ?>" data-msg="Descartar esta nota recebida?">Descartar</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

@@ -31,9 +31,6 @@ require __DIR__ . '/_header.php';
         </div>
         <p class="text-muted">Contagem física. Digite a quantidade real só nos itens que contar — os deixados <strong>em branco não são alterados</strong>. Ao salvar, cada item preenchido recebe um ajuste no histórico.</p>
 
-        <?php if ($flash): ?>
-            <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
-        <?php endif; ?>
 
         <form method="get" class="row g-2 mb-3" style="max-width:760px;">
             <div class="col-12 col-md"><input type="text" name="busca" class="form-control" placeholder="Filtrar por nome" value="<?= htmlspecialchars($busca) ?>"></div>

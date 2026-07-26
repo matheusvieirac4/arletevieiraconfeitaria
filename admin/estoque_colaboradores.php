@@ -25,9 +25,6 @@ require __DIR__ . '/_header.php';
         </div>
         <p class="text-muted">Quem pode dar baixa no quiosque. Cada um escolhe o nome e digita o <strong>PIN de 4 dígitos</strong> antes de retirar.</p>
 
-        <?php if ($flash): ?>
-            <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
-        <?php endif; ?>
 
         <div class="row g-4">
             <div class="col-lg-5">
@@ -68,8 +65,8 @@ require __DIR__ . '/_header.php';
                                         </form>
                                     </td>
                                     <td class="text-end">
-                                        <a href="controller_estoque.php?acao=colab_excluir&id=<?= (int) $c['id'] ?>" class="btn btn-outline-danger btn-sm"
-                                           onclick="return confirm('Remover <?= htmlspecialchars($c['nome'], ENT_QUOTES) ?>?')">Remover</a>
+                                        <a href="controller_estoque.php?acao=colab_excluir&id=<?= (int) $c['id'] ?>" class="btn btn-outline-danger btn-sm js-confirm"
+                                           data-msg="Remover <?= htmlspecialchars($c['nome'], ENT_QUOTES) ?>?">Remover</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

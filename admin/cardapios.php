@@ -24,9 +24,6 @@ require __DIR__ . '/_header.php';
             Cadastre cada cardapio com um nome de arquivo fixo. Depois, envie ou substitua apenas o PDF — o link publico nao muda.
         </p>
 
-        <?php if ($flash): ?>
-            <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
-        <?php endif; ?>
 
         <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#modalNovoCardapio">Novo cardapio</button>
 
@@ -77,8 +74,8 @@ require __DIR__ . '/_header.php';
                             Renomear
                         </button>
                         <a href="controller_cardapios.php?acao=excluir&id=<?= urlencode(isset($item['id']) ? $item['id'] : '') ?>"
-                           class="btn btn-danger btn-sm"
-                           onclick="return confirm('Excluir este cardapio e o PDF associado? O link deixara de funcionar.')">Excluir</a>
+                           class="btn btn-danger btn-sm js-confirm"
+                           data-msg="Excluir este cardápio e o PDF associado? O link deixará de funcionar.">Excluir</a>
                     </td>
                 </tr>
             <?php endforeach; ?>

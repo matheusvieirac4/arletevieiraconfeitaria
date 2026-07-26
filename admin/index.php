@@ -28,7 +28,7 @@ require __DIR__ . '/_header.php';
                     <td><?= htmlspecialchars($post['criado_em']) ?></td>
                     <td>
                         <a href="form.php?id=<?= (int) $post['id'] ?>" class="btn btn-primary btn-sm">Editar</a>
-                        <a href="controller.php?acao=deletar&id=<?= (int) $post['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir?')">Excluir</a>
+                        <a href="controller.php?acao=deletar&id=<?= (int) $post['id'] ?>" class="btn btn-danger btn-sm js-confirm" data-msg="Excluir este post?">Excluir</a>
                     </td>
                 </tr>
             <?php endforeach; ?>

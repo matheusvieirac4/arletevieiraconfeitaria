@@ -32,7 +32,7 @@ require __DIR__ . '/_header.php';
                             data-bs-toggle="modal" data-bs-target="#modalEditarUsuario">
                             Editar
                         </button>
-                        <a href="controller_user.php?acao=deletar&id=<?= $user['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir?')">Excluir</a>
+                        <a href="controller_user.php?acao=deletar&id=<?= $user['id'] ?>" class="btn btn-danger btn-sm js-confirm" data-msg="Excluir este usuário?">Excluir</a>
                     </td>
                 </tr>
             <?php endforeach; ?>

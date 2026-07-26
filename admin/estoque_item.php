@@ -30,9 +30,6 @@ require __DIR__ . '/_header.php';
             <a href="estoque.php" class="btn btn-outline-secondary btn-sm">&larr; Voltar</a>
         </div>
 
-        <?php if ($flash): ?>
-            <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
-        <?php endif; ?>
 
         <div class="row g-4">
             <div class="col-lg-7">
@@ -156,14 +153,14 @@ require __DIR__ . '/_header.php';
                                     $estornado = !empty($m['estornado']);
                                     $podeEstornar = !$estornado && in_array($m['tipo'], ['entrada', 'saida'], true);
                                 ?>
-                                    <tr<?= $estornado ? ' class="text-decoration-line-through opacity-50"' : '' ?>>
-                                        <td class="text-nowrap small text-muted"><?= htmlspecialchars(date('d/m H:i', strtotime($m['criado_em']))) ?></td>
-                                        <td class="<?= $estornado ? 'text-muted' : $cor ?> fw-semibold"><?= $sinal ?> <?= $fmt($m['quantidade']) ?></td>
+                                    <?php $risca = $estornado ? 'text-decoration-line-through opacity-50' : ''; ?>
+                                    <tr>
+                                        <td class="text-nowrap small text-muted <?= $risca ?>"><?= htmlspecialchars(date('d/m H:i', strtotime($m['criado_em']))) ?></td>
+                                        <td class="fw-semibold <?= $estornado ? 'text-muted ' . $risca : $cor ?>"><?= $sinal ?> <?= $fmt($m['quantidade']) ?></td>
                                         <td class="small text-muted">
-                                            <?= htmlspecialchars($m['origem']) ?><?= $m['observacao'] ? ' · ' . htmlspecialchars($m['observacao']) : '' ?>
-                                            <?php if (!empty($m['responsavel'])): ?><div class="text-muted">por <?= htmlspecialchars($m['responsavel']) ?></div><?php endif; ?>
+                                            <span class="<?= $risca ?>"><?= htmlspecialchars($m['origem']) ?><?= $m['observacao'] ? ' · ' . htmlspecialchars($m['observacao']) : '' ?><?php if (!empty($m['responsavel'])): ?> · por <?= htmlspecialchars($m['responsavel']) ?><?php endif; ?></span>
                                             <?php if ($estornado): ?>
-                                                <div><span class="badge bg-secondary">estornado</span><?php if (!empty($m['estornado_por'])): ?> por <?= htmlspecialchars($m['estornado_por']) ?><?php endif; ?></div>
+                                                <div class="d-inline-block"><span class="badge bg-secondary">estornado</span><?php if (!empty($m['estornado_por'])): ?> por <?= htmlspecialchars($m['estornado_por']) ?><?php endif; ?></div>
                                             <?php endif; ?>
                                         </td>
                                         <td class="text-end small text-nowrap">
@@ -185,32 +182,4 @@ require __DIR__ . '/_header.php';
             </div>
             <?php endif; ?>
         </div>
-
-        <!-- Confirmação reutilizável (sem alert nativo) -->
-        <button id="confirm-trigger" class="d-none" data-bs-toggle="modal" data-bs-target="#modal-confirm"></button>
-        <div class="modal fade" id="modal-confirm" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Confirmar</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-                    </div>
-                    <div class="modal-body" id="confirm-msg"></div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <a href="#" id="confirm-ok" class="btn btn-danger">Confirmar</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <script>
-        document.querySelectorAll('.js-confirm').forEach(function (el) {
-            el.addEventListener('click', function (e) {
-                e.preventDefault();
-                document.getElementById('confirm-msg').textContent = this.dataset.msg || 'Tem certeza?';
-                document.getElementById('confirm-ok').href = this.href;
-                document.getElementById('confirm-trigger').click();
-            });
-        });
-        </script>
 <?php require __DIR__ . '/_footer.php'; ?>

@@ -29,9 +29,6 @@ require __DIR__ . '/_header.php';
             <a href="estoque.php" class="btn btn-outline-secondary btn-sm">&larr; Estoque</a>
         </div>
 
-        <?php if ($flash): ?>
-            <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
-        <?php endif; ?>
 
             <?php if (!empty($rev['duplicada'])): ?>
                 <div class="alert alert-danger">

@@ -28,9 +28,6 @@ require __DIR__ . '/_header.php';
             O identificador (<code>slug</code>) nao muda — as metricas de cliques continuam funcionando.
         </p>
 
-        <?php if ($flash): ?>
-            <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
-        <?php endif; ?>
 
         <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#modalNovoLink">Novo link</button>
 
@@ -76,8 +73,8 @@ require __DIR__ . '/_header.php';
                             Editar
                         </button>
                         <a href="controller_links_bio.php?acao=excluir&slug=<?= urlencode($slug) ?>"
-                           class="btn btn-danger btn-sm"
-                           onclick="return confirm('Excluir este link da pagina da bio?')">Excluir</a>
+                           class="btn btn-danger btn-sm js-confirm"
+                           data-msg="Excluir este link da página da bio?">Excluir</a>
                     </td>
                 </tr>
             <?php endforeach; ?>

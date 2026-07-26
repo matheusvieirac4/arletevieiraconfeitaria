@@ -60,9 +60,6 @@ require __DIR__ . '/_header.php';
             </form>
         </div>
 
-        <?php if ($flash): ?>
-            <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
-        <?php endif; ?>
 
         <?php
         $qsAbaixo = http_build_query(array_filter(['busca' => $busca, 'fornecedor' => $forn, 'abaixo' => $soMin ? null : 1]));
@@ -154,8 +151,8 @@ require __DIR__ . '/_header.php';
         <p class="text-muted small mt-2">
             <?= count($itens) ?> item(ns)<?= $busca || $soMin || $forn ? ' (filtrado)' : '' ?>.
             &nbsp;·&nbsp;
-            <a href="controller_estoque.php?acao=detectar_medida" class="text-decoration-none"
-               onclick="return confirm('Ler as descrições e preencher Unidade/Conteúdo (5 KG, 1 L, 200ML...) nos itens?')">
+            <a href="controller_estoque.php?acao=detectar_medida" class="text-decoration-none js-confirm"
+               data-msg="Ler as descrições e preencher Unidade/Conteúdo (5 KG, 1 L, 200ML...) nos itens?">
                 Detectar unidade/conteúdo pelas descrições
             </a>
         </p>
