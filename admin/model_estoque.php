@@ -290,6 +290,53 @@ function estoque_responsavel_atual(): string
     return trim((string) ($_SESSION['admin_nome'] ?? ''));
 }
 
+// ------------------- Token do quiosque (acesso sem login admin) ----------
+// Guardado num arquivo em admin/data/ (fora do git). Gera um link que abre o
+// quiosque sem a sessão do admin; o aparelho fica autorizado por cookie longo.
+
+function estoque_kiosk_token_path(): string { return __DIR__ . '/data/kiosk_token.txt'; }
+
+function estoque_kiosk_token(): string
+{
+    $p = estoque_kiosk_token_path();
+    return is_file($p) ? trim((string) @file_get_contents($p)) : '';
+}
+
+/** Gera (ou regenera, revogando o anterior) o token do quiosque. */
+function estoque_kiosk_token_gerar(): string
+{
+    $t = bin2hex(random_bytes(20));
+    $dir = dirname(estoque_kiosk_token_path());
+    if (!is_dir($dir)) { @mkdir($dir, 0755, true); }
+    @file_put_contents(estoque_kiosk_token_path(), $t);
+    return $t;
+}
+
+function estoque_kiosk_token_valido(string $t): bool
+{
+    $a = estoque_kiosk_token();
+    return $a !== '' && $t !== '' && hash_equals($a, $t);
+}
+
+/**
+ * Autoriza o acesso ao quiosque: admin logado OU token válido (link/cookie).
+ * Ao chegar com ?token válido, grava um cookie longo (autoriza o aparelho).
+ */
+function estoque_kiosk_autorizado(): bool
+{
+    if (!empty($_SESSION['admin_blog'])) { return true; }
+    $t = (string) ($_GET['token'] ?? $_COOKIE['kiosk_token'] ?? '');
+    if (!estoque_kiosk_token_valido($t)) { return false; }
+    if (isset($_GET['token'])) {   // primeiro acesso pelo link: fixa o cookie
+        setcookie('kiosk_token', $t, [
+            'expires' => time() + 315360000,   // ~10 anos
+            'path' => '/', 'httponly' => true, 'samesite' => 'Lax',
+            'secure' => !empty($_SERVER['HTTPS']),
+        ]);
+    }
+    return true;
+}
+
 // ------------------- Colaboradores (identificação no quiosque) ----------
 // Cada colaborador tem um PIN de 4 dígitos (guardado com hash). No quiosque a
 // pessoa escolhe o nome e digita o PIN antes de dar baixa; o nome vira o

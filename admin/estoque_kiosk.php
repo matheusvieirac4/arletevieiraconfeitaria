@@ -3,8 +3,10 @@
 // Fluxo: escolhe o nome -> digita o PIN -> câmera lê o código -> confirma a
 // quantidade -> sucesso -> volta para a lista de nomes. Cada baixa fica
 // atribuída ao colaborador. ZXing lê código de barras EAN e QR.
-require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_session.php';
 require_once 'model_estoque.php';
+// Acesso: admin logado OU token do quiosque (link/cookie). Sem nenhum, vai pro login.
+if (!estoque_kiosk_autorizado()) { header('Location: login.php'); exit; }
 if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
 ?>
 <!DOCTYPE html>

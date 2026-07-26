@@ -262,6 +262,12 @@ if ($acao === 'colab_salvar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         estoque_redirect('danger', $e->getMessage(), 'estoque_colaboradores.php');
     }
 }
+// ---- Gerar/regenerar o token de acesso do quiosque ----
+if ($acao === 'kiosk_token_gerar') {
+    estoque_kiosk_token_gerar();
+    estoque_redirect('success', 'Novo link do quiosque gerado — o link anterior deixou de funcionar.', 'estoque_colaboradores.php');
+}
+
 if ($acao === 'colab_excluir') {
     $id = (int) ($_GET['id'] ?? 0);
     if ($id > 0) { estoque_colaborador_excluir($pdo, $id); }

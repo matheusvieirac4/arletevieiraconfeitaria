@@ -1,13 +1,15 @@
 <?php
-// API JSON do quiosque de estoque. Tudo autenticado (o celular da porta fica
-// logado com a sessão de 30 dias). Ações: lookup, buscar, baixa, associar.
-require_once __DIR__ . '/_auth.php';
+// API JSON do quiosque de estoque. Acesso: admin logado OU token do quiosque
+// (cookie do aparelho). Ações: lookup, buscar, baixa, associar.
+require_once __DIR__ . '/_session.php';
 require_once 'model_estoque.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
 function api_out($d): void { echo json_encode($d, JSON_UNESCAPED_UNICODE); exit; }
 function api_erro(string $msg, int $http = 400): void { http_response_code($http); api_out(['error' => $msg]); }
+
+if (!estoque_kiosk_autorizado()) { api_erro('Não autorizado.', 401); }
 
 /** Formata um item para o quiosque (números crus; a tela formata). */
 function estoque_item_publico(array $it): array
