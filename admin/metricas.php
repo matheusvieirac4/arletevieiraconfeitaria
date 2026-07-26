@@ -89,14 +89,14 @@ $page_title = 'Métricas';
 $active = 'metricas';
 $extra_head = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>';
 $extra_css = '
-        .stat { border:0; border-radius:14px; padding:18px 20px; height:100%; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.06); }
-        .stat .label { font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; opacity:.85; }
-        .stat .value { font-size:1.8rem; font-weight:700; line-height:1.15; margin-top:4px; }
-        .stat .sub { font-size:.8rem; opacity:.85; margin-top:2px; }
-        .stat-1 { background:linear-gradient(135deg,#a51d32,#c94b5f); }
-        .stat-2 { background:linear-gradient(135deg,#2c6fb5,#4f96de); }
-        .stat-3 { background:linear-gradient(135deg,#2e7d5b,#54ab83); }
-        .stat-4 { background:linear-gradient(135deg,#8e6d1f,#c2a24a); }
+        .mtr { border:0; border-radius:14px; padding:18px 20px; height:100%; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.06); }
+        .mtr .label { font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; opacity:.85; }
+        .mtr .value { font-size:1.8rem; font-weight:700; line-height:1.15; margin-top:4px; }
+        .mtr .sub { font-size:.8rem; opacity:.85; margin-top:2px; }
+        .mtr-1 { background:linear-gradient(135deg,#a51d32,#c94b5f); }
+        .mtr-2 { background:linear-gradient(135deg,#2c6fb5,#4f96de); }
+        .mtr-3 { background:linear-gradient(135deg,#2e7d5b,#54ab83); }
+        .mtr-4 { background:linear-gradient(135deg,#8e6d1f,#c2a24a); }
         .chart-wrap { position:relative; height:300px; }
         .chart-wrap-sm { position:relative; height:240px; }';
 require __DIR__ . '/_header.php';
@@ -115,28 +115,28 @@ require __DIR__ . '/_header.php';
 
         <div class="row g-3 mb-4">
             <div class="col-6 col-lg-3">
-                <div class="stat stat-1">
+                <div class="mtr mtr-1">
                     <div class="label">Cliques</div>
                     <div class="value"><?= number_format($totalCliques, 0, ',', '.') ?></div>
                     <div class="sub">nos últimos <?= $diasFiltro ?> dias</div>
                 </div>
             </div>
             <div class="col-6 col-lg-3">
-                <div class="stat stat-2">
+                <div class="mtr mtr-2">
                     <div class="label">Média diária</div>
                     <div class="value"><?= number_format($mediaDiaria, 1, ',', '.') ?></div>
                     <div class="sub">cliques por dia</div>
                 </div>
             </div>
             <div class="col-6 col-lg-3">
-                <div class="stat stat-3">
+                <div class="mtr mtr-3">
                     <div class="label">Link campeão</div>
                     <div class="value" style="font-size:1.2rem;"><?= htmlspecialchars($topLinkNome) ?></div>
                     <div class="sub"><?= $topLink ? (int) ($porLink[$topLink]) . ' cliques' : '—' ?></div>
                 </div>
             </div>
             <div class="col-6 col-lg-3">
-                <div class="stat stat-4">
+                <div class="mtr mtr-4">
                     <div class="label">No celular</div>
                     <div class="value"><?= $pctMobile ?>%</div>
                     <div class="sub">dos acessos</div>
