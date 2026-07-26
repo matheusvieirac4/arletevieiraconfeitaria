@@ -153,15 +153,26 @@ require __DIR__ . '/_header.php';
                                 <?php foreach ($movs as $m):
                                     $sinal = $m['tipo'] === 'saida' ? '−' : ($m['tipo'] === 'entrada' ? '+' : '=');
                                     $cor = $m['tipo'] === 'saida' ? 'text-danger' : ($m['tipo'] === 'entrada' ? 'text-success' : 'text-muted');
+                                    $estornado = !empty($m['estornado']);
+                                    $podeEstornar = !$estornado && in_array($m['tipo'], ['entrada', 'saida'], true);
                                 ?>
-                                    <tr>
+                                    <tr<?= $estornado ? ' class="text-decoration-line-through opacity-50"' : '' ?>>
                                         <td class="text-nowrap small text-muted"><?= htmlspecialchars(date('d/m H:i', strtotime($m['criado_em']))) ?></td>
-                                        <td class="<?= $cor ?> fw-semibold"><?= $sinal ?> <?= $fmt($m['quantidade']) ?></td>
+                                        <td class="<?= $estornado ? 'text-muted' : $cor ?> fw-semibold"><?= $sinal ?> <?= $fmt($m['quantidade']) ?></td>
                                         <td class="small text-muted">
                                             <?= htmlspecialchars($m['origem']) ?><?= $m['observacao'] ? ' · ' . htmlspecialchars($m['observacao']) : '' ?>
                                             <?php if (!empty($m['responsavel'])): ?><div class="text-muted">por <?= htmlspecialchars($m['responsavel']) ?></div><?php endif; ?>
+                                            <?php if ($estornado): ?><span class="badge bg-secondary">estornado</span><?php endif; ?>
                                         </td>
-                                        <td class="text-end small">→ <?= $fmt($m['saldo_apos']) ?></td>
+                                        <td class="text-end small text-nowrap">
+                                            <?php if ($podeEstornar): ?>
+                                                <a href="controller_estoque.php?acao=estornar&mov=<?= (int) $m['id'] ?>&id=<?= (int) $id ?>"
+                                                   class="text-danger text-decoration-none" title="Estornar"
+                                                   onclick="return confirm('Estornar esta movimentação? O saldo volta e a linha fica riscada no histórico.')">↩︎ estornar</a>
+                                            <?php else: ?>
+                                                → <?= $fmt($m['saldo_apos']) ?>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>

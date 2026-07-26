@@ -44,6 +44,7 @@ try {
             origem      VARCHAR(32) NOT NULL DEFAULT 'manual',
             observacao  VARCHAR(255) NULL,
             responsavel VARCHAR(120) NULL,
+            estornado   TINYINT(1) NOT NULL DEFAULT 0,
             criado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX (item_id),
             INDEX (criado_em),
@@ -106,6 +107,19 @@ try {
         }
     } catch (\Throwable $e) {
         $log[] = 'ERRO ao migrar codigo_compra: ' . $e->getMessage();
+    }
+
+    // Migração: flag de estorno nas movimentações.
+    try {
+        $tem = $pdo->query("SHOW COLUMNS FROM estoque_movimentacoes LIKE 'estornado'")->fetch();
+        if (!$tem) {
+            $pdo->exec("ALTER TABLE estoque_movimentacoes ADD COLUMN estornado TINYINT(1) NOT NULL DEFAULT 0 AFTER saldo_apos");
+            $log[] = 'OK  coluna estornado adicionada';
+        } else {
+            $log[] = '..  coluna estornado já existe';
+        }
+    } catch (\Throwable $e) {
+        $log[] = 'ERRO ao migrar estornado: ' . $e->getMessage();
     }
 
     // Migração: unidade de medida + conteúdo (modelo novo; substitui peso_gramas).

@@ -343,6 +343,49 @@ function estoque_colaborador_nome(PDO $pdo, int $id): string
     return (string) ($stmt->fetchColumn() ?: '');
 }
 
+/** A coluna 'estornado' já existe? (setup migra). */
+function estoque_mov_tem_estornado(PDO $pdo): bool
+{
+    static $tem = null;
+    if ($tem === null) {
+        try { $pdo->query("SELECT estornado FROM estoque_movimentacoes LIMIT 1"); $tem = true; }
+        catch (\Throwable $e) { $tem = false; }
+    }
+    return $tem;
+}
+
+/**
+ * Estorna uma movimentação de entrada/saída: desfaz o efeito no saldo e marca
+ * a linha como estornada (fica no histórico, riscada). Ajuste não é estornável.
+ */
+function estoque_estornar_movimentacao(PDO $pdo, int $movId): void
+{
+    if (!estoque_mov_tem_estornado($pdo)) {
+        throw new RuntimeException('Recurso indisponível — rode o estoque_setup.php.');
+    }
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM estoque_movimentacoes WHERE id = :id FOR UPDATE");
+        $stmt->execute([':id' => $movId]);
+        $m = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$m) { throw new RuntimeException('Movimentação não encontrada.'); }
+        if (!empty($m['estornado'])) { throw new RuntimeException('Esta movimentação já foi estornada.'); }
+        if (!in_array($m['tipo'], ['entrada', 'saida'], true)) {
+            throw new RuntimeException('Só entrada e saída podem ser estornadas.');
+        }
+        $qtd = (float) $m['quantidade'];
+        $delta = $m['tipo'] === 'entrada' ? -$qtd : $qtd;   // desfaz o efeito no saldo
+        $pdo->prepare("UPDATE estoque_itens SET estoque_atual = estoque_atual + :d WHERE id = :id")
+            ->execute([':d' => $delta, ':id' => (int) $m['item_id']]);
+        $pdo->prepare("UPDATE estoque_movimentacoes SET estornado = 1 WHERE id = :id")
+            ->execute([':id' => $movId]);
+        $pdo->commit();
+    } catch (\Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
 /** Últimas movimentações de um item. */
 function estoque_movimentacoes(PDO $pdo, int $itemId, int $limite = 30): array
 {
