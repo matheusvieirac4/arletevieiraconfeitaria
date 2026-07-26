@@ -278,8 +278,14 @@ $datalist = function (string $id, array $opts): string {
             <?php endif; ?>
 
             <!-- Estado 1: composer (texto + anexos: XML / foto / câmera) -->
-            <div class="card" style="max-width: 820px;">
+            <div class="card" style="max-width: 820px; position: relative;">
                 <div class="card-header fw-semibold">Novo lançamento</div>
+                <div id="cp-overlay" class="d-none" style="position:absolute; inset:0; background:rgba(255,255,255,.85); z-index:10; display:flex; align-items:center; justify-content:center; border-radius:.25rem;">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary mb-2" role="status"></div>
+                        <div id="cp-overlay-msg" class="fw-semibold text-muted">Lendo…</div>
+                    </div>
+                </div>
                 <div class="card-body">
                     <div id="cp-msg"></div>
                     <input type="file" id="cp-cam-input" accept="image/*" capture="environment" class="d-none">
@@ -415,17 +421,15 @@ $datalist = function (string $id, array $opts): string {
                 }
 
                 const btnEnviar = document.getElementById('cp-enviar');
+                const cpOverlay = document.getElementById('cp-overlay');
                 function travar(msg) {
-                    if (!btnEnviar.classList.contains('is-loading')) {
-                        btnEnviar.dataset.htmlOriginal = btnEnviar.innerHTML; // salva o original só uma vez
-                    }
-                    btnEnviar.classList.add('is-loading');
+                    // Camada de loading sobre o card: bloqueia anexo, câmera e envio.
+                    document.getElementById('cp-overlay-msg').textContent = msg || 'Lendo…';
+                    cpOverlay.classList.remove('d-none');
                     btnEnviar.disabled = true;
-                    btnEnviar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + (msg || 'Enviando…');
                 }
                 function destravar() {
-                    if (btnEnviar.dataset.htmlOriginal) { btnEnviar.innerHTML = btnEnviar.dataset.htmlOriginal; }
-                    btnEnviar.classList.remove('is-loading');
+                    cpOverlay.classList.add('d-none');
                     btnEnviar.disabled = false;
                 }
 
