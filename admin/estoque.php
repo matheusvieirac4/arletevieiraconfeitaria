@@ -151,7 +151,14 @@ require __DIR__ . '/_header.php';
                 </table>
             </div>
         </div>
-        <p class="text-muted small mt-2"><?= count($itens) ?> item(ns)<?= $busca || $soMin || $forn ? ' (filtrado)' : '' ?>.</p>
+        <p class="text-muted small mt-2">
+            <?= count($itens) ?> item(ns)<?= $busca || $soMin || $forn ? ' (filtrado)' : '' ?>.
+            &nbsp;·&nbsp;
+            <a href="controller_estoque.php?acao=detectar_medida" class="text-decoration-none"
+               onclick="return confirm('Ler as descrições e preencher Unidade/Conteúdo (5 KG, 1 L, 200ML...) nos itens?')">
+                Detectar unidade/conteúdo pelas descrições
+            </a>
+        </p>
 <script>
 // Cada opção do dropdown de Entrada abre o seletor de arquivo e já envia.
 (function () {

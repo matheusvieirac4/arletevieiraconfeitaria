@@ -117,6 +117,29 @@ function estoque_medida_da_descricao(string $desc): ?array
 }
 
 /**
+ * Varre os itens e preenche unidade_medida + conteúdo lendo a descrição
+ * ("5 KG", "1 LT", "200ML"...). Só mexe onde detecta e onde mudou. Devolve
+ * quantos foram atualizados.
+ */
+function estoque_detectar_medida_todos(PDO $pdo): int
+{
+    if (!estoque_tem_unidade($pdo)) { return 0; }
+    $itens = estoque_listar($pdo);
+    $up = $pdo->prepare("UPDATE estoque_itens SET unidade_medida = :u, conteudo = :c WHERE id = :id");
+    $n = 0;
+    foreach ($itens as $it) {
+        $m = estoque_medida_da_descricao((string) $it['nome']);
+        if ($m === null) { continue; }
+        $mesmaUn = strtoupper((string) ($it['unidade_medida'] ?? 'UN')) === $m[0];
+        $mesmoCont = abs((float) ($it['conteudo'] ?? 0) - (float) $m[1]) < 0.0005;
+        if ($mesmaUn && $mesmoCont) { continue; }
+        $up->execute([':u' => $m[0], ':c' => $m[1], ':id' => (int) $it['id']]);
+        $n++;
+    }
+    return $n;
+}
+
+/**
  * Preço por unidade base (grama/ml/unidade interna), derivado de preço + conteúdo.
  * @return array{valor:float, rotulo:string}|null  ex.: ['valor'=>0.004,'rotulo'=>'g']
  */

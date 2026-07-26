@@ -268,6 +268,12 @@ if ($acao === 'colab_excluir') {
     estoque_redirect('success', 'Colaborador removido.', 'estoque_colaboradores.php');
 }
 
+// ---- Detectar unidade de medida + conteúdo pelas descrições (lote) ----
+if ($acao === 'detectar_medida') {
+    $n = estoque_detectar_medida_todos($pdo);
+    estoque_redirect('success', "Unidade/conteúdo detectados em $n item(ns) pela descrição.");
+}
+
 // ---- Excluir (soft delete) ----
 if ($acao === 'excluir') {
     $id = (int) ($_GET['id'] ?? 0);
