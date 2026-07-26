@@ -43,9 +43,11 @@ try {
             saldo_apos  DECIMAL(10,3) NULL,
             origem      VARCHAR(32) NOT NULL DEFAULT 'manual',
             observacao  VARCHAR(255) NULL,
-            responsavel VARCHAR(120) NULL,
-            estornado   TINYINT(1) NOT NULL DEFAULT 0,
-            criado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            responsavel   VARCHAR(120) NULL,
+            estornado     TINYINT(1) NOT NULL DEFAULT 0,
+            estornado_por VARCHAR(120) NULL,
+            estornado_em  DATETIME NULL,
+            criado_em     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX (item_id),
             INDEX (criado_em),
             CONSTRAINT fk_mov_item FOREIGN KEY (item_id) REFERENCES estoque_itens(id) ON DELETE CASCADE
@@ -117,6 +119,12 @@ try {
             $log[] = 'OK  coluna estornado adicionada';
         } else {
             $log[] = '..  coluna estornado já existe';
+        }
+        // quem/quando estornou (pode faltar se veio da versão anterior)
+        if (!$pdo->query("SHOW COLUMNS FROM estoque_movimentacoes LIKE 'estornado_por'")->fetch()) {
+            $pdo->exec("ALTER TABLE estoque_movimentacoes ADD COLUMN estornado_por VARCHAR(120) NULL AFTER estornado");
+            $pdo->exec("ALTER TABLE estoque_movimentacoes ADD COLUMN estornado_em DATETIME NULL AFTER estornado_por");
+            $log[] = 'OK  colunas estornado_por/estornado_em adicionadas';
         }
     } catch (\Throwable $e) {
         $log[] = 'ERRO ao migrar estornado: ' . $e->getMessage();

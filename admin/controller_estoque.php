@@ -279,7 +279,7 @@ if ($acao === 'estornar') {
     $movId  = (int) ($_GET['mov'] ?? 0);
     $itemId = (int) ($_GET['id'] ?? 0);
     try {
-        estoque_estornar_movimentacao($pdo, $movId);
+        estoque_estornar_movimentacao($pdo, $movId, estoque_responsavel_atual());
         estoque_redirect('success', 'Movimentação estornada.', 'estoque_item.php?id=' . $itemId);
     } catch (\Throwable $e) {
         estoque_redirect('danger', 'Não consegui estornar: ' . $e->getMessage(), 'estoque_item.php?id=' . $itemId);

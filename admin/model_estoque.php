@@ -358,11 +358,13 @@ function estoque_mov_tem_estornado(PDO $pdo): bool
  * Estorna uma movimentação de entrada/saída: desfaz o efeito no saldo e marca
  * a linha como estornada (fica no histórico, riscada). Ajuste não é estornável.
  */
-function estoque_estornar_movimentacao(PDO $pdo, int $movId): void
+function estoque_estornar_movimentacao(PDO $pdo, int $movId, string $responsavel = ''): void
 {
     if (!estoque_mov_tem_estornado($pdo)) {
         throw new RuntimeException('Recurso indisponível — rode o estoque_setup.php.');
     }
+    $temPor = false;
+    try { $pdo->query("SELECT estornado_por FROM estoque_movimentacoes LIMIT 1"); $temPor = true; } catch (\Throwable $e) {}
     $pdo->beginTransaction();
     try {
         $stmt = $pdo->prepare("SELECT * FROM estoque_movimentacoes WHERE id = :id FOR UPDATE");
@@ -377,8 +379,12 @@ function estoque_estornar_movimentacao(PDO $pdo, int $movId): void
         $delta = $m['tipo'] === 'entrada' ? -$qtd : $qtd;   // desfaz o efeito no saldo
         $pdo->prepare("UPDATE estoque_itens SET estoque_atual = estoque_atual + :d WHERE id = :id")
             ->execute([':d' => $delta, ':id' => (int) $m['item_id']]);
-        $pdo->prepare("UPDATE estoque_movimentacoes SET estornado = 1 WHERE id = :id")
-            ->execute([':id' => $movId]);
+        if ($temPor) {
+            $pdo->prepare("UPDATE estoque_movimentacoes SET estornado = 1, estornado_por = :p, estornado_em = NOW() WHERE id = :id")
+                ->execute([':p' => $responsavel !== '' ? $responsavel : null, ':id' => $movId]);
+        } else {
+            $pdo->prepare("UPDATE estoque_movimentacoes SET estornado = 1 WHERE id = :id")->execute([':id' => $movId]);
+        }
         $pdo->commit();
     } catch (\Throwable $e) {
         $pdo->rollBack();

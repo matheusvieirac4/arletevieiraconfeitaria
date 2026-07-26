@@ -104,8 +104,8 @@ require __DIR__ . '/_header.php';
                             <div class="mt-4 d-flex gap-2">
                                 <button class="btn btn-primary">Salvar</button>
                                 <?php if ($item): ?>
-                                    <a href="controller_estoque.php?acao=excluir&id=<?= (int) $id ?>" class="btn btn-outline-danger ms-auto"
-                                       onclick="return confirm('Remover este item do estoque? O histórico é mantido.')">Excluir</a>
+                                    <a href="controller_estoque.php?acao=excluir&id=<?= (int) $id ?>" class="btn btn-outline-danger ms-auto js-confirm"
+                                       data-msg="Remover este item do estoque? O histórico é mantido.">Excluir</a>
                                 <?php endif; ?>
                             </div>
                         </form>
@@ -162,13 +162,15 @@ require __DIR__ . '/_header.php';
                                         <td class="small text-muted">
                                             <?= htmlspecialchars($m['origem']) ?><?= $m['observacao'] ? ' · ' . htmlspecialchars($m['observacao']) : '' ?>
                                             <?php if (!empty($m['responsavel'])): ?><div class="text-muted">por <?= htmlspecialchars($m['responsavel']) ?></div><?php endif; ?>
-                                            <?php if ($estornado): ?><span class="badge bg-secondary">estornado</span><?php endif; ?>
+                                            <?php if ($estornado): ?>
+                                                <div><span class="badge bg-secondary">estornado</span><?php if (!empty($m['estornado_por'])): ?> por <?= htmlspecialchars($m['estornado_por']) ?><?php endif; ?></div>
+                                            <?php endif; ?>
                                         </td>
                                         <td class="text-end small text-nowrap">
                                             <?php if ($podeEstornar): ?>
                                                 <a href="controller_estoque.php?acao=estornar&mov=<?= (int) $m['id'] ?>&id=<?= (int) $id ?>"
-                                                   class="text-danger text-decoration-none" title="Estornar"
-                                                   onclick="return confirm('Estornar esta movimentação? O saldo volta e a linha fica riscada no histórico.')">↩︎ estornar</a>
+                                                   class="text-danger text-decoration-none js-confirm" title="Estornar"
+                                                   data-msg="Estornar esta movimentação? O saldo volta e a linha fica riscada no histórico.">↩︎ estornar</a>
                                             <?php else: ?>
                                                 → <?= $fmt($m['saldo_apos']) ?>
                                             <?php endif; ?>
@@ -183,4 +185,32 @@ require __DIR__ . '/_header.php';
             </div>
             <?php endif; ?>
         </div>
+
+        <!-- Confirmação reutilizável (sem alert nativo) -->
+        <button id="confirm-trigger" class="d-none" data-bs-toggle="modal" data-bs-target="#modal-confirm"></button>
+        <div class="modal fade" id="modal-confirm" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Confirmar</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    </div>
+                    <div class="modal-body" id="confirm-msg"></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <a href="#" id="confirm-ok" class="btn btn-danger">Confirmar</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+        document.querySelectorAll('.js-confirm').forEach(function (el) {
+            el.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.getElementById('confirm-msg').textContent = this.dataset.msg || 'Tem certeza?';
+                document.getElementById('confirm-ok').href = this.href;
+                document.getElementById('confirm-trigger').click();
+            });
+        });
+        </script>
 <?php require __DIR__ . '/_footer.php'; ?>
