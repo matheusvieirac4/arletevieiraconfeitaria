@@ -321,7 +321,9 @@ if ($acao === 'estornar') {
 if ($acao === 'excluir') {
     $id = (int) ($_GET['id'] ?? 0);
     if ($id > 0) { estoque_deletar($pdo, $id); }
-    estoque_redirect('success', 'Item removido.');
+    $voltar = (string) ($_GET['voltar'] ?? 'estoque.php');
+    if (strncmp($voltar, 'estoque.php', 11) !== 0) { $voltar = 'estoque.php'; }
+    estoque_redirect('success', 'Item removido.', $voltar);
 }
 
 header('Location: estoque.php');

@@ -125,7 +125,7 @@ require __DIR__ . '/_header.php';
                             <div class="mt-4 d-flex gap-2">
                                 <button class="btn btn-primary">Salvar</button>
                                 <?php if ($item): ?>
-                                    <a href="controller_estoque.php?acao=excluir&id=<?= (int) $id ?>" class="btn btn-outline-danger ms-auto js-confirm"
+                                    <a href="controller_estoque.php?acao=excluir&id=<?= (int) $id ?>&voltar=<?= urlencode($voltar) ?>" class="btn btn-outline-danger ms-auto js-confirm"
                                        data-msg="Remover este item do estoque? O histórico é mantido.">Excluir</a>
                                 <?php endif; ?>
                             </div>
