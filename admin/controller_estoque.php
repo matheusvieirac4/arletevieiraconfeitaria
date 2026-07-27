@@ -17,10 +17,12 @@ if (($acao === 'salvar') && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (trim((string) ($_POST['nome'] ?? '')) === '') {
         estoque_redirect('danger', 'O nome do item é obrigatório.');
     }
+    $voltar = (string) ($_POST['voltar'] ?? 'estoque.php');
+    if (strncmp($voltar, 'estoque.php', 11) !== 0) { $voltar = 'estoque.php'; }
     try {
         if ($id > 0) {
             estoque_atualizar($pdo, $id, $_POST);
-            estoque_redirect('success', 'Item atualizado.');
+            estoque_redirect('success', 'Item atualizado.', $voltar);
         } else {
             $novo = estoque_criar($pdo, $_POST);
             estoque_redirect('success', 'Item cadastrado.', 'estoque_item.php?id=' . $novo);
@@ -272,6 +274,29 @@ if ($acao === 'colab_excluir') {
     $id = (int) ($_GET['id'] ?? 0);
     if ($id > 0) { estoque_colaborador_excluir($pdo, $id); }
     estoque_redirect('success', 'Colaborador removido.', 'estoque_colaboradores.php');
+}
+
+// ---- Fornecedores (CRUD) ----
+if ($acao === 'forn_salvar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $id   = (int) ($_POST['id'] ?? 0);
+    $nome = trim((string) ($_POST['nome'] ?? ''));
+    if ($nome === '') { estoque_redirect('danger', 'Informe o nome do fornecedor.', 'estoque_fornecedores.php'); }
+    try {
+        estoque_fornecedor_salvar($pdo, $id, $nome);
+        estoque_redirect('success', $id > 0 ? 'Fornecedor atualizado.' : 'Fornecedor adicionado.', 'estoque_fornecedores.php');
+    } catch (\Throwable $e) {
+        estoque_redirect('danger', 'Falha ao salvar: ' . $e->getMessage(), 'estoque_fornecedores.php');
+    }
+}
+
+if ($acao === 'forn_excluir') {
+    $id = (int) ($_GET['id'] ?? 0);
+    try {
+        estoque_fornecedor_excluir($pdo, $id);
+        estoque_redirect('success', 'Fornecedor removido.', 'estoque_fornecedores.php');
+    } catch (\Throwable $e) {
+        estoque_redirect('danger', 'Falha ao remover: ' . $e->getMessage(), 'estoque_fornecedores.php');
+    }
 }
 
 // ---- Detectar unidade de medida + conteúdo pelas descrições (lote) ----

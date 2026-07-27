@@ -38,6 +38,62 @@ function estoque_fornecedores(PDO $pdo): array
     return $rows ?: [];
 }
 
+/** A tabela de fornecedores cadastrados já existe? (setup cria). */
+function estoque_tem_fornecedores_tabela(PDO $pdo): bool
+{
+    static $tem = null;
+    if ($tem === null) {
+        try { $pdo->query("SELECT 1 FROM estoque_fornecedores LIMIT 1"); $tem = true; }
+        catch (\Throwable $e) { $tem = false; }
+    }
+    return $tem;
+}
+
+/** Fornecedores cadastrados (CRUD). */
+function estoque_fornecedores_listar(PDO $pdo): array
+{
+    if (!estoque_tem_fornecedores_tabela($pdo)) { return []; }
+    return $pdo->query("SELECT * FROM estoque_fornecedores ORDER BY nome")->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** Nomes para o SELECT do item: cadastrados + os que já constam nos itens. */
+function estoque_fornecedores_nomes(PDO $pdo): array
+{
+    $nomes = [];
+    foreach (estoque_fornecedores_listar($pdo) as $f) { $nomes[$f['nome']] = true; }
+    foreach (estoque_fornecedores($pdo) as $n) { $nomes[$n] = true; }
+    $lista = array_keys($nomes);
+    natcasesort($lista);
+    return array_values($lista);
+}
+
+/** Insere/atualiza um fornecedor. Ao renomear, propaga para os itens. */
+function estoque_fornecedor_salvar(PDO $pdo, int $id, string $nome): void
+{
+    $nome = trim($nome);
+    if ($nome === '') { return; }
+    if ($id > 0) {
+        $sel = $pdo->prepare("SELECT nome FROM estoque_fornecedores WHERE id = :id");
+        $sel->execute([':id' => $id]);
+        $antigo = (string) $sel->fetchColumn();
+        $pdo->prepare("UPDATE estoque_fornecedores SET nome = :n WHERE id = :id")->execute([':n' => $nome, ':id' => $id]);
+        if ($antigo !== '' && $antigo !== $nome) {
+            $pdo->prepare("UPDATE estoque_itens SET fornecedor = :n WHERE fornecedor = :o")->execute([':n' => $nome, ':o' => $antigo]);
+        }
+    } else {
+        $ex = $pdo->prepare("SELECT id FROM estoque_fornecedores WHERE nome = :n");
+        $ex->execute([':n' => $nome]);
+        if (!$ex->fetchColumn()) {
+            $pdo->prepare("INSERT INTO estoque_fornecedores (nome) VALUES (:n)")->execute([':n' => $nome]);
+        }
+    }
+}
+
+function estoque_fornecedor_excluir(PDO $pdo, int $id): void
+{
+    $pdo->prepare("DELETE FROM estoque_fornecedores WHERE id = :id")->execute([':id' => $id]);
+}
+
 function estoque_listar(PDO $pdo, string $busca = '', bool $soAbaixoMinimo = false, string $ordem = 'nome', string $dir = 'asc', string $fornecedor = ''): array
 {
     $sql = "SELECT * FROM estoque_itens WHERE ativo = 1";

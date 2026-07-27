@@ -16,6 +16,12 @@ $item = $id ? estoque_buscar($pdo, $id) : null;
 if ($id && !$item) { header('Location: estoque.php'); exit; }
 $movs = $id ? estoque_movimentacoes($pdo, $id) : [];
 
+// Preserva o filtro da listagem: só aceita voltar para estoque.php (evita redirect aberto).
+$voltar = (string) ($_GET['voltar'] ?? '');
+if ($voltar === '' || strncmp($voltar, 'estoque.php', 11) !== 0) { $voltar = 'estoque.php'; }
+
+$fornNomes = estoque_fornecedores_nomes($pdo);   // opções do select de fornecedor
+
 $flash = $_SESSION['estoque_flash'] ?? null;
 unset($_SESSION['estoque_flash']);
 
@@ -27,7 +33,7 @@ require __DIR__ . '/_header.php';
 ?>
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0"><?= $item ? htmlspecialchars($item['nome']) : 'Novo item' ?></h1>
-            <a href="estoque.php" class="btn btn-outline-secondary btn-sm">&larr; Voltar</a>
+            <a href="<?= htmlspecialchars($voltar) ?>" class="btn btn-outline-secondary btn-sm">&larr; Voltar</a>
         </div>
 
 
@@ -38,6 +44,7 @@ require __DIR__ . '/_header.php';
                     <div class="card-body">
                         <form method="post" action="controller_estoque.php?acao=salvar">
                             <input type="hidden" name="id" value="<?= (int) $id ?>">
+                            <input type="hidden" name="voltar" value="<?= htmlspecialchars($voltar) ?>">
                             <div class="row g-3">
                                 <div class="col-12">
                                     <label class="form-label">Nome <span class="text-danger">*</span></label>
@@ -45,7 +52,17 @@ require __DIR__ . '/_header.php';
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Fornecedor</label>
-                                    <input type="text" name="fornecedor" class="form-control" value="<?= htmlspecialchars($item['fornecedor'] ?? '') ?>">
+                                    <?php $fAtual = $item['fornecedor'] ?? ''; $temAtual = false; ?>
+                                    <select name="fornecedor" class="form-select">
+                                        <option value="">— sem fornecedor —</option>
+                                        <?php foreach ($fornNomes as $fn): $sel = ($fn === $fAtual); if ($sel) { $temAtual = true; } ?>
+                                            <option value="<?= htmlspecialchars($fn, ENT_QUOTES) ?>" <?= $sel ? 'selected' : '' ?>><?= htmlspecialchars($fn) ?></option>
+                                        <?php endforeach; ?>
+                                        <?php if ($fAtual !== '' && !$temAtual): ?>
+                                            <option value="<?= htmlspecialchars($fAtual, ENT_QUOTES) ?>" selected><?= htmlspecialchars($fAtual) ?></option>
+                                        <?php endif; ?>
+                                    </select>
+                                    <div class="form-text"><a href="estoque_fornecedores.php" target="_blank">Gerenciar fornecedores</a></div>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Código de barras (unidade)</label>

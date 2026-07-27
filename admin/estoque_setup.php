@@ -86,6 +86,29 @@ try {
     ");
     $log[] = 'OK  tabela estoque_notas_processadas';
 
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS estoque_fornecedores (
+            id        INT AUTO_INCREMENT PRIMARY KEY,
+            nome      VARCHAR(190) NOT NULL,
+            ativo     TINYINT(1) NOT NULL DEFAULT 1,
+            criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_forn_nome (nome)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $log[] = 'OK  tabela estoque_fornecedores';
+
+    // Semeia com os fornecedores que já constam nos itens (só os que faltam).
+    try {
+        $ins = $pdo->prepare("INSERT IGNORE INTO estoque_fornecedores (nome) VALUES (:n)");
+        $n = 0;
+        foreach ($pdo->query("SELECT DISTINCT fornecedor FROM estoque_itens WHERE fornecedor IS NOT NULL AND fornecedor <> ''")->fetchAll(PDO::FETCH_COLUMN) as $forn) {
+            if ($ins->execute([':n' => $forn]) && $ins->rowCount() > 0) { $n++; }
+        }
+        $log[] = "OK  $n fornecedor(es) importado(s) dos itens.";
+    } catch (\Throwable $e) {
+        $log[] = 'ERRO ao importar fornecedores: ' . $e->getMessage();
+    }
+
     // Migração: adiciona 'responsavel' se a tabela veio de uma versão anterior.
     try {
         $tem = $pdo->query("SHOW COLUMNS FROM estoque_movimentacoes LIKE 'responsavel'")->fetch();

@@ -25,6 +25,13 @@ $itens  = estoque_listar($pdo, $busca, $soMin, $ordem, $dir, $forn);
 $fornecedores = estoque_fornecedores($pdo);
 $abaixo = count(estoque_lista_compra($pdo));
 
+// URL da listagem com o filtro atual, para o item saber pra onde voltar.
+$listaQs   = http_build_query(array_filter([
+    'busca' => $busca, 'fornecedor' => $forn, 'abaixo' => $soMin ? 1 : null, 'ordem' => $ordem, 'dir' => $dir,
+]));
+$voltarUrl = 'estoque.php' . ($listaQs ? '?' . $listaQs : '');
+$itemHref  = fn(int $iid) => 'estoque_item.php?id=' . $iid . '&voltar=' . urlencode($voltarUrl);
+
 // Monta o link de ordenação de uma coluna, alternando a direção e mostrando a seta.
 $linkOrdem = function (string $col, string $rotulo) use ($ordem, $dir, $busca, $soMin, $forn) {
     $novaDir = ($ordem === $col && $dir === 'asc') ? 'desc' : 'asc';
@@ -57,6 +64,7 @@ require __DIR__ . '/_header.php';
             <a href="estoque_auditoria.php" class="btn btn-outline-primary btn-sm"><i data-feather="clipboard" class="align-middle me-1" style="width:15px;height:15px;"></i>Auditoria</a>
             <a href="estoque_kiosk.php" class="btn btn-dark btn-sm"><i data-feather="camera" class="align-middle me-1" style="width:15px;height:15px;"></i>Quiosque</a>
             <a href="estoque_colaboradores.php" class="btn btn-outline-secondary btn-sm"><i data-feather="users" class="align-middle me-1" style="width:15px;height:15px;"></i>Colaboradores</a>
+            <a href="estoque_fornecedores.php" class="btn btn-outline-secondary btn-sm"><i data-feather="truck" class="align-middle me-1" style="width:15px;height:15px;"></i>Fornecedores</a>
             <form id="form-ent-xml" method="post" action="controller_estoque.php?acao=entrada_xml" enctype="multipart/form-data" class="d-none">
                 <input type="file" name="xml" id="file-xml" accept=".xml,text/xml,application/xml">
             </form>
@@ -115,7 +123,7 @@ require __DIR__ . '/_header.php';
                     ?>
                         <tr>
                             <td>
-                                <a href="estoque_item.php?id=<?= (int) $it['id'] ?>" class="text-decoration-none fw-semibold"><?= htmlspecialchars($it['nome']) ?></a>
+                                <a href="<?= htmlspecialchars($itemHref((int) $it['id'])) ?>" class="text-decoration-none fw-semibold"><?= htmlspecialchars($it['nome']) ?></a>
                                 <?php if (empty($it['codigo_barras'])): ?><span class="badge bg-light text-muted ms-1" title="Sem código de barras">sem cód.</span><?php endif; ?>
                             </td>
                             <td class="text-muted"><?= htmlspecialchars($it['fornecedor'] ?? '—') ?></td>
@@ -145,7 +153,7 @@ require __DIR__ . '/_header.php';
                                 <?php endif; ?>
                             </td>
                             <td class="text-end text-nowrap">
-                                <a href="estoque_item.php?id=<?= (int) $it['id'] ?>" class="btn btn-outline-primary btn-sm">Abrir</a>
+                                <a href="<?= htmlspecialchars($itemHref((int) $it['id'])) ?>" class="btn btn-outline-primary btn-sm">Abrir</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
