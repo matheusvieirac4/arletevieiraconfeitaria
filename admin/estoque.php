@@ -180,6 +180,24 @@ require __DIR__ . '/_header.php';
     };
     liga('ent-xml', 'file-xml', 'form-ent-xml');
 })();
+
+// Volta pra onde você estava: guarda a rolagem ao abrir um item e restaura ao
+// retornar (funciona no voltar, salvar e excluir, pois todos recarregam a lista).
+(function () {
+    document.querySelectorAll('a[href^="estoque_item.php"]').forEach(function (a) {
+        a.addEventListener('click', function () {
+            try { sessionStorage.setItem('estoqueScroll', String(window.scrollY)); } catch (e) {}
+        });
+    });
+    function restaurar() {
+        try {
+            var y = sessionStorage.getItem('estoqueScroll');
+            if (y !== null) { window.scrollTo(0, parseInt(y, 10) || 0); sessionStorage.removeItem('estoqueScroll'); }
+        } catch (e) {}
+    }
+    restaurar();
+    window.addEventListener('load', restaurar);   // reforça após o layout assentar
+})();
 </script>
 
 <style>
