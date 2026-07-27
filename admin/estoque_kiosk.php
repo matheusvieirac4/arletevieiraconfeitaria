@@ -80,6 +80,24 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     document.addEventListener('touchend', goFull, true);
     document.addEventListener('click', goFull, true);
 })();
+
+// Mantém a TELA LIGADA (Screen Wake Lock) — ignora o timeout do Android enquanto
+// o quiosque está aberto. Requer HTTPS (produção). Reaquire ao voltar pra tela.
+(function () {
+    var lock = null;
+    async function segurar() {
+        try {
+            if ('wakeLock' in navigator && document.visibilityState === 'visible') {
+                lock = await navigator.wakeLock.request('screen');
+            }
+        } catch (e) { /* sem suporte / negado: ignora */ }
+    }
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') { segurar(); }
+    });
+    document.addEventListener('touchend', segurar, false);   // reforça em gesto
+    segurar();
+})();
 </script>
 
 <div class="kx-top">
