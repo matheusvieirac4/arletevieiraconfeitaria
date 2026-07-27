@@ -98,6 +98,13 @@ require __DIR__ . '/_header.php';
                                     <div class="form-text">Compra até esse nível.</div>
                                 </div>
                             </div>
+                            <div class="form-check form-switch mt-4">
+                                <input type="hidden" name="controlar_estoque_set" value="1">
+                                <input class="form-check-input" type="checkbox" role="switch" id="controlar_estoque" name="controlar_estoque" value="1"
+                                       <?= (!$item || !empty($item['controlar_estoque'])) ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="controlar_estoque"><strong>Controlar estoque deste item</strong></label>
+                                <div class="form-text">Desligue para itens que você ainda não controla (ex.: sala dos doces, geladeiras). Eles continuam cadastrados, mas somem da auditoria e da lista de compra.</div>
+                            </div>
                             <div class="mt-4 d-flex gap-2">
                                 <button class="btn btn-primary">Salvar</button>
                                 <?php if ($item): ?>

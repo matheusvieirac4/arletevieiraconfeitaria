@@ -209,6 +209,37 @@ class GeminiClient
     }
 
     /**
+     * Gera uma descrição curta e apetitosa para um produto do cardápio.
+     * Devolve ['descricao' => string]. Contexto opcional (grupo, observação do lojista).
+     */
+    public function descricaoProduto(string $nome, string $categoria = '', string $sub = '', string $extra = ''): array
+    {
+        $schema = [
+            'type' => 'object',
+            'properties' => ['descricao' => ['type' => 'string']],
+            'required' => ['descricao'],
+        ];
+        $instr = implode("\n", array_filter([
+            'Você escreve descrições para o cardápio de uma confeitaria artesanal brasileira',
+            '(Arlete Vieira Confeitaria & Doceria, São José/SC, 27 anos de história).',
+            'Escreva a descrição de UM produto, para aparecer no cardápio do site.',
+            'Responda SOMENTE com o JSON do schema. Regras:',
+            '- 1 a 2 frases curtas (no máximo ~240 caracteres). Português do Brasil.',
+            '- Tom acolhedor e caseiro; destaque sabor e textura, sem exagero publicitário',
+            '  ("o melhor", "imperdível") e sem emojis.',
+            '- NÃO invente preço, quantidade, ingredientes exóticos nem informações que você',
+            '  não tem certeza. Se não souber os ingredientes, descreva de forma genérica e verdadeira.',
+            '- Escreva natural; não comece repetindo o nome de forma robótica.',
+            '',
+            'Produto: ' . $nome,
+            $categoria !== '' ? 'Categoria: ' . $categoria : '',
+            $sub !== '' ? 'Grupo/sabor: ' . $sub : '',
+            $extra !== '' ? 'Observações do lojista (use como base): ' . $extra : '',
+        ]));
+        return $this->chamar([['text' => $instr]], $schema);
+    }
+
+    /**
      * Extrai a LISTA DE ITENS de um cupom/nota (foto), para dar entrada no
      * estoque. Cada item: descrição, quantidade e unidade. Sem rede além do Gemini.
      * @return array{itens: array<int,array{descricao:string,quantidade:string,unidade:string}>}

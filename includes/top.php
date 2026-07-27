@@ -1,6 +1,15 @@
 <?php
 include "includes/banco.php";
 
+// ====== CATEGORIAS DO CARDÁPIO (menu dinâmico) ======
+require_once __DIR__ . '/../admin/model_catalogo.php';
+$cat_menu = [];
+try {
+    if (catalogo_pronto($pdo)) { $cat_menu = catalogo_categorias_listar($pdo, false); }
+} catch (\Throwable $e) { $cat_menu = []; }
+$cat_files = array_map(function ($cm) { return basename(strtok(catalogo_pagina_do_slug($cm['slug']), '?')); }, $cat_menu);
+$catMenuAtivo = in_array(basename($_SERVER['PHP_SELF']), array_merge($cat_files, ['cardapio.php']), true);
+
 // ====== CONFERE PÁGINA E ATIVA MENU ======
 function isActive($page) {
 	return (basename($_SERVER['PHP_SELF']) === $page) ? 'active' : '';
@@ -142,6 +151,7 @@ $whatsapp_pedido_url = 'https://wa.me/554820133000?text=Olá! Vim do site e gost
 	height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 	<!-- End Google Tag Manager (noscript) -->
     <div class="body">
+			<?php if (empty($catalogo_modo)): ?>
 			<header id="header" class="header-effect-shrink" data-plugin-options="{'stickyEnabled': true, 'stickyEffect': 'shrink', 'stickyEnableOnBoxed': true, 'stickyEnableOnMobile': false, 'stickyChangeLogo': true, 'stickyStartAt': 120, 'stickyHeaderContainerHeight': 85}">
 				<div class="header-body border-top-0">
 					<div class="header-top header-top-default header-top-borders border-bottom-0 bg-dark">
@@ -186,25 +196,28 @@ $whatsapp_pedido_url = 'https://wa.me/554820133000?text=Olá! Vim do site e gost
 															Início
 														</a>
 													</li>
-													<li>
-													<li>
-														<a class="nav-link <?php echo isActive('doces.php'); ?>" href="doces.php">
-															Doces
-														</a>
-													</li>
-													<!-- li>
-														<a class="nav-link <?php echo isActive('tortas.php'); ?>" href="tortas.php">
-															Tortas
-														</a>
-													</li -->
+																											<?php if ($cat_menu): ?>
+														<li class="dropdown">
+															<a class="nav-link dropdown-toggle<?php echo $catMenuAtivo ? ' active' : ''; ?>" href="cardapio.php">
+																Cardápio <i class="fas fa-angle-down ms-1 cardapio-caret" style="font-size:.72em;vertical-align:middle;"></i>
+															</a>
+															<ul class="dropdown-menu">
+																<li><a class="dropdown-item<?php echo (basename($_SERVER['PHP_SELF']) === 'cardapio.php') ? ' active' : ''; ?>" href="cardapio.php">Cardápio completo</a></li>
+																<?php foreach ($cat_menu as $cm): $cmUrl = catalogo_pagina_do_slug($cm['slug']); ?>
+																<li>
+																	<a class="dropdown-item<?php echo isActive(basename(strtok($cmUrl, '?'))) ? ' active' : ''; ?>" href="<?= htmlspecialchars($cmUrl) ?>"><?= htmlspecialchars($cm['nome']) ?></a>
+																</li>
+																<?php endforeach; ?>
+															</ul>
+														</li>
+														<?php else: ?>
+														<li>
+															<a class="nav-link <?php echo isActive('doces.php'); ?>" href="doces.php">Doces</a>
+														</li>
+														<?php endif; ?>
 													<li>
 														<a class="nav-link <?php echo isActive('corporativos.php'); ?>" href="corporativos.php">
 															Presentes Corporativos
-														</a>
-													</li>
-													<li>
-														<a class="nav-link <?php echo isActive('salgados.php'); ?>" href="salgados.php">
-															Salgados
 														</a>
 													</li>
 													<li>
@@ -241,4 +254,39 @@ $whatsapp_pedido_url = 'https://wa.me/554820133000?text=Olá! Vim do site e gost
 					</div>
 				</div>
 			</header>
+			<?php else: ?>
+<style>
+#catalogo-header { position:sticky; top:0; z-index:1000; background:#f8f0e2; box-shadow:0 2px 16px rgba(70,45,20,.10); }
+#catalogo-header .ch-inner { display:flex; align-items:center; justify-content:space-between; padding:.55rem 1.1rem; max-width:1200px; margin:0 auto; }
+#catalogo-header .ch-logo img { height:54px; width:auto; }
+#catalogo-header .ch-side { flex:1; display:flex; align-items:center; }
+#catalogo-header .ch-side.right { justify-content:flex-end; }
+#catalogo-header .ch-site { color:#b0894e; text-decoration:none; font-weight:700; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; }
+#catalogo-header .ch-ig { color:#8f1d2e; font-size:1.35rem; }
+#catalogo-header .ch-nav { border-top:1px solid #e2cfa6; background:#f2e8d6; }
+#catalogo-header .ch-nav-inner { display:flex; gap:.25rem; overflow-x:auto; white-space:nowrap; padding:.45rem .6rem; max-width:1200px; margin:0 auto; justify-content:center; -ms-overflow-style:none; scrollbar-width:none; }
+#catalogo-header .ch-nav-inner::-webkit-scrollbar { display:none; }
+#catalogo-header .ch-nav a { color:#7a6c5f; text-decoration:none; font-size:.76rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; padding:.35rem .85rem; border-radius:20px; transition:all .15s; }
+#catalogo-header .ch-nav a:hover { color:#8f1d2e; }
+#catalogo-header .ch-nav a.active { background:#8f1d2e; color:#fff; }
+@media(max-width:600px){ #catalogo-header .ch-nav-inner{ justify-content:flex-start; } #catalogo-header .ch-logo img{ height:44px; } #catalogo-header .ch-site{ font-size:0; } #catalogo-header .ch-site::before{ content:'‹'; font-size:1.4rem; } }
+</style>
+<header id="catalogo-header">
+    <div class="ch-inner">
+        <div class="ch-side"><a href="index.php" class="ch-site" title="Voltar ao site">‹ Site</a></div>
+        <a href="cardapio.php" class="ch-logo"><img src="img/logo.png" alt="Arlete Vieira Confeitaria & Doceria"></a>
+        <div class="ch-side right"><a href="https://www.instagram.com/arletevieiraconfeitaria" target="_blank" class="ch-ig" aria-label="Instagram"><i class="fab fa-instagram"></i></a></div>
+    </div>
+    <?php if (!empty($cat_menu)): ?>
+    <nav class="ch-nav">
+        <div class="ch-nav-inner">
+            <a href="cardapio.php" class="<?= (basename($_SERVER['PHP_SELF']) === 'cardapio.php' && empty($_GET['cat'])) ? 'active' : '' ?>">Cardápio</a>
+            <?php $catAtual = (string) ($_GET['cat'] ?? ''); foreach ($cat_menu as $cm): ?>
+                <a href="<?= htmlspecialchars(catalogo_folder_do_slug($cm['slug'])) ?>" class="<?= $catAtual === $cm['slug'] ? 'active' : '' ?>"><?= htmlspecialchars($cm['nome']) ?></a>
+            <?php endforeach; ?>
+        </div>
+    </nav>
+    <?php endif; ?>
+</header>
+<?php endif; ?>
 			<div role="main" class="main">	

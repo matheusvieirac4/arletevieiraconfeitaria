@@ -13,7 +13,13 @@ if (!estoque_pronto($pdo)) {
 
 $busca = trim((string) ($_GET['busca'] ?? ''));
 $forn  = trim((string) ($_GET['fornecedor'] ?? ''));
-$itens = estoque_listar($pdo, $busca, false, 'nome', 'asc', $forn);
+$ord   = in_array($_GET['ord'] ?? '', ['nome', 'fornecedor'], true) ? $_GET['ord'] : 'nome';
+$dir   = (strtolower($_GET['dir'] ?? '') === 'desc') ? 'desc' : 'asc';
+$itens = estoque_listar($pdo, $busca, false, $ord, $dir, $forn);
+// Só itens marcados para controle (ex.: exclui sala dos doces / geladeiras).
+if (estoque_tem_controlar($pdo)) {
+    $itens = array_values(array_filter($itens, fn($it) => !empty($it['controlar_estoque'])));
+}
 $fornecedores = estoque_fornecedores($pdo);
 $colabs = estoque_colaboradores_listar($pdo);
 
@@ -32,8 +38,20 @@ require __DIR__ . '/_header.php';
         <p class="text-muted">Contagem física. Digite a quantidade real só nos itens que contar — os deixados <strong>em branco não são alterados</strong>. Ao salvar, cada item preenchido recebe um ajuste no histórico.</p>
 
 
-        <form method="get" class="row g-2 mb-3" style="max-width:760px;">
+        <style>
+            .aud-row { display:flex; align-items:center; gap:12px; padding:11px 14px; border-bottom:1px solid #eef0f3; }
+            .aud-row:last-child { border-bottom:0; }
+            .aud-info { flex:1; min-width:0; }
+            .aud-nome { font-weight:600; line-height:1.2; }
+            .aud-meta { color:#8a929c; font-size:.82rem; margin-top:2px; }
+            .aud-meta .sis { color:#28303f; font-weight:600; }
+            .aud-input { width:86px; flex:0 0 86px; text-align:center; font-size:1.15rem; padding:.4rem; }
+        </style>
+
+        <form method="get" class="row g-2 mb-2" style="max-width:760px;">
             <div class="col-12 col-md"><input type="text" name="busca" class="form-control" placeholder="Filtrar por nome" value="<?= htmlspecialchars($busca) ?>"></div>
+            <input type="hidden" name="ord" value="<?= htmlspecialchars($ord) ?>">
+            <input type="hidden" name="dir" value="<?= htmlspecialchars($dir) ?>">
             <div class="col-auto">
                 <select name="fornecedor" class="form-select" onchange="this.form.submit()">
                     <option value="">Todos os fornecedores</option>
@@ -45,35 +63,34 @@ require __DIR__ . '/_header.php';
             <div class="col-auto"><button class="btn btn-outline-secondary">Filtrar</button></div>
         </form>
 
+        <?php
+        $qs   = fn($o, $d) => 'estoque_auditoria.php?' . http_build_query(['busca' => $busca, 'fornecedor' => $forn, 'ord' => $o, 'dir' => $d]);
+        $seta = fn($o) => $ord === $o ? ($dir === 'asc' ? ' ▲' : ' ▼') : '';
+        $prox = fn($o) => ($ord === $o && $dir === 'asc') ? 'desc' : 'asc';
+        ?>
+        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+            <span class="text-muted small">Ordenar:</span>
+            <a class="btn btn-sm <?= $ord === 'nome' ? 'btn-primary' : 'btn-outline-secondary' ?>" href="<?= htmlspecialchars($qs('nome', $prox('nome'))) ?>">Item<?= $seta('nome') ?></a>
+            <a class="btn btn-sm <?= $ord === 'fornecedor' ? 'btn-primary' : 'btn-outline-secondary' ?>" href="<?= htmlspecialchars($qs('fornecedor', $prox('fornecedor'))) ?>">Fornecedor<?= $seta('fornecedor') ?></a>
+        </div>
+
         <form method="post" action="controller_estoque.php?acao=auditoria" id="form-auditoria">
             <input type="hidden" name="responsavel_id" id="aud-resp">
             <div class="card">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0 bg-white">
-                        <thead><tr>
-                            <th>Item</th>
-                            <th>Fornecedor</th>
-                            <th class="text-end">Sistema</th>
-                            <th class="text-end" style="width:150px;">Contagem real</th>
-                        </tr></thead>
-                        <tbody>
-                        <?php if (!$itens): ?>
-                            <tr><td colspan="4" class="text-muted text-center py-4">Nenhum item.</td></tr>
-                        <?php endif; ?>
-                        <?php foreach ($itens as $it): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($it['nome']) ?></td>
-                                <td class="text-muted"><?= htmlspecialchars($it['fornecedor'] ?? '—') ?></td>
-                                <td class="text-end text-muted"><?= $fmt($it['estoque_atual']) ?></td>
-                                <td>
-                                    <input type="text" name="contagem[<?= (int) $it['id'] ?>]" class="form-control form-control-sm text-end"
-                                           placeholder="—" inputmode="decimal" autocomplete="off">
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
+                <?php if (!$itens): ?>
+                    <div class="text-muted text-center py-4">Nenhum item.</div>
+                <?php endif; ?>
+                <?php foreach ($itens as $it): ?>
+                    <div class="aud-row">
+                        <div class="aud-info">
+                            <div class="aud-nome"><?= htmlspecialchars($it['nome']) ?></div>
+                            <div class="aud-meta"><?= htmlspecialchars($it['fornecedor'] ?? '—') ?> · Sistema: <span class="sis"><?= $fmt($it['estoque_atual']) ?></span></div>
+                        </div>
+                        <input type="text" name="contagem[<?= (int) $it['id'] ?>]" class="form-control aud-input"
+                               placeholder="—" enterkeyhint="next" autocomplete="off"
+                               aria-label="Contagem de <?= htmlspecialchars($it['nome'], ENT_QUOTES) ?>">
+                    </div>
+                <?php endforeach; ?>
             </div>
             <?php if ($itens): ?>
                 <div class="mt-3">
@@ -81,6 +98,24 @@ require __DIR__ . '/_header.php';
                 </div>
             <?php endif; ?>
         </form>
+
+        <script>
+        // Teclado de texto (tem Enter): só números "grudam", e Enter pula pro próximo item.
+        (function () {
+            const inputs = Array.prototype.slice.call(document.querySelectorAll('.aud-input'));
+            inputs.forEach(function (inp, i) {
+                inp.addEventListener('input', function () { inp.value = inp.value.replace(/[^0-9.,-]/g, ''); });
+                inp.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const next = inputs[i + 1];
+                        if (next) { next.focus(); if (next.select) { next.select(); } }
+                        else { inp.blur(); }
+                    }
+                });
+            });
+        })();
+        </script>
 
         <div class="modal fade" id="modal-auditoria" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">

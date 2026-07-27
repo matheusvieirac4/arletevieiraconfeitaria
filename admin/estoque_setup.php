@@ -25,6 +25,7 @@ try {
             unidade_medida VARCHAR(4) NOT NULL DEFAULT 'UN',
             conteudo       DECIMAL(10,3) NULL,
             imagem         VARCHAR(255) NULL,
+            controlar_estoque TINYINT(1) NOT NULL DEFAULT 1,
             ativo          TINYINT(1) NOT NULL DEFAULT 1,
             criado_em      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             atualizado_em  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -142,6 +143,18 @@ try {
         }
     } catch (\Throwable $e) {
         $log[] = 'ERRO ao migrar unidade_medida: ' . $e->getMessage();
+    }
+
+    // Migração: flag "controlar estoque" por item (default 1 = controlado).
+    try {
+        if (!$pdo->query("SHOW COLUMNS FROM estoque_itens LIKE 'controlar_estoque'")->fetch()) {
+            $pdo->exec("ALTER TABLE estoque_itens ADD COLUMN controlar_estoque TINYINT(1) NOT NULL DEFAULT 1 AFTER imagem");
+            $log[] = 'OK  coluna controlar_estoque adicionada';
+        } else {
+            $log[] = '..  coluna controlar_estoque já existe';
+        }
+    } catch (\Throwable $e) {
+        $log[] = 'ERRO ao migrar controlar_estoque: ' . $e->getMessage();
     }
 
     // Importa o catálogo só se a tabela estiver vazia (não duplica em re-runs).

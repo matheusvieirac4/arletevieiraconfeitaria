@@ -1,3 +1,4 @@
+			<?php if (empty($catalogo_modo)): ?>
 			<footer id="footer" class="border-top-0 bg-dark pt-5 mt-0">
 				<div class="container mt-4">
 					<div class="row">
@@ -51,6 +52,7 @@
 					</div>
 				</div>
 			</footer>
+<?php endif; ?>
 			
 		</div>
 
@@ -120,6 +122,30 @@
 				popup.style.display = 'none';
 			}
 		};
+		</script>
+
+		<!-- No desktop mostramos a nossa setinha (angle-down) e escondemos a que o
+		     Porto injeta; no mobile é o contrário (a nossa fica d-none). -->
+		<style>
+		#mainNav .cardapio-caret{ display:none; }                                   /* mobile: só a seta do Porto */
+		@media (min-width:992px){
+			#mainNav .cardapio-caret{ display:inline-block !important; }            /* desktop: mostra a nossa */
+			#mainNav .dropdown-toggle .fa-chevron-down{ display:none !important; }  /* desktop: esconde a do Porto */
+		}
+		</style>
+		<!-- Menu "Cardápio": no mobile, tocar em qualquer parte abre o dropdown
+		     (não navega); no desktop, clique vai pra landing e hover abre. -->
+		<script>
+		(function () {
+			var a = document.querySelector('#mainNav li.dropdown > a.dropdown-toggle');
+			if (!a) { return; }
+			a.addEventListener('click', function (e) {
+				if (!window.matchMedia('(max-width: 991px)').matches) { return; }   // desktop: link normal
+				if (e.target.closest('.fa-chevron-down')) { return; }               // clicou na seta: Porto cuida
+				var chev = a.querySelector('.fa-chevron-down');
+				if (chev) { e.preventDefault(); chev.click(); }                     // abre/fecha o submenu
+			});
+		})();
 		</script>
 
 	</body>

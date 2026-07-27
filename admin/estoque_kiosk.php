@@ -8,13 +8,23 @@ require_once 'model_estoque.php';
 // Acesso: admin logado OU token do quiosque (link/cookie). Sem nenhum, vai pro login.
 if (!estoque_kiosk_autorizado()) { header('Location: login.php'); exit; }
 if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
+// Admin logado vê o botão "Sair do quiosque"; aparelho por token não (não há
+// pra onde sair — o estoque.php exigiria login).
+$kioskAdmin = !empty($_SESSION['admin_blog']);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Baixa de estoque</title>
+<!-- PWA: permite "Adicionar à tela inicial" e abrir em tela cheia (sem barra do Chrome). -->
+<link rel="manifest" href="estoque_kiosk_manifest.php">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#14171c">
+<link rel="apple-touch-icon" href="../img/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
 <style>
     html, body { height: 100%; margin: 0; background: #14171c; color: #fff; overflow: hidden; }
@@ -55,6 +65,22 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
 </style>
 </head>
 <body>
+<script>
+// Tela cheia de verdade no primeiro toque (Android/Chrome esconde a barra de
+// endereço). iOS só entra em tela cheia via "Adicionar à tela inicial" (manifest).
+(function () {
+    function goFull() {
+        var el = document.documentElement;
+        var req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+        var jaEsta = document.fullscreenElement || document.webkitFullscreenElement;
+        if (req && !jaEsta) { try { req.call(el); } catch (e) {} }
+        document.removeEventListener('touchend', goFull, true);
+        document.removeEventListener('click', goFull, true);
+    }
+    document.addEventListener('touchend', goFull, true);
+    document.addEventListener('click', goFull, true);
+})();
+</script>
 
 <div class="kx-top">
     <h1>Baixa de estoque</h1>
@@ -74,7 +100,9 @@ if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
         <div class="kx-nome mb-3">Quem está retirando?</div>
         <div id="nomes-lista" class="kx-nomes"></div>
         <div id="nomes-vazio" class="kx-saldo d-none">Nenhum colaborador cadastrado. Cadastre em Estoque → Colaboradores.</div>
+        <?php if ($kioskAdmin): ?>
         <a href="estoque.php" class="btn btn-outline-light btn-kx mt-3">Sair do quiosque</a>
+        <?php endif; ?>
     </div>
 </div>
 

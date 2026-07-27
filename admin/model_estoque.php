@@ -96,6 +96,17 @@ function estoque_tem_unidade(PDO $pdo): bool
     return $tem;
 }
 
+/** A coluna 'controlar_estoque' já existe? (setup migra). */
+function estoque_tem_controlar(PDO $pdo): bool
+{
+    static $tem = null;
+    if ($tem === null) {
+        try { $pdo->query("SELECT controlar_estoque FROM estoque_itens LIMIT 1"); $tem = true; }
+        catch (\Throwable $e) { $tem = false; }
+    }
+    return $tem;
+}
+
 /** Unidades de medida aceitas (grandeza do conteúdo do item). */
 function estoque_unidades_medida(): array
 {
@@ -188,6 +199,7 @@ function estoque_cols_editaveis(PDO $pdo, array &$p): array
         $cols[] = 'unidade_medida=:unidade';
         $cols[] = 'conteudo=:conteudo';
     } else { unset($p[':unidade'], $p[':conteudo']); }
+    if (estoque_tem_controlar($pdo)) { $cols[] = 'controlar_estoque=:controlar'; } else { unset($p[':controlar']); }
     return $cols;
 }
 
@@ -233,6 +245,9 @@ function estoque_params(array $d): array
         ':unidade'  => $un,
         ':conteudo' => $num($d['conteudo'] ?? ''),
         ':imagem'   => ($im = trim((string) ($d['imagem'] ?? ''))) !== '' ? $im : null,
+        // Checkbox só vem no POST quando marcado; o form manda um marcador oculto
+        // para distinguir "desmarcado" de "chamada sem o campo" (esta assume controlado).
+        ':controlar' => isset($d['controlar_estoque_set']) ? (!empty($d['controlar_estoque']) ? 1 : 0) : 1,
     ];
 }
 
@@ -604,9 +619,11 @@ function estoque_definir_codigo_compra(PDO $pdo, int $itemId, string $ean): void
  */
 function estoque_lista_compra(PDO $pdo): array
 {
+    // Só sugere comprar o que está sob controle de estoque.
+    $soControlados = estoque_tem_controlar($pdo) ? ' AND controlar_estoque = 1' : '';
     $itens = $pdo->query("
         SELECT * FROM estoque_itens
-        WHERE ativo = 1 AND estoque_minimo IS NOT NULL AND estoque_atual < estoque_minimo
+        WHERE ativo = 1 AND estoque_minimo IS NOT NULL AND estoque_atual < estoque_minimo" . $soControlados . "
         ORDER BY fornecedor, nome
     ")->fetchAll(PDO::FETCH_ASSOC);
 
