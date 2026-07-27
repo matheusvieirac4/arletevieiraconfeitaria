@@ -5,6 +5,8 @@ require_once 'model_estoque.php';
 $page_title = 'Estoque';
 $active = 'estoque';
 $fmt = fn($n) => $n === null ? '—' : rtrim(rtrim(number_format((float) $n, 3, ',', '.'), '0'), ',');
+// Valor cru para edição inline (sem separador de milhar; decimal com vírgula).
+$raw = fn($n) => $n === null ? '' : rtrim(rtrim(number_format((float) $n, 3, ',', ''), '0'), ',');
 
 if (!estoque_pronto($pdo)) {
     require __DIR__ . '/_header.php';
@@ -128,11 +130,14 @@ require __DIR__ . '/_header.php';
                                     <div class="text-muted">R$ <?= number_format($pb['valor'], 4, ',', '.') ?>/<?= $pb['rotulo'] ?></div>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-end text-nowrap"><?= $it['preco'] !== null ? 'R$ ' . number_format((float) $it['preco'], 2, ',', '.') : '—' ?></td>
+                            <td class="text-end text-nowrap">R$&nbsp;<input type="text" class="inline-edit" style="width:78px" inputmode="decimal" placeholder="—"
+                                       data-id="<?= (int) $it['id'] ?>" data-campo="preco" value="<?= $it['preco'] !== null ? number_format((float) $it['preco'], 2, ',', '') : '' ?>"></td>
                             <td class="text-end fw-semibold"><?= $fmt($it['estoque_atual']) ?></td>
-                            <td class="text-end text-muted"><?= $fmt($min) ?></td>
-                            <td class="text-end text-muted"><?= $fmt($it['estoque_ideal']) ?></td>
-                            <td>
+                            <td class="text-end"><input type="text" class="inline-edit" style="width:58px" inputmode="decimal" placeholder="—"
+                                       data-id="<?= (int) $it['id'] ?>" data-campo="estoque_minimo" value="<?= $raw($min) ?>"></td>
+                            <td class="text-end"><input type="text" class="inline-edit" style="width:58px" inputmode="decimal" placeholder="—"
+                                       data-id="<?= (int) $it['id'] ?>" data-campo="estoque_ideal" value="<?= $raw($it['estoque_ideal']) ?>"></td>
+                            <td data-situacao="<?= (int) $it['id'] ?>">
                                 <?php if ($abaixoMin): ?>
                                     <span class="badge bg-danger">abaixo do mínimo</span>
                                 <?php else: ?>
@@ -166,6 +171,57 @@ require __DIR__ . '/_header.php';
         file.addEventListener('change', () => { if (file.files.length) { form.submit(); } });
     };
     liga('ent-xml', 'file-xml', 'form-ent-xml');
+})();
+</script>
+
+<style>
+    .inline-edit { border:1px solid transparent; background:transparent; text-align:right; border-radius:6px;
+                   padding:2px 6px; font:inherit; color:inherit; transition:background .2s, border-color .15s; }
+    .inline-edit:hover { border-color:#dde1e6; }
+    .inline-edit:focus { border-color:#2ec07a; background:#fff; outline:none; box-shadow:0 0 0 2px rgba(46,192,122,.15); }
+    .inline-edit.saved { background:#eafaf1; border-color:#c7ecd7; }
+    .inline-edit.err   { border-color:#dc3545; background:#fdeaea; }
+</style>
+<script>
+// Edição inline de preço/mínimo/ideal: salva ao sair do campo (blur) ou no Enter.
+(function () {
+    document.querySelectorAll('.inline-edit').forEach(function (inp) {
+        inp.dataset.orig = inp.value;
+        inp.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+            if (e.key === 'Escape') { inp.value = inp.dataset.orig; inp.blur(); }
+        });
+        inp.addEventListener('blur', function () {
+            if (inp.value === inp.dataset.orig) { return; }
+            const fd = new FormData();
+            fd.append('id', inp.dataset.id);
+            fd.append('campo', inp.dataset.campo);
+            fd.append('valor', inp.value);
+            inp.classList.remove('err');
+            fetch('estoque_editar_campo.php', { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.error) {
+                        inp.classList.add('err');
+                        inp.value = inp.dataset.orig;
+                        if (window.showToast) { showToast(d.error, 'danger'); }
+                        return;
+                    }
+                    inp.dataset.orig = inp.value;
+                    inp.classList.add('saved');
+                    setTimeout(function () { inp.classList.remove('saved'); }, 1000);
+                    if (inp.dataset.campo === 'estoque_minimo') {
+                        const td = document.querySelector('[data-situacao="' + inp.dataset.id + '"]');
+                        if (td) {
+                            td.innerHTML = d.abaixo
+                                ? '<span class="badge bg-danger">abaixo do mínimo</span>'
+                                : '<span class="badge bg-light text-success border border-success">ok</span>';
+                        }
+                    }
+                })
+                .catch(function () { inp.classList.add('err'); inp.value = inp.dataset.orig; });
+        });
+    });
 })();
 </script>
 <?php require __DIR__ . '/_footer.php'; ?>
