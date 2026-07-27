@@ -29,7 +29,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 <style>
     html, body { height: 100%; margin: 0; background: #14171c; color: #fff; overflow: hidden; }
     body { font-family: system-ui, sans-serif; }
-    .kx-top { position: fixed; top: 0; left: 0; right: 0; z-index: 20; display: flex; justify-content: space-between;
+    .kx-top { position: fixed; top: 0; left: 0; right: 0; z-index: 20; display: flex; justify-content: center;
               align-items: center; padding: 12px 16px; background: rgba(0,0,0,.45); }
     .kx-top h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
     #video { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; background:#000; }
@@ -83,7 +83,6 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 </script>
 
 <div class="kx-top">
-    <h1>Baixa de estoque</h1>
     <div class="d-flex gap-2">
         <button class="btn btn-light btn-sm" id="btn-buscar">🔍 Buscar item</button>
         <button class="btn btn-outline-light btn-sm" id="btn-cam">↺ Câmera</button>
