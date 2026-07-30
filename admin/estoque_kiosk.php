@@ -110,7 +110,6 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 <div class="kx-top">
     <div class="d-flex gap-2">
         <button class="btn btn-light btn-sm" id="btn-buscar">🔍 Buscar item</button>
-        <button class="btn btn-outline-light btn-sm" id="btn-cam">↺ Câmera</button>
         <button class="btn btn-outline-light btn-sm" id="btn-trocar">Trocar usuário</button>
     </div>
 </div>
@@ -203,7 +202,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         busca: document.getElementById('ov-busca'),
         ok: document.getElementById('ov-ok'),
     };
-    let facing = 'environment', pausado = true, ultimo = '', ultimoT = 0;
+    let facing = 'user', pausado = true, ultimo = '', ultimoT = 0;
     let itemAtual = null, codigoPendente = '';
     let colaboradorId = null, colaboradorNome = '', pinBuffer = '', pinSel = null;
     let inatividade = null;
@@ -450,7 +449,6 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         if (token === scanToken) { setTimeout(function () { scanLoop(token); }, 60); }
     }
 
-    document.getElementById('btn-cam').onclick = function () { facing = (facing === 'user') ? 'environment' : 'user'; iniciarCamera(); };
     document.getElementById('btn-trocar').onclick = voltarParaNomes;
 
     let audioCtx = null;
