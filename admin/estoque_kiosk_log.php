@@ -25,14 +25,14 @@ if (!is_array($body)) { http_response_code(400); echo 'bad'; exit; }
 
 $s = fn($k, $max = 60) => substr(preg_replace('/[\r\n\t]+/', ' ', (string) ($body[$k] ?? '')), 0, $max);
 $linha = sprintf(
-    "%s | %-18s | %-4s | %-12s | %5sms | %s | %s\n",
+    "%s | %-18s | %-16s | %-8s | frame %4sms | busca %6sms | %s\n",
     date('Y-m-d H:i:s'),
     $s('codigo', 24),
     $s('modo', 20),
     $s('formato', 12),
     (string) (int) ($body['ms'] ?? 0),
-    $s('cam', 30),
-    $s('nome', 40)   // preenchido depois do lookup, quando houver
+    (string) (int) ($body['busca'] ?? 0),
+    $s('cam', 30)
 );
 
 // Limita o arquivo a ~500 KB (rotação simples).

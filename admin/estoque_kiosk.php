@@ -211,7 +211,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     function mostrar(el) { Object.values(ov).forEach(o => o.classList.remove('show')); if (el) { el.classList.add('show'); } }
 
     // Volta para a captura (mesmo colaborador) — após cancelar um card.
-    function voltarParaScan() { mostrar(null); pausado = false; resetInatividade(); }
+    function voltarParaScan() { mostrar(null); pausado = false; _buscaT0 = performance.now(); resetInatividade(); }
     // Volta para a lista de nomes (encerra o colaborador) — após sucesso/timeout.
     function voltarParaNomes() {
         colaboradorId = null; colaboradorNome = ''; clearInatividade();
@@ -305,13 +305,15 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     // Acrescente &log=1 para gravar cada leitura em admin/data/kiosk_debug.log.
     const _debug = /[?&]debug=1/.test(location.search);
     const _logOn = /[?&]log=1/.test(location.search);
+    let _buscaT0 = performance.now();   // início da busca atual (mede o "tempão")
     function logScan(codigo, modo, fmt, ms) {
         if (!_logOn) { return; }
+        const busca = Math.round(performance.now() - _buscaT0);
         try {
             fetch('estoque_kiosk_log.php', {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ codigo: codigo, modo: modo, formato: fmt, ms: Math.round(ms), cam: _camInfo }),
+                body: JSON.stringify({ codigo: codigo, modo: modo, formato: fmt, ms: Math.round(ms), busca: busca, cam: _camInfo }),
                 keepalive: true
             }).catch(function () {});
         } catch (e) {}
