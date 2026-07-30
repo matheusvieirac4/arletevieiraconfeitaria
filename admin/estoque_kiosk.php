@@ -38,6 +38,8 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
               border: 3px solid rgba(255,255,255,.55); border-radius: 16px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.28); }
     .kx-aim::after { content: ''; position: absolute; left: 8%; right: 8%; top: 50%; height: 2px;
                      background: rgba(255,64,64,.8); box-shadow: 0 0 6px rgba(255,64,64,.8); }
+    .kx-dbg { position: fixed; top: 8px; left: 8px; z-index: 40; display: none; font: 12px/1.4 monospace;
+              background: rgba(0,0,0,.72); color: #fff; padding: 6px 9px; border-radius: 8px; max-width: 72vw; }
     .kx-hint { position: fixed; bottom: 24px; left: 0; right: 0; text-align: center; z-index: 15;
                font-size: 1.1rem; color: #dfe3e8; text-shadow: 0 1px 4px #000; }
     .kx-overlay { position: fixed; inset: 0; z-index: 30; background: rgba(10,12,16,.97);
@@ -115,6 +117,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 
 <video id="video" playsinline autoplay muted></video>
 <div class="kx-aim" id="aim"></div>
+<div class="kx-dbg" id="dbg"></div>
 <div class="kx-hint" id="hint">Aponte o código de barras na faixa central</div>
 
 <!-- Passo 1: escolher o colaborador -->
@@ -296,6 +299,25 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     let mfReader = null, camStream = null, scanToken = 0, BARCODE_HINTS = null;
     const _roi = document.createElement('canvas');
     const _roiCtx = _roi.getContext('2d', { willReadFrequently: true });
+    // Diagnóstico: abra o quiosque com ?debug=1 para ver formato + tempo de leitura.
+    const _debug = /[?&]debug=1/.test(location.search);
+    let _tick = 0, _dbgAtt = 0, _dbgFps = 0, _dbgFpsT = 0;
+    function formatoNome(f) {
+        try { for (const k in ZXing.BarcodeFormat) { if (ZXing.BarcodeFormat[k] === f) { return k; } } } catch (e) {}
+        return '?';
+    }
+    function dbgUpdate(modo, result, ms) {
+        const el = document.getElementById('dbg'); if (!el) { return; }
+        _dbgAtt++;
+        const now = performance.now();
+        if (now - _dbgFpsT > 1000) { _dbgFps = _dbgAtt; _dbgAtt = 0; _dbgFpsT = now; }
+        if (result) {
+            const fmt = result.getBarcodeFormat ? formatoNome(result.getBarcodeFormat()) : '?';
+            el.innerHTML = '<b style="color:#3fd07a">LEU</b> ' + modo + ' · ' + fmt + ' · ' + Math.round(ms) + 'ms · ' + _dbgFps + '/s';
+        } else {
+            el.textContent = modo + ' · ' + Math.round(ms) + 'ms · ' + _dbgFps + '/s (procurando…)';
+        }
+    }
 
     function montarHints() {
         const h = new Map();
@@ -351,25 +373,44 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         }
     }
 
+    function decodificar(canvas) {
+        const src = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+        const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(src));
+        return mfReader.decode(bmp, BARCODE_HINTS);   // lança se não achar
+    }
     function scanLoop(token) {
         if (token !== scanToken) { return; }   // loop antigo morre ao trocar câmera
-        // Blindado: qualquer erro num quadro é ignorado; o loop SEMPRE reagenda
-        // (senão uma exceção transitória mataria a leitura até recarregar).
+        // Blindado: qualquer erro num quadro é ignorado; o loop SEMPRE reagenda.
         try {
             const v = document.getElementById('video');
             if (!pausado && v && v.videoWidth) {
+                _tick++;
                 const cw = v.videoWidth, ch = v.videoHeight;
-                const rw = Math.floor(cw * 0.92), rh = Math.floor(ch * 0.5);   // faixa central
-                const rx = Math.floor((cw - rw) / 2), ry = Math.floor((ch - rh) / 2);
-                if (_roi.width !== rw || _roi.height !== rh) { _roi.width = rw; _roi.height = rh; }
-                _roiCtx.drawImage(v, rx, ry, rw, rh, 0, 0, rw, rh);
-                const src = new ZXing.HTMLCanvasElementLuminanceSource(_roi);
-                const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(src));
-                const result = mfReader.decode(bmp, BARCODE_HINTS);   // lança se não achar
+                let modo;
+                // 2 de cada 3 quadros: FAIXA CENTRAL (rápido, códigos pequenos).
+                // 1 de cada 3: QUADRO INTEIRO reduzido (pega código grande/perto que
+                // estoura a faixa, e código fora do centro).
+                if (_tick % 3 === 0) {
+                    modo = 'inteiro';
+                    const s = Math.min(1, 1100 / cw);
+                    const fw = Math.round(cw * s), fh = Math.round(ch * s);
+                    if (_roi.width !== fw || _roi.height !== fh) { _roi.width = fw; _roi.height = fh; }
+                    _roiCtx.drawImage(v, 0, 0, cw, ch, 0, 0, fw, fh);
+                } else {
+                    modo = 'faixa';
+                    const rw = Math.floor(cw * 0.92), rh = Math.floor(ch * 0.5);
+                    const rx = Math.floor((cw - rw) / 2), ry = Math.floor((ch - rh) / 2);
+                    if (_roi.width !== rw || _roi.height !== rh) { _roi.width = rw; _roi.height = rh; }
+                    _roiCtx.drawImage(v, rx, ry, rw, rh, 0, 0, rw, rh);
+                }
+                const t0 = performance.now();
+                let result = null;
+                try { result = decodificar(_roi); } catch (e) { /* nada neste quadro */ }
+                if (_debug) { dbgUpdate(modo, result, performance.now() - t0); }
                 if (result) { onScan(result.getText()); }
             }
-        } catch (e) { /* sem código no quadro, ou quadro num estado ruim: ignora */ }
-        if (token === scanToken) { setTimeout(function () { scanLoop(token); }, 70); }   // ~14/seg, sempre
+        } catch (e) { /* quadro num estado ruim: ignora */ }
+        if (token === scanToken) { setTimeout(function () { scanLoop(token); }, 60); }
     }
 
     document.getElementById('btn-cam').onclick = function () { facing = (facing === 'user') ? 'environment' : 'user'; iniciarCamera(); };
@@ -537,6 +578,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     }
 
     carregarNomes();
+    if (_debug) { const d = document.getElementById('dbg'); if (d) { d.style.display = 'block'; d.textContent = 'debug ligado…'; } }
     iniciarCamera();
     iniciarOcr();
 })();
