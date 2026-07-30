@@ -303,7 +303,20 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     const _flipCtx = _flip.getContext('2d', { willReadFrequently: true });
     let _camInfo = '';
     // Diagnóstico: abra o quiosque com ?debug=1 para ver formato + tempo de leitura.
+    // Acrescente &log=1 para gravar cada leitura em admin/data/kiosk_debug.log.
     const _debug = /[?&]debug=1/.test(location.search);
+    const _logOn = /[?&]log=1/.test(location.search);
+    function logScan(codigo, modo, fmt, ms) {
+        if (!_logOn) { return; }
+        try {
+            fetch('estoque_kiosk_log.php', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codigo: codigo, modo: modo, formato: fmt, ms: Math.round(ms), cam: _camInfo }),
+                keepalive: true
+            }).catch(function () {});
+        } catch (e) {}
+    }
     let _tick = 0, _dbgAtt = 0, _dbgFps = 0, _dbgFpsT = 0;
     function formatoNome(f) {
         try { for (const k in ZXing.BarcodeFormat) { if (ZXing.BarcodeFormat[k] === f) { return k; } } } catch (e) {}
@@ -425,8 +438,13 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
                     _flipCtx.setTransform(1, 0, 0, 1, 0, 0);
                     try { result = decodificar(_flip); if (result) { modo = 'inteiro-espelhado'; } } catch (e) {}
                 }
-                if (_debug) { dbgUpdate(modo, result, performance.now() - t0); }
-                if (result) { onScan(result.getText()); }
+                const _ms = performance.now() - t0;
+                if (_debug) { dbgUpdate(modo, result, _ms); }
+                if (result) {
+                    const _fmt = result.getBarcodeFormat ? formatoNome(result.getBarcodeFormat()) : '?';
+                    logScan(result.getText(), modo, _fmt, _ms);
+                    onScan(result.getText());
+                }
             }
         } catch (e) { /* quadro num estado ruim: ignora */ }
         if (token === scanToken) { setTimeout(function () { scanLoop(token); }, 60); }
