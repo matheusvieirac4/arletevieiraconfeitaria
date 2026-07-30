@@ -299,6 +299,9 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     let mfReader = null, camStream = null, scanToken = 0, BARCODE_HINTS = null;
     const _roi = document.createElement('canvas');
     const _roiCtx = _roi.getContext('2d', { willReadFrequently: true });
+    const _flip = document.createElement('canvas');
+    const _flipCtx = _flip.getContext('2d', { willReadFrequently: true });
+    let _camInfo = '';
     // Diagnóstico: abra o quiosque com ?debug=1 para ver formato + tempo de leitura.
     const _debug = /[?&]debug=1/.test(location.search);
     let _tick = 0, _dbgAtt = 0, _dbgFps = 0, _dbgFpsT = 0;
@@ -311,11 +314,12 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         _dbgAtt++;
         const now = performance.now();
         if (now - _dbgFpsT > 1000) { _dbgFps = _dbgAtt; _dbgAtt = 0; _dbgFpsT = now; }
+        const cam = _camInfo ? '<br><span style="opacity:.7">📷 ' + _camInfo + '</span>' : '';
         if (result) {
             const fmt = result.getBarcodeFormat ? formatoNome(result.getBarcodeFormat()) : '?';
-            el.innerHTML = '<b style="color:#3fd07a">LEU</b> ' + modo + ' · ' + fmt + ' · ' + Math.round(ms) + 'ms · ' + _dbgFps + '/s';
+            el.innerHTML = '<b style="color:#3fd07a">LEU</b> ' + modo + ' · ' + fmt + ' · ' + Math.round(ms) + 'ms · ' + _dbgFps + '/s' + cam;
         } else {
-            el.textContent = modo + ' · ' + Math.round(ms) + 'ms · ' + _dbgFps + '/s (procurando…)';
+            el.innerHTML = modo + ' · ' + Math.round(ms) + 'ms · ' + _dbgFps + '/s (procurando…)' + cam;
         }
     }
 
@@ -366,6 +370,10 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
             });
             v.srcObject = camStream;
             await v.play();
+            try {
+                const st = camStream.getVideoTracks()[0].getSettings();
+                _camInfo = (st.facingMode || facing) + ' ' + (st.width || '?') + '×' + (st.height || '?');
+            } catch (e) { _camInfo = facing; }
             scanToken++;
             scanLoop(scanToken);
         } catch (e) {
@@ -406,6 +414,17 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
                 const t0 = performance.now();
                 let result = null;
                 try { result = decodificar(_roi); } catch (e) { /* nada neste quadro */ }
+                // Fallback anti-espelho: no quadro inteiro, se não leu, tenta a
+                // imagem espelhada horizontalmente (descarta a hipótese de que a
+                // câmera frontal espelhada estaria atrapalhando).
+                if (!result && modo === 'inteiro') {
+                    const fw = _roi.width, fh = _roi.height;
+                    if (_flip.width !== fw || _flip.height !== fh) { _flip.width = fw; _flip.height = fh; }
+                    _flipCtx.setTransform(-1, 0, 0, 1, fw, 0);
+                    _flipCtx.drawImage(_roi, 0, 0);
+                    _flipCtx.setTransform(1, 0, 0, 1, 0, 0);
+                    try { result = decodificar(_flip); if (result) { modo = 'inteiro-espelhado'; } } catch (e) {}
+                }
                 if (_debug) { dbgUpdate(modo, result, performance.now() - t0); }
                 if (result) { onScan(result.getText()); }
             }
