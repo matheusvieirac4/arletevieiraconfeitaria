@@ -315,7 +315,13 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ codigo: codigo, modo: modo, formato: fmt, ms: Math.round(ms), busca: busca, cam: _camInfo }),
                 keepalive: true
-            }).catch(function () {});
+            }).then(function (r) {
+                const el = document.getElementById('dbg');
+                if (el) { el.innerHTML += '<br><span style="color:' + (r.ok ? '#3fd07a' : '#ff6b6b') + '">log HTTP ' + r.status + '</span>'; }
+            }).catch(function (e) {
+                const el = document.getElementById('dbg');
+                if (el) { el.innerHTML += '<br><span style="color:#ff6b6b">log ERRO ' + e + '</span>'; }
+            });
         } catch (e) {}
     }
     let _tick = 0, _dbgAtt = 0, _dbgFps = 0, _dbgFpsT = 0;
