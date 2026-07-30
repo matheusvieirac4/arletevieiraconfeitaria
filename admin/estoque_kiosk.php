@@ -194,7 +194,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         busca: document.getElementById('ov-busca'),
         ok: document.getElementById('ov-ok'),
     };
-    let leitor = null, facing = 'environment', pausado = true, ultimo = '', ultimoT = 0;
+    let facing = 'environment', pausado = true, ultimo = '', ultimoT = 0;
     let itemAtual = null, codigoPendente = '';
     let colaboradorId = null, colaboradorNome = '', pinBuffer = '', pinSel = null;
     let inatividade = null;
@@ -283,28 +283,87 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
             });
     }
 
-    // ---------- Câmera (ZXing) ----------
-    function iniciarCamera() {
-        if (typeof ZXing === 'undefined') { hint.textContent = 'Falha ao carregar o leitor. Recarregue.'; return; }
-        if (!leitor) {
-            // TRY_HARDER + formatos de barras 1D melhoram muito a leitura de EAN.
-            const hints = new Map();
-            hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-                ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
-                ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
-                ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
-                ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.QR_CODE,
-            ]);
-            leitor = new ZXing.BrowserMultiFormatReader(hints);
-        }
-        try { leitor.reset(); } catch (e) {}
-        leitor.decodeFromConstraints(
+    // ---------- Câmera + leitor de barras (ROI rápido) ----------
+    // Em vez de decodificar o quadro inteiro num loop lento (padrão do ZXing),
+    // recortamos a FAIXA CENTRAL (onde a pessoa aponta) e decodificamos ~14x/seg
+    // um pedaço pequeno — leitura quase instantânea com imagem boa.
+    let mfReader = null, camStream = null, scanToken = 0, BARCODE_HINTS = null;
+    const _roi = document.createElement('canvas');
+    const _roiCtx = _roi.getContext('2d', { willReadFrequently: true });
+
+    function montarHints() {
+        const h = new Map();
+        h.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+            ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+            ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+            ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+            ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.QR_CODE,
+        ]);
+        return h;
+    }
+
+    let legacyReader = null;
+    function roiSuportado() {
+        return typeof ZXing.MultiFormatReader !== 'undefined'
+            && typeof ZXing.HTMLCanvasElementLuminanceSource !== 'undefined'
+            && typeof ZXing.BinaryBitmap !== 'undefined'
+            && typeof ZXing.HybridBinarizer !== 'undefined';
+    }
+    function iniciarCameraLegacy() {
+        // Fallback: decodifica o quadro inteiro (método antigo do ZXing).
+        if (!legacyReader) { legacyReader = new ZXing.BrowserMultiFormatReader(montarHints()); }
+        try { legacyReader.reset(); } catch (e) {}
+        legacyReader.decodeFromConstraints(
             { video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } } },
             document.getElementById('video'),
             function (result) { if (result && !pausado) { onScan(result.getText()); } }
         ).catch(function (e) { hint.textContent = 'Não consegui abrir a câmera: ' + e; });
     }
+
+    async function iniciarCamera() {
+        if (typeof ZXing === 'undefined') { hint.textContent = 'Falha ao carregar o leitor. Recarregue.'; return; }
+        if (!roiSuportado()) { iniciarCameraLegacy(); return; }
+        if (!mfReader) { mfReader = new ZXing.MultiFormatReader(); BARCODE_HINTS = montarHints(); }
+        const v = document.getElementById('video');
+        try {
+            if (camStream) { camStream.getTracks().forEach(t => t.stop()); }
+            camStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: facing,
+                    width: { ideal: 1280 }, height: { ideal: 720 },
+                    frameRate: { ideal: 30 },
+                    advanced: [{ focusMode: 'continuous' }]
+                }
+            });
+            v.srcObject = camStream;
+            await v.play();
+            scanToken++;
+            scanLoop(scanToken);
+        } catch (e) {
+            hint.textContent = 'Não consegui abrir a câmera: ' + e;
+        }
+    }
+
+    function scanLoop(token) {
+        if (token !== scanToken) { return; }   // loop antigo morre ao trocar câmera
+        const v = document.getElementById('video');
+        if (!pausado && v.videoWidth) {
+            const cw = v.videoWidth, ch = v.videoHeight;
+            const rw = Math.floor(cw * 0.92), rh = Math.floor(ch * 0.5);   // faixa central
+            const rx = Math.floor((cw - rw) / 2), ry = Math.floor((ch - rh) / 2);
+            if (_roi.width !== rw || _roi.height !== rh) { _roi.width = rw; _roi.height = rh; }
+            _roiCtx.drawImage(v, rx, ry, rw, rh, 0, 0, rw, rh);
+            try {
+                const src = new ZXing.HTMLCanvasElementLuminanceSource(_roi);
+                const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(src));
+                const result = mfReader.decode(bmp, BARCODE_HINTS);
+                if (result) { onScan(result.getText()); }
+            } catch (e) { /* nenhum código neste quadro */ }
+        }
+        setTimeout(function () { scanLoop(token); }, 70);   // ~14 tentativas/seg
+    }
+
     document.getElementById('btn-cam').onclick = function () { facing = (facing === 'user') ? 'environment' : 'user'; iniciarCamera(); };
     document.getElementById('btn-trocar').onclick = voltarParaNomes;
 
@@ -356,7 +415,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         try {
             ocrWorker = await Tesseract.createWorker('eng');
             await ocrWorker.setParameters({ tessedit_char_whitelist: '0123456789' });
-            setInterval(tickOcr, 1500);
+            setInterval(tickOcr, 2500);   // fallback lento; o ZXing (ROI) é o caminho rápido
         } catch (e) {}
     }
     async function tickOcr() {
