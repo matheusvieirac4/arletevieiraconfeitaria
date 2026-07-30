@@ -33,6 +33,11 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
               align-items: center; padding: 12px 16px; background: rgba(0,0,0,.45); }
     .kx-top h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
     #video { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; background:#000; }
+    /* Moldura da faixa que o leitor realmente analisa (ROI) — mire o código aqui. */
+    .kx-aim { position: fixed; left: 4%; top: 25%; width: 92%; height: 50%; z-index: 14; pointer-events: none;
+              border: 3px solid rgba(255,255,255,.55); border-radius: 16px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.28); }
+    .kx-aim::after { content: ''; position: absolute; left: 8%; right: 8%; top: 50%; height: 2px;
+                     background: rgba(255,64,64,.8); box-shadow: 0 0 6px rgba(255,64,64,.8); }
     .kx-hint { position: fixed; bottom: 24px; left: 0; right: 0; text-align: center; z-index: 15;
                font-size: 1.1rem; color: #dfe3e8; text-shadow: 0 1px 4px #000; }
     .kx-overlay { position: fixed; inset: 0; z-index: 30; background: rgba(10,12,16,.97);
@@ -109,7 +114,8 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 </div>
 
 <video id="video" playsinline autoplay muted></video>
-<div class="kx-hint" id="hint">Aponte o código de barras para a câmera</div>
+<div class="kx-aim" id="aim"></div>
+<div class="kx-hint" id="hint">Aponte o código de barras na faixa central</div>
 
 <!-- Passo 1: escolher o colaborador -->
 <div class="kx-overlay show" id="ov-nomes">
@@ -347,21 +353,23 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 
     function scanLoop(token) {
         if (token !== scanToken) { return; }   // loop antigo morre ao trocar câmera
-        const v = document.getElementById('video');
-        if (!pausado && v.videoWidth) {
-            const cw = v.videoWidth, ch = v.videoHeight;
-            const rw = Math.floor(cw * 0.92), rh = Math.floor(ch * 0.5);   // faixa central
-            const rx = Math.floor((cw - rw) / 2), ry = Math.floor((ch - rh) / 2);
-            if (_roi.width !== rw || _roi.height !== rh) { _roi.width = rw; _roi.height = rh; }
-            _roiCtx.drawImage(v, rx, ry, rw, rh, 0, 0, rw, rh);
-            try {
+        // Blindado: qualquer erro num quadro é ignorado; o loop SEMPRE reagenda
+        // (senão uma exceção transitória mataria a leitura até recarregar).
+        try {
+            const v = document.getElementById('video');
+            if (!pausado && v && v.videoWidth) {
+                const cw = v.videoWidth, ch = v.videoHeight;
+                const rw = Math.floor(cw * 0.92), rh = Math.floor(ch * 0.5);   // faixa central
+                const rx = Math.floor((cw - rw) / 2), ry = Math.floor((ch - rh) / 2);
+                if (_roi.width !== rw || _roi.height !== rh) { _roi.width = rw; _roi.height = rh; }
+                _roiCtx.drawImage(v, rx, ry, rw, rh, 0, 0, rw, rh);
                 const src = new ZXing.HTMLCanvasElementLuminanceSource(_roi);
                 const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(src));
-                const result = mfReader.decode(bmp, BARCODE_HINTS);
+                const result = mfReader.decode(bmp, BARCODE_HINTS);   // lança se não achar
                 if (result) { onScan(result.getText()); }
-            } catch (e) { /* nenhum código neste quadro */ }
-        }
-        setTimeout(function () { scanLoop(token); }, 70);   // ~14 tentativas/seg
+            }
+        } catch (e) { /* sem código no quadro, ou quadro num estado ruim: ignora */ }
+        if (token === scanToken) { setTimeout(function () { scanLoop(token); }, 70); }   // ~14/seg, sempre
     }
 
     document.getElementById('btn-cam').onclick = function () { facing = (facing === 'user') ? 'environment' : 'user'; iniciarCamera(); };
