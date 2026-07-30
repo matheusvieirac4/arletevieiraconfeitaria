@@ -5,6 +5,9 @@
 // atribuída ao colaborador. ZXing lê código de barras EAN e QR.
 require_once __DIR__ . '/_session.php';
 require_once 'model_estoque.php';
+// Nunca cachear: o navegador do celular estava servindo JS antigo.
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 // Acesso: admin logado OU token do quiosque (link/cookie). Sem nenhum, vai pro login.
 if (!estoque_kiosk_autorizado()) { header('Location: login.php'); exit; }
 if (!estoque_pronto($pdo)) { header('Location: estoque.php'); exit; }
