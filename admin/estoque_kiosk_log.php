@@ -2,7 +2,10 @@
 // Log de diagnóstico do leitor do quiosque. Só grava quando o quiosque é aberto
 // com ?debug=1&log=1. Uma linha por leitura, em admin/data/kiosk_debug.log.
 // GET (sem parâmetros) devolve o conteúdo do log pra baixar/copiar.
-require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_session.php';
+require_once __DIR__ . '/model_estoque.php';
+// Mesmo acesso do quiosque: admin logado OU token do quiosque.
+if (!estoque_kiosk_autorizado()) { http_response_code(403); echo 'sem acesso'; exit; }
 
 $dir = __DIR__ . '/data';
 if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
