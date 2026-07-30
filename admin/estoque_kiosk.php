@@ -43,6 +43,8 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
                      background: rgba(255,64,64,.8); box-shadow: 0 0 6px rgba(255,64,64,.8); }
     .kx-dbg { position: fixed; top: 8px; left: 8px; z-index: 40; display: none; font: 12px/1.4 monospace;
               background: rgba(0,0,0,.72); color: #fff; padding: 6px 9px; border-radius: 8px; max-width: 72vw; }
+    .kx-dbglog { position: fixed; top: 8px; right: 8px; z-index: 41; display: none; font: 12px/1.4 monospace;
+              background: rgba(0,0,0,.72); color: #fff; padding: 6px 9px; border-radius: 8px; max-width: 60vw; text-align: right; }
     .kx-hint { position: fixed; bottom: 24px; left: 0; right: 0; text-align: center; z-index: 15;
                font-size: 1.1rem; color: #dfe3e8; text-shadow: 0 1px 4px #000; }
     .kx-overlay { position: fixed; inset: 0; z-index: 30; background: rgba(10,12,16,.97);
@@ -120,6 +122,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 <video id="video" playsinline autoplay muted></video>
 <div class="kx-aim" id="aim"></div>
 <div class="kx-dbg" id="dbg"></div>
+<div class="kx-dbglog" id="dbglog"></div>
 <div class="kx-hint" id="hint">Aponte o código de barras na faixa central</div>
 
 <!-- Passo 1: escolher o colaborador -->
@@ -309,6 +312,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     const _debug = /[?&]debug=1/.test(location.search);
     const _logOn = /[?&]log=1/.test(location.search);
     let _buscaT0 = performance.now();   // início da busca atual (mede o "tempão")
+    let _logN = 0;                      // quantos POSTs de log já saíram (feedback na tela)
     function logScan(codigo, modo, fmt, ms) {
         if (!_logOn) { return; }
         const busca = Math.round(performance.now() - _buscaT0);
@@ -319,11 +323,12 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
                 body: JSON.stringify({ codigo: codigo, modo: modo, formato: fmt, ms: Math.round(ms), busca: busca, cam: _camInfo }),
                 keepalive: true
             }).then(function (r) {
-                const el = document.getElementById('dbg');
-                if (el) { el.innerHTML += '<br><span style="color:' + (r.ok ? '#3fd07a' : '#ff6b6b') + '">log HTTP ' + r.status + '</span>'; }
+                _logN++;
+                const el = document.getElementById('dbglog');
+                if (el) { el.style.display = 'block'; el.innerHTML = '<span style="color:' + (r.ok ? '#3fd07a' : '#ff6b6b') + '">log HTTP ' + r.status + '</span> · gravados: ' + _logN; }
             }).catch(function (e) {
-                const el = document.getElementById('dbg');
-                if (el) { el.innerHTML += '<br><span style="color:#ff6b6b">log ERRO ' + e + '</span>'; }
+                const el = document.getElementById('dbglog');
+                if (el) { el.style.display = 'block'; el.innerHTML = '<span style="color:#ff6b6b">log ERRO ' + e + '</span>'; }
             });
         } catch (e) {}
     }
