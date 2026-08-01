@@ -154,7 +154,14 @@ require __DIR__ . '/_header.php';
                         <td><?= htmlspecialchars($c['contato'] ?: '—') ?></td>
                         <td><?= htmlspecialchars($c['bairro_cidade'] ?: '—') ?></td>
                         <td class="text-center"><?= !empty($c['curriculo_pdf']) ? '<i data-feather="paperclip" class="text-success"></i>' : '<span class="text-muted">—</span>' ?></td>
-                        <td><?= curr_badge($statusMap, $c['status']) ?></td>
+                        <td>
+                            <select class="form-select form-select-sm js-status-inline border-<?= $statusMap[$c['status']][1] ?? 'secondary' ?>"
+                                    data-id="<?= (int) $c['id'] ?>" style="min-width:130px">
+                                <?php foreach ($statusMap as $sChave => $sInfo): ?>
+                                    <option value="<?= $sChave ?>" <?= $c['status'] === $sChave ? 'selected' : '' ?>><?= htmlspecialchars($sInfo[0]) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </td>
                         <td class="text-nowrap"><?= htmlspecialchars(date('d/m/Y', strtotime($c['criado_em']))) ?></td>
                         <td class="text-end">
                             <a href="curriculos.php?id=<?= (int) $c['id'] ?>" class="btn btn-primary btn-sm">Ver</a>
@@ -164,5 +171,45 @@ require __DIR__ . '/_header.php';
                 </tbody>
             </table>
         </div>
+
+        <script>
+        // Troca de status direto na listagem (salva no change, igual ao estoque).
+        (function () {
+            var filtro = <?= json_encode($filtro) ?>;
+            document.querySelectorAll('.js-status-inline').forEach(function (sel) {
+                sel.dataset.orig = sel.value;
+                sel.addEventListener('change', function () {
+                    var fd = new FormData();
+                    fd.append('id', sel.dataset.id);
+                    fd.append('status', sel.value);
+                    sel.disabled = true;
+                    fetch('curriculos_status_salvar.php', { method: 'POST', body: fd })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) {
+                            sel.disabled = false;
+                            if (d.error) {
+                                sel.value = sel.dataset.orig;
+                                if (window.showToast) { showToast(d.error, 'danger'); }
+                                return;
+                            }
+                            sel.dataset.orig = sel.value;
+                            sel.className = 'form-select form-select-sm js-status-inline border-' + d.cor;
+                            if (window.showToast) { showToast('Status: ' + d.rotulo, 'success'); }
+                            // Se há filtro ativo e a linha não pertence mais a ele, some com ela.
+                            if (filtro && filtro !== 'todos' && d.status !== filtro) {
+                                var tr = sel.closest('tr');
+                                if (tr) { tr.style.transition = 'opacity .4s'; tr.style.opacity = '0';
+                                          setTimeout(function () { tr.remove(); }, 400); }
+                            }
+                        })
+                        .catch(function () {
+                            sel.disabled = false;
+                            sel.value = sel.dataset.orig;
+                            if (window.showToast) { showToast('Falha de conexão.', 'danger'); }
+                        });
+                });
+            });
+        })();
+        </script>
 <?php endif; ?>
 <?php require __DIR__ . '/_footer.php'; ?>
