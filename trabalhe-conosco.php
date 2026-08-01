@@ -15,7 +15,7 @@ $modo = ($_POST['modo'] ?? '') === 'pdf' ? 'pdf' : 'manual';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Honeypot antispam: bot preenche o campo escondido; humano nunca.
     if (!empty($_POST['website'])) {
-        header('Location: trabalhe-conosco.php?enviado=1');
+        header('Location: trabalhe-conosco.php?enviado=1#candidatura');
         exit;
     }
 
@@ -118,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $headers .= 'Content-Type: text/plain; charset=utf-8' . "\r\n";
             @mail(CURRICULOS_EMAIL_AVISO, '=?UTF-8?B?' . base64_encode($assunto) . '?=', $corpo, $headers);
 
-            header('Location: trabalhe-conosco.php?enviado=1');
+            header('Location: trabalhe-conosco.php?enviado=1#candidatura');
             exit;
         } catch (\Throwable $e) {
             $erros[] = 'Ocorreu um erro ao registrar sua candidatura. Tente novamente.';
