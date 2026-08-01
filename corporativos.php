@@ -119,7 +119,7 @@ include "includes/top.php" ?>
                 <div class="col text-center">
                     <h4 class="font-weight-bold text-color-primary mb-3">Solicite um orçamento personalizado</h4>
                     <p class="lead mb-4">Entre em contato pelo WhatsApp e surpreenda seus clientes, parceiros e colaboradores!</p>
-                    <a href="https://wa.me/554820133000?text=Olá! Vim do site e gostaria de mais informações!" target="_blank" class="btn btn-primary btn-lg font-weight-semibold px-5 py-3" style="background-color: #a51d32; border-color: #a51d32;">Solicitar Orçamento</a>
+                    <a href="https://wa.me/554820133000?text=Olá! Vim do site e gostaria de mais informações!" target="_blank" class="btn btn-primary btn-lg font-weight-semibold px-5 py-3" style="background-color: #a51d32; border-color: #a51d32;" onclick="return (typeof gtag_report_conversion==='function') ? gtag_report_conversion(this.href) : true;">Solicitar Orçamento</a>
                 </div>
             </div>
             <!-- SESSÃO DIRECIONAMENTO AO BLOG -->
