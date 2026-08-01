@@ -80,13 +80,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $erros[] = 'Não encontramos um e-mail no currículo. Informe seu e-mail para concluir.';
         }
     } else {
-        // ---- Envio pelo formulário: sem anexo, e-mail obrigatório. ----
+        // ---- Envio pelo formulário: sem anexo novo, e-mail obrigatório. ----
         if ($dados['email'] === '' || !filter_var($dados['email'], FILTER_VALIDATE_EMAIL)) {
             $erros[] = 'Informe um e-mail válido.';
         }
         if ($dados['data_nascimento'] !== '') {
             $d = DateTime::createFromFormat('Y-m-d', $dados['data_nascimento']);
             if (!$d) { $dados['data_nascimento'] = ''; }
+        }
+        // Se veio de um PDF já enviado (fluxo de revisão), reancora o arquivo.
+        $ref = basename((string) ($_POST['curriculo_pdf_ref'] ?? ''));
+        if ($ref !== '' && preg_match('/^cv_[\w]+\.pdf$/', $ref)
+            && is_file(__DIR__ . '/admin/data/curriculos/' . $ref)) {
+            $pdfSalvo = $ref;
         }
     }
 
@@ -226,6 +232,15 @@ include "includes/top.php" ?>
                                 </div>
                             <?php endif; ?>
 
+                            <div id="cv-wrap" style="position:relative;">
+                            <!-- Overlay de loading (igual ao "novo lançamento" do Financeiro) -->
+                            <div id="cv-overlay" class="d-none" style="position:absolute; inset:0; background:rgba(255,255,255,.88); z-index:10; display:flex; align-items:center; justify-content:center; border-radius:.5rem;">
+                                <div class="text-center">
+                                    <div class="spinner-border mb-2" style="color:#a51d32;" role="status"></div>
+                                    <div id="cv-overlay-msg" class="fw-semibold text-muted">Lendo seu currículo…</div>
+                                </div>
+                            </div>
+
                             <!-- Escolha do modo de envio -->
                             <div id="cv-opcoes" class="row g-3 mb-2">
                                 <div class="col-md-6">
@@ -260,7 +275,7 @@ include "includes/top.php" ?>
                                 <div class="form-group mb-3">
                                     <label class="form-label">Currículo em PDF <span class="text-danger">*</span></label>
                                     <input type="file" name="curriculo_pdf" accept="application/pdf" class="form-control" required>
-                                    <small class="text-muted">Apenas PDF, até 8 MB. Vamos ler o arquivo e preencher seus dados automaticamente.</small>
+                                    <small class="text-muted">Apenas PDF, até 8 MB. Vamos ler o arquivo e preencher seus dados para você revisar.</small>
                                 </div>
                                 <div class="form-group mb-3">
                                     <label class="form-label">Seu e-mail</label>
@@ -269,7 +284,7 @@ include "includes/top.php" ?>
                                 </div>
                                 <div class="text-center mt-2">
                                     <button type="submit" class="btn btn-primary btn-lg font-weight-semibold px-5 py-3"
-                                            style="background-color:#a51d32;border-color:#a51d32;">Enviar currículo</button>
+                                            style="background-color:#a51d32;border-color:#a51d32;">Ler currículo e revisar</button>
                                 </div>
                             </form>
 
@@ -277,12 +292,17 @@ include "includes/top.php" ?>
                             <form id="cv-form-manual" method="post" action="trabalhe-conosco.php"
                                   class="p-4 rounded shadow-sm bg-light cv-form" style="display:none;">
                                 <input type="hidden" name="modo" value="manual">
+                                <input type="hidden" name="curriculo_pdf_ref" value="<?= $modo === 'manual' ? htmlspecialchars($_POST['curriculo_pdf_ref'] ?? '') : '' ?>">
                                 <div style="position:absolute;left:-9999px;" aria-hidden="true">
                                     <label>Não preencha<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h4 class="font-weight-bold mb-0">Preencha seus dados</h4>
                                     <button type="button" class="btn btn-sm btn-link text-muted js-cv-voltar">&larr; Trocar opção</button>
+                                </div>
+                                <div id="cv-review-aviso" class="alert alert-info d-none">
+                                    <i class="fas fa-robot me-1"></i> Preenchemos os campos com base no seu currículo.
+                                    <strong>Revise</strong> e ajuste o que precisar antes de enviar.
                                 </div>
                                 <div class="row">
                                     <div class="form-group col-md-6 mb-3">
@@ -328,9 +348,19 @@ include "includes/top.php" ?>
                                 </div>
                             </form>
 
+                            </div><!-- /#cv-wrap -->
+
                             <script>
                             (function () {
-                                var opcoes = document.getElementById('cv-opcoes');
+                                var opcoes  = document.getElementById('cv-opcoes');
+                                var overlay = document.getElementById('cv-overlay');
+                                var overMsg = document.getElementById('cv-overlay-msg');
+                                var formPdf = document.getElementById('cv-form-pdf');
+                                var formMan = document.getElementById('cv-form-manual');
+                                var aviso   = document.getElementById('cv-review-aviso');
+
+                                function travar(t) { if (overMsg) { overMsg.textContent = t; } overlay.classList.remove('d-none'); }
+                                function destravar() { overlay.classList.add('d-none'); }
                                 function abrir(id) {
                                     document.querySelectorAll('.cv-form').forEach(function (f) { f.style.display = 'none'; });
                                     var alvo = document.getElementById(id);
@@ -340,6 +370,7 @@ include "includes/top.php" ?>
                                 }
                                 function voltar() {
                                     document.querySelectorAll('.cv-form').forEach(function (f) { f.style.display = 'none'; });
+                                    if (aviso) { aviso.classList.add('d-none'); }
                                     if (opcoes) { opcoes.style.display = ''; }
                                 }
                                 document.querySelectorAll('.js-cv-modo').forEach(function (b) {
@@ -348,6 +379,58 @@ include "includes/top.php" ?>
                                 document.querySelectorAll('.js-cv-voltar').forEach(function (b) {
                                     b.addEventListener('click', voltar);
                                 });
+
+                                // Envio por PDF: NÃO grava direto. Manda para a IA ler, preenche o
+                                // formulário de revisão e mostra para o candidato conferir/enviar.
+                                if (formPdf) {
+                                    formPdf.addEventListener('submit', function (e) {
+                                        e.preventDefault();
+                                        var file = formPdf.querySelector('input[type=file]');
+                                        if (!file || !file.files.length) { return; }
+                                        travar('Lendo seu currículo…');
+                                        fetch('curriculo_extrair.php', { method: 'POST', body: new FormData(formPdf) })
+                                            .then(function (r) { return r.json(); })
+                                            .then(function (res) {
+                                                if (!res || !res.ok) {
+                                                    destravar();
+                                                    alert((res && res.error) || 'Não foi possível ler o PDF. Tente novamente ou preencha o formulário.');
+                                                    return;
+                                                }
+                                                var d = res.dados || {};
+                                                Object.keys(d).forEach(function (k) {
+                                                    var el = formMan.querySelector('[name="' + k + '"]');
+                                                    if (el && d[k]) { el.value = d[k]; }
+                                                });
+                                                // E-mail digitado na tela do PDF entra se o currículo não trouxe um.
+                                                var emailPdf = (formPdf.querySelector('[name=email]') || {}).value || '';
+                                                var emailMan = formMan.querySelector('[name=email]');
+                                                if (emailPdf.trim() && emailMan && !emailMan.value.trim()) { emailMan.value = emailPdf.trim(); }
+                                                var ref = formMan.querySelector('[name=curriculo_pdf_ref]');
+                                                if (ref) { ref.value = res.pdf || ''; }
+                                                destravar();
+                                                abrir('cv-form-manual');
+                                                if (aviso) {
+                                                    aviso.classList.remove('d-none');
+                                                    if (!res.ia) {
+                                                        aviso.innerHTML = '<i class="fas fa-info-circle me-1"></i> Recebemos seu currículo em PDF. Confira e complete os campos abaixo antes de enviar.';
+                                                    }
+                                                }
+                                            })
+                                            .catch(function () { destravar(); alert('Falha de conexão. Tente novamente.'); });
+                                    });
+                                }
+
+                                // Evita envio duplicado do formulário final (o clique duplo do usuário).
+                                if (formMan) {
+                                    formMan.addEventListener('submit', function (e) {
+                                        if (formMan.dataset.enviando === '1') { e.preventDefault(); return; }
+                                        formMan.dataset.enviando = '1';
+                                        var btn = formMan.querySelector('button[type=submit]');
+                                        if (btn) { btn.disabled = true; }
+                                        travar('Enviando sua candidatura…');
+                                    });
+                                }
+
                                 <?php if ($erros): ?>
                                 abrir('cv-form-<?= $modo ?>');
                                 <?php endif; ?>
