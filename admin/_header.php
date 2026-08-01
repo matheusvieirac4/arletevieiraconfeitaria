@@ -14,7 +14,6 @@ $navItems = [
     'catalogo'  => ['catalogo.php',  'Catálogo',     'grid'],
     'cardapios' => ['cardapios.php', 'Cardápios PDF','book-open'],
     'links_bio' => ['links_bio.php', 'Links da bio', 'link'],
-    'metricas'  => ['metricas.php',  'Métricas',     'bar-chart-2'],
     'financeiro'=> ['financeiro.php','Financeiro',   'dollar-sign'],
     'estoque'   => ['estoque.php',   'Estoque',      'package'],
     'curriculos'=> ['curriculos.php','Currículos',   'briefcase'],
