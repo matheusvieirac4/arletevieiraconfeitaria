@@ -23,7 +23,7 @@
 							</p>
 							<div class="mt-3">
 								<a href="https://www.instagram.com/arletevieiraconfeitaria" target="_blank"><i class="fab fa-instagram fa-lg me-2"></i></a>
-								<a href="https://wa.me/554820133000" target="_blank"><i class="fab fa-whatsapp fa-lg me-2"></i></a>
+								<a href="https://wa.me/554820133000" target="_blank" onclick="return (typeof gtag_report_conversion==='function') ? gtag_report_conversion(this.href) : true;"><i class="fab fa-whatsapp fa-lg me-2"></i></a>
 								<a href="https://facebook.com/arletevieiraconfeitaria" target="_blank"><i class="fab fa-facebook fa-lg"></i></a>
 							</div>
 							<div class="mt-2">
@@ -37,7 +37,8 @@
 								<a href="sobrenos.php" class="text-color-grey text-3-5 me-3">Sobre nós</a>
 								<a href="blog.php" class="text-color-grey text-3-5 me-3">Blog</a>
 								<a href="corporativos.php" class="text-color-grey text-3-5 me-3">Presentes Corporativos</a>
-								<a href="https://wa.me/554820133000?text=Olá! Vim do site e gostaria de mais informações!" class="text-color-grey text-3-5">Faça seu pedido</a>
+								<a href="trabalhe-conosco.php" class="text-color-grey text-3-5 me-3">Trabalhe Conosco</a>
+								<a href="https://wa.me/554820133000?text=Olá! Vim do site e gostaria de mais informações!" class="text-color-grey text-3-5" onclick="return (typeof gtag_report_conversion==='function') ? gtag_report_conversion(this.href) : true;">Faça seu pedido</a>
 							</div>
 						</div>
 					</div>

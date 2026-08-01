@@ -17,6 +17,7 @@ $navItems = [
     'metricas'  => ['metricas.php',  'Métricas',     'bar-chart-2'],
     'financeiro'=> ['financeiro.php','Financeiro',   'dollar-sign'],
     'estoque'   => ['estoque.php',   'Estoque',      'package'],
+    'curriculos'=> ['curriculos.php','Currículos',   'briefcase'],
 ];
 ?>
 <!DOCTYPE html>
