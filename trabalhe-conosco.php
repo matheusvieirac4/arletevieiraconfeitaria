@@ -3,11 +3,14 @@
 // Processa o POST ANTES de qualquer saída HTML (padrão PRG: grava e redireciona).
 require_once __DIR__ . '/includes/banco.php';
 require_once __DIR__ . '/admin/model_curriculos.php';
+require_once __DIR__ . '/admin/model_financeiro.php';   // reusa a config/chave do Gemini
 
 // Para onde vai o aviso de nova candidatura. Ajuste aqui se precisar.
 const CURRICULOS_EMAIL_AVISO = 'contato@arletevieiraconfeitaria.com.br';
 
 $erros = [];
+// Qual aba enviou: 'pdf' (currículo em PDF + IA) ou 'manual' (formulário).
+$modo = ($_POST['modo'] ?? '') === 'pdf' ? 'pdf' : 'manual';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Honeypot antispam: bot preenche o campo escondido; humano nunca.
@@ -21,39 +24,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dados[$campo] = trim((string) ($_POST[$campo] ?? ''));
     }
 
-    // Validação: e-mail é o único obrigatório (espelha o Google Form).
-    if ($dados['email'] === '' || !filter_var($dados['email'], FILTER_VALIDATE_EMAIL)) {
-        $erros[] = 'Informe um e-mail válido.';
-    }
-    if ($dados['data_nascimento'] !== '') {
-        $d = DateTime::createFromFormat('Y-m-d', $dados['data_nascimento']);
-        if (!$d) { $dados['data_nascimento'] = ''; }
-    }
-
-    // Upload opcional do PDF do currículo.
     $pdfSalvo = null;
-    if (!empty($_FILES['curriculo_pdf']) && $_FILES['curriculo_pdf']['error'] !== UPLOAD_ERR_NO_FILE) {
-        $arq = $_FILES['curriculo_pdf'];
-        if ($arq['error'] !== UPLOAD_ERR_OK) {
-            $erros[] = 'Falha ao enviar o arquivo. Tente novamente.';
-        } elseif ($arq['size'] > 8 * 1024 * 1024) {
-            $erros[] = 'O currículo em PDF deve ter no máximo 8 MB.';
+
+    if ($modo === 'pdf') {
+        // ---- Envio por PDF: arquivo obrigatório; o Gemini lê e preenche. ----
+        if (empty($_FILES['curriculo_pdf']) || $_FILES['curriculo_pdf']['error'] === UPLOAD_ERR_NO_FILE) {
+            $erros[] = 'Anexe o seu currículo em PDF.';
         } else {
-            $finfo = new finfo(FILEINFO_MIME_TYPE);
-            $mime  = $finfo->file($arq['tmp_name']);
-            $ext   = strtolower(pathinfo($arq['name'], PATHINFO_EXTENSION));
-            if ($mime !== 'application/pdf' || $ext !== 'pdf') {
-                $erros[] = 'Envie o currículo apenas em formato PDF.';
+            $arq = $_FILES['curriculo_pdf'];
+            if ($arq['error'] !== UPLOAD_ERR_OK) {
+                $erros[] = 'Falha ao enviar o arquivo. Tente novamente.';
+            } elseif ($arq['size'] > 8 * 1024 * 1024) {
+                $erros[] = 'O currículo em PDF deve ter no máximo 8 MB.';
             } else {
-                $dir = __DIR__ . '/admin/data/curriculos';
-                if (!is_dir($dir)) { @mkdir($dir, 0755, true); }
-                $nome = 'cv_' . date('Ymd') . '_' . bin2hex(random_bytes(6)) . '.pdf';
-                if (move_uploaded_file($arq['tmp_name'], $dir . '/' . $nome)) {
-                    $pdfSalvo = $nome;
+                $finfo = new finfo(FILEINFO_MIME_TYPE);
+                $mime  = $finfo->file($arq['tmp_name']);
+                $ext   = strtolower(pathinfo($arq['name'], PATHINFO_EXTENSION));
+                if ($mime !== 'application/pdf' || $ext !== 'pdf') {
+                    $erros[] = 'Envie o currículo apenas em formato PDF.';
                 } else {
-                    $erros[] = 'Não foi possível salvar o arquivo enviado.';
+                    // Lê o PDF com a IA ANTES de mover o arquivo (usa o tmp).
+                    if (financeiro_ia_configurada()) {
+                        try {
+                            $b64 = base64_encode((string) file_get_contents($arq['tmp_name']));
+                            $ext_ia = financeiro_gemini()->extrairCurriculo($b64);
+                            foreach (curriculos_campos() as $campo) {
+                                $v = trim((string) ($ext_ia[$campo] ?? ''));
+                                // O que o candidato digitou (ex.: e-mail) tem prioridade;
+                                // a IA só preenche o que ficou em branco.
+                                if ($v !== '' && ($dados[$campo] ?? '') === '') {
+                                    $dados[$campo] = $v;
+                                }
+                            }
+                        } catch (\Throwable $e) {
+                            // IA falhou: segue salvando o PDF; o RH lê manualmente.
+                        }
+                    }
+                    if ($dados['data_nascimento'] !== '') {
+                        $d = DateTime::createFromFormat('Y-m-d', $dados['data_nascimento']);
+                        if (!$d) { $dados['data_nascimento'] = ''; }
+                    }
+                    $dir = __DIR__ . '/admin/data/curriculos';
+                    if (!is_dir($dir)) { @mkdir($dir, 0755, true); }
+                    $nome = 'cv_' . date('Ymd') . '_' . bin2hex(random_bytes(6)) . '.pdf';
+                    if (move_uploaded_file($arq['tmp_name'], $dir . '/' . $nome)) {
+                        $pdfSalvo = $nome;
+                    } else {
+                        $erros[] = 'Não foi possível salvar o arquivo enviado.';
+                    }
                 }
             }
+        }
+        // No envio por PDF o e-mail pode vir do formulário OU do próprio currículo.
+        if (!$erros && ($dados['email'] === '' || !filter_var($dados['email'], FILTER_VALIDATE_EMAIL))) {
+            $erros[] = 'Não encontramos um e-mail no currículo. Informe seu e-mail para concluir.';
+        }
+    } else {
+        // ---- Envio pelo formulário: sem anexo, e-mail obrigatório. ----
+        if ($dados['email'] === '' || !filter_var($dados['email'], FILTER_VALIDATE_EMAIL)) {
+            $erros[] = 'Informe um e-mail válido.';
+        }
+        if ($dados['data_nascimento'] !== '') {
+            $d = DateTime::createFromFormat('Y-m-d', $dados['data_nascimento']);
+            if (!$d) { $dados['data_nascimento'] = ''; }
         }
     }
 
@@ -175,7 +208,7 @@ include "includes/top.php" ?>
                     <div class="col-lg-8">
                         <div class="text-center mb-4">
                             <h2 class="font-weight-bold text-color-primary mb-2">Envie seu currículo</h2>
-                            <p class="lead">Preencha os dados abaixo. Leva menos de 2 minutos.</p>
+                            <p class="lead">Escolha como prefere se candidatar.</p>
                         </div>
 
                         <?php if ($enviado): ?>
@@ -193,61 +226,133 @@ include "includes/top.php" ?>
                                 </div>
                             <?php endif; ?>
 
-                            <form method="post" action="trabalhe-conosco.php" enctype="multipart/form-data" class="p-4 rounded shadow-sm bg-light">
-                                <!-- Honeypot antispam (escondido) -->
+                            <!-- Escolha do modo de envio -->
+                            <div id="cv-opcoes" class="row g-3 mb-2">
+                                <div class="col-md-6">
+                                    <button type="button" class="btn btn-outline-primary w-100 h-100 py-4 js-cv-modo" data-alvo="cv-form-pdf"
+                                            style="border-color:#a51d32;color:#a51d32;">
+                                        <i class="fas fa-file-pdf text-6 d-block mb-2"></i>
+                                        <span class="font-weight-bold d-block text-4">Enviar currículo (PDF)</span>
+                                        <small class="text-muted">Anexe seu PDF e a gente já preenche seus dados pra você.</small>
+                                    </button>
+                                </div>
+                                <div class="col-md-6">
+                                    <button type="button" class="btn btn-outline-primary w-100 h-100 py-4 js-cv-modo" data-alvo="cv-form-manual"
+                                            style="border-color:#a51d32;color:#a51d32;">
+                                        <i class="fas fa-keyboard text-6 d-block mb-2"></i>
+                                        <span class="font-weight-bold d-block text-4">Preencher formulário</span>
+                                        <small class="text-muted">Responda algumas perguntas rápidas. Leva menos de 2 minutos.</small>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- FORM: envio por PDF (IA preenche os dados) -->
+                            <form id="cv-form-pdf" method="post" action="trabalhe-conosco.php" enctype="multipart/form-data"
+                                  class="p-4 rounded shadow-sm bg-light cv-form" style="display:none;">
+                                <input type="hidden" name="modo" value="pdf">
                                 <div style="position:absolute;left:-9999px;" aria-hidden="true">
                                     <label>Não preencha<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
                                 </div>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h4 class="font-weight-bold mb-0">Enviar currículo em PDF</h4>
+                                    <button type="button" class="btn btn-sm btn-link text-muted js-cv-voltar">&larr; Trocar opção</button>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label">Currículo em PDF <span class="text-danger">*</span></label>
+                                    <input type="file" name="curriculo_pdf" accept="application/pdf" class="form-control" required>
+                                    <small class="text-muted">Apenas PDF, até 8 MB. Vamos ler o arquivo e preencher seus dados automaticamente.</small>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label">Seu e-mail</label>
+                                    <input type="email" name="email" class="form-control" placeholder="Deixe em branco se já estiver no currículo" value="<?= $modo === 'pdf' ? $old('email') : '' ?>">
+                                    <small class="text-muted">Só precisamos caso ele não esteja no PDF.</small>
+                                </div>
+                                <div class="text-center mt-2">
+                                    <button type="submit" class="btn btn-primary btn-lg font-weight-semibold px-5 py-3"
+                                            style="background-color:#a51d32;border-color:#a51d32;">Enviar currículo</button>
+                                </div>
+                            </form>
 
+                            <!-- FORM: preenchimento manual -->
+                            <form id="cv-form-manual" method="post" action="trabalhe-conosco.php"
+                                  class="p-4 rounded shadow-sm bg-light cv-form" style="display:none;">
+                                <input type="hidden" name="modo" value="manual">
+                                <div style="position:absolute;left:-9999px;" aria-hidden="true">
+                                    <label>Não preencha<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h4 class="font-weight-bold mb-0">Preencha seus dados</h4>
+                                    <button type="button" class="btn btn-sm btn-link text-muted js-cv-voltar">&larr; Trocar opção</button>
+                                </div>
                                 <div class="row">
                                     <div class="form-group col-md-6 mb-3">
                                         <label class="form-label">Nome completo</label>
-                                        <input type="text" name="nome" class="form-control" value="<?= $old('nome') ?>">
+                                        <input type="text" name="nome" class="form-control" value="<?= $modo === 'manual' ? $old('nome') : '' ?>">
                                     </div>
                                     <div class="form-group col-md-6 mb-3">
                                         <label class="form-label">E-mail <span class="text-danger">*</span></label>
-                                        <input type="email" name="email" class="form-control" required value="<?= $old('email') ?>">
+                                        <input type="email" name="email" class="form-control" value="<?= $modo === 'manual' ? $old('email') : '' ?>">
                                     </div>
                                     <div class="form-group col-md-6 mb-3">
                                         <label class="form-label">Data de nascimento</label>
-                                        <input type="date" name="data_nascimento" class="form-control" value="<?= $old('data_nascimento') ?>">
+                                        <input type="date" name="data_nascimento" class="form-control" value="<?= $modo === 'manual' ? $old('data_nascimento') : '' ?>">
                                     </div>
                                     <div class="form-group col-md-6 mb-3">
                                         <label class="form-label">Melhor contato (WhatsApp)</label>
-                                        <input type="text" name="contato" class="form-control" placeholder="(48) 90000-0000" value="<?= $old('contato') ?>">
+                                        <input type="text" name="contato" class="form-control" placeholder="(48) 90000-0000" value="<?= $modo === 'manual' ? $old('contato') : '' ?>">
                                     </div>
                                     <div class="form-group col-md-6 mb-3">
                                         <label class="form-label">Bairro / Cidade</label>
-                                        <input type="text" name="bairro_cidade" class="form-control" value="<?= $old('bairro_cidade') ?>">
+                                        <input type="text" name="bairro_cidade" class="form-control" value="<?= $modo === 'manual' ? $old('bairro_cidade') : '' ?>">
                                     </div>
                                     <div class="form-group col-md-6 mb-3">
                                         <label class="form-label">Vaga de interesse</label>
-                                        <input type="text" name="vaga_interesse" class="form-control" placeholder="Ex.: Confeiteiro(a), Atendimento..." value="<?= $old('vaga_interesse') ?>">
+                                        <input type="text" name="vaga_interesse" class="form-control" placeholder="Ex.: Confeiteiro(a), Atendimento..." value="<?= $modo === 'manual' ? $old('vaga_interesse') : '' ?>">
                                     </div>
                                     <div class="form-group col-12 mb-3">
                                         <label class="form-label">Possui algum curso/especialização na área?</label>
-                                        <textarea name="cursos" class="form-control" rows="2"><?= $old('cursos') ?></textarea>
+                                        <textarea name="cursos" class="form-control" rows="2"><?= $modo === 'manual' ? $old('cursos') : '' ?></textarea>
                                     </div>
                                     <div class="form-group col-12 mb-3">
                                         <label class="form-label">Possui experiência na área?</label>
-                                        <textarea name="experiencia" class="form-control" rows="2"><?= $old('experiencia') ?></textarea>
+                                        <textarea name="experiencia" class="form-control" rows="2"><?= $modo === 'manual' ? $old('experiencia') : '' ?></textarea>
                                     </div>
                                     <div class="form-group col-12 mb-3">
                                         <label class="form-label">Algo que gostaria de acrescentar?</label>
-                                        <textarea name="observacoes" class="form-control" rows="3"><?= $old('observacoes') ?></textarea>
-                                    </div>
-                                    <div class="form-group col-12 mb-3">
-                                        <label class="form-label">Currículo em PDF (opcional)</label>
-                                        <input type="file" name="curriculo_pdf" accept="application/pdf" class="form-control">
-                                        <small class="text-muted">Apenas PDF, até 8 MB.</small>
+                                        <textarea name="observacoes" class="form-control" rows="3"><?= $modo === 'manual' ? $old('observacoes') : '' ?></textarea>
                                     </div>
                                 </div>
-
                                 <div class="text-center mt-2">
                                     <button type="submit" class="btn btn-primary btn-lg font-weight-semibold px-5 py-3"
                                             style="background-color:#a51d32;border-color:#a51d32;">Enviar candidatura</button>
                                 </div>
                             </form>
+
+                            <script>
+                            (function () {
+                                var opcoes = document.getElementById('cv-opcoes');
+                                function abrir(id) {
+                                    document.querySelectorAll('.cv-form').forEach(function (f) { f.style.display = 'none'; });
+                                    var alvo = document.getElementById(id);
+                                    if (!alvo) { return; }
+                                    if (opcoes) { opcoes.style.display = 'none'; }
+                                    alvo.style.display = 'block';
+                                }
+                                function voltar() {
+                                    document.querySelectorAll('.cv-form').forEach(function (f) { f.style.display = 'none'; });
+                                    if (opcoes) { opcoes.style.display = ''; }
+                                }
+                                document.querySelectorAll('.js-cv-modo').forEach(function (b) {
+                                    b.addEventListener('click', function () { abrir(b.dataset.alvo); });
+                                });
+                                document.querySelectorAll('.js-cv-voltar').forEach(function (b) {
+                                    b.addEventListener('click', voltar);
+                                });
+                                <?php if ($erros): ?>
+                                abrir('cv-form-<?= $modo ?>');
+                                <?php endif; ?>
+                            })();
+                            </script>
                         <?php endif; ?>
                     </div>
                 </div>

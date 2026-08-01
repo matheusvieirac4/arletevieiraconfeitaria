@@ -294,6 +294,55 @@ class GeminiClient
         ], $schema);
     }
 
+    /**
+     * Lê o PDF de um currículo e extrai os campos da candidatura. Só devolve o
+     * que encontrar; o que não achar volta vazio (nunca inventa). As chaves
+     * batem com curriculos_campos(): nome, email, data_nascimento, contato,
+     * bairro_cidade, vaga_interesse, cursos, experiencia, observacoes.
+     * @param string $base64 Conteúdo do PDF em base64.
+     */
+    public function extrairCurriculo(string $base64): array
+    {
+        $str = ['type' => 'string'];
+        $schema = [
+            'type' => 'object',
+            'properties' => [
+                'nome'            => $str,
+                'email'           => $str,
+                'data_nascimento' => $str,
+                'contato'         => $str,
+                'bairro_cidade'   => $str,
+                'vaga_interesse'  => $str,
+                'cursos'          => $str,
+                'experiencia'     => $str,
+                'observacoes'     => $str,
+            ],
+            'required' => ['nome'],
+        ];
+        $instr = implode("\n", [
+            'Você lê o PDF de um CURRÍCULO e extrai os dados do candidato para o',
+            'formulário de "Trabalhe Conosco" de uma confeitaria. Responda SOMENTE',
+            'com o JSON do schema. Regras:',
+            '- Preencha APENAS o que estiver no currículo. O que não encontrar, deixe',
+            '  como string VAZIA. NUNCA invente dados.',
+            '- nome: nome completo do candidato.',
+            '- email: e-mail de contato, se houver.',
+            '- data_nascimento: no formato YYYY-MM-DD. Se só houver idade ou nada, deixe vazio.',
+            '- contato: telefone/WhatsApp (mantenha como está escrito).',
+            '- bairro_cidade: bairro e/ou cidade onde mora.',
+            '- vaga_interesse: cargo/objetivo profissional declarado, se houver.',
+            '- cursos: resumo curto dos cursos, formação ou especializações.',
+            '- experiencia: resumo curto das experiências profissionais mais relevantes.',
+            '- observacoes: qualquer informação extra útil (idiomas, disponibilidade, etc.).',
+            '- Seja conciso em cursos/experiencia/observacoes (poucas linhas cada).',
+        ]);
+        return $this->chamar([
+            ['text' => $instr],
+            ['inline_data' => ['mime_type' => 'application/pdf', 'data' => $base64]],
+            ['text' => 'Extraia os dados deste currículo.'],
+        ], $schema);
+    }
+
     private function extrair(array $parts): array
     {
         return $this->normalizar($this->chamar($parts, $this->schema()));
