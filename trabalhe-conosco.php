@@ -106,7 +106,7 @@ include "includes/top.php" ?>
                             <li class="active text-color-primary">TRABALHE CONOSCO</li>
                         </ul>
                         <h1 class="font-weight-bold text-color-primary mb-3">Faça parte da nossa história</h1>
-                        <p class="lead">Na <strong>Arlete Vieira Confeitaria &amp; Doceria</strong> transformamos ingredientes simples
+                        <p class="lead">Na <strong>Arlete Vieira Confeitaria</strong> transformamos ingredientes simples
                             em momentos inesquecíveis. Se você tem paixão pelo que faz e vontade de crescer com a gente,
                             adoraríamos te conhecer.</p>
                     </div>
