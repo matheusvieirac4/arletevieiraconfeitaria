@@ -6,6 +6,7 @@ function curriculos_status_map(): array {
     return [
         'novo'      => ['Novo',       'primary'],
         'analise'   => ['Em análise', 'warning'],
+        'backlog'   => ['Backlog',    'info'],
         'aprovado'  => ['Aprovado',   'success'],
         'reprovado' => ['Reprovado',  'secondary'],
     ];
