@@ -153,7 +153,15 @@ require __DIR__ . '/_header.php';
                         <td><?= htmlspecialchars($c['vaga_interesse'] ?: '—') ?></td>
                         <td><?= htmlspecialchars($c['contato'] ?: '—') ?></td>
                         <td><?= htmlspecialchars($c['bairro_cidade'] ?: '—') ?></td>
-                        <td class="text-center"><?= !empty($c['curriculo_pdf']) ? '<i data-feather="paperclip" class="text-success"></i>' : '<span class="text-muted">—</span>' ?></td>
+                        <td class="text-center">
+                            <?php if (!empty($c['curriculo_pdf'])): ?>
+                                <a href="curriculo_download.php?id=<?= (int) $c['id'] ?>" class="text-success" title="Baixar currículo (PDF)">
+                                    <i data-feather="download"></i>
+                                </a>
+                            <?php else: ?>
+                                <span class="text-muted">—</span>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <select class="form-select form-select-sm js-status-inline border-<?= $statusMap[$c['status']][1] ?? 'secondary' ?>"
                                     data-id="<?= (int) $c['id'] ?>" style="min-width:130px">
