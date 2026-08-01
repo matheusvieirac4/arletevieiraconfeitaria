@@ -61,34 +61,26 @@ if ($acao === 'entrada_xml' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (\Throwable $e) {
         estoque_redirect('danger', 'XML inválido: ' . $e->getMessage(), 'estoque_entrada.php');
     }
-    // Pré-casa cada item da nota com o estoque.
-    $cache = estoque_listar($pdo);
-    $aliases = estoque_aliases_map($pdo);
-    $linhas = [];
-    foreach ($nota['itens'] as $it) {
-        $casa = estoque_casar_item($it['ean'] ?? '', $it['descricao'] ?? '', $cache, $aliases);
-        $q    = (float) str_replace(',', '.', (string) ($it['quantidade'] ?? '0'));
-        $vtot = (float) str_replace(',', '.', (string) ($it['valor'] ?? '0'));   // vProd (total da linha)
-        $linhas[] = [
-            'descricao' => $it['descricao'] ?? '',
-            'ean'       => preg_replace('/\D/', '', (string) ($it['ean'] ?? '')),
-            'quantidade'=> $q,
-            'unidade'   => $it['unidade'] ?? '',
-            'valor_unit'=> $q > 0 ? $vtot / $q : 0.0,
-            'item_id'   => $casa['item_id'],
-            'match'     => $casa['match'],
-            'embalagem' => estoque_qtde_da_descricao((string) ($it['descricao'] ?? '')) ?? 0,
-        ];
+    $_SESSION['estoque_entrada'] = estoque_nota_para_revisao($pdo, $nota);
+    header('Location: estoque_entrada.php');
+    exit;
+}
+
+// ---- Entrada por NF-e GUARDADA do SEFAZ (XML completo já baixado) ----
+if ($acao === 'entrada_nfe' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_once __DIR__ . '/lib/nfe_parser.php';
+    require_once __DIR__ . '/model_financeiro.php';
+    $chave = preg_replace('/\D/', '', (string) ($_POST['chave'] ?? ''));
+    $xml = $chave !== '' ? financeiro_nfe_xml($chave) : null;
+    if ($xml === null) {
+        estoque_redirect('danger', 'XML dessa nota não está guardado.', 'estoque_notas.php');
     }
-    $chave = $nota['chave'] ?? '';
-    $jaLancada = $chave !== '' ? estoque_nota_processada($pdo, $chave) : null;
-    $_SESSION['estoque_entrada'] = [
-        'fornecedor' => $nota['fornecedor']['nome'] ?? '',
-        'numero'     => $nota['numero'] ?? '',
-        'chave'      => $chave,
-        'duplicada'  => $jaLancada,   // data do lançamento anterior, se houver
-        'linhas'     => $linhas,
-    ];
+    try {
+        $nota = NFeParser::parse($xml);
+    } catch (\Throwable $e) {
+        estoque_redirect('danger', 'XML inválido: ' . $e->getMessage(), 'estoque_notas.php');
+    }
+    $_SESSION['estoque_entrada'] = estoque_nota_para_revisao($pdo, $nota);
     header('Location: estoque_entrada.php');
     exit;
 }

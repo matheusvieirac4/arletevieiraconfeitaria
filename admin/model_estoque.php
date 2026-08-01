@@ -618,6 +618,41 @@ function estoque_nota_processada(PDO $pdo, string $chave): ?string
     } catch (\Throwable $e) { return null; }
 }
 
+/**
+ * Monta a estrutura de revisão de entrada a partir de uma nota já parseada
+ * (NFeParser). Pré-casa cada item com o estoque. Usado tanto pelo upload de XML
+ * quanto pela importação de uma NF-e guardada do SEFAZ.
+ */
+function estoque_nota_para_revisao(PDO $pdo, array $nota): array
+{
+    $cache   = estoque_listar($pdo);
+    $aliases = estoque_aliases_map($pdo);
+    $linhas  = [];
+    foreach ($nota['itens'] ?? [] as $it) {
+        $casa = estoque_casar_item($it['ean'] ?? '', $it['descricao'] ?? '', $cache, $aliases);
+        $q    = (float) str_replace(',', '.', (string) ($it['quantidade'] ?? '0'));
+        $vtot = (float) str_replace(',', '.', (string) ($it['valor'] ?? '0'));   // vProd (total da linha)
+        $linhas[] = [
+            'descricao'  => $it['descricao'] ?? '',
+            'ean'        => preg_replace('/\D/', '', (string) ($it['ean'] ?? '')),
+            'quantidade' => $q,
+            'unidade'    => $it['unidade'] ?? '',
+            'valor_unit' => $q > 0 ? $vtot / $q : 0.0,
+            'item_id'    => $casa['item_id'],
+            'match'      => $casa['match'],
+            'embalagem'  => estoque_qtde_da_descricao((string) ($it['descricao'] ?? '')) ?? 0,
+        ];
+    }
+    $chave = $nota['chave'] ?? '';
+    return [
+        'fornecedor' => $nota['fornecedor']['nome'] ?? '',
+        'numero'     => $nota['numero'] ?? '',
+        'chave'      => $chave,
+        'duplicada'  => $chave !== '' ? estoque_nota_processada($pdo, $chave) : null,
+        'linhas'     => $linhas,
+    ];
+}
+
 /** Registra a nota como processada (evita dobrar o estoque em reenvio). */
 function estoque_nota_registrar(PDO $pdo, string $chave, string $desc = ''): void
 {

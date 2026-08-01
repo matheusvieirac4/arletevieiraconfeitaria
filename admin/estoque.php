@@ -54,6 +54,7 @@ require __DIR__ . '/_header.php';
                     <i data-feather="file-plus" class="align-middle me-1" style="width:15px;height:15px;"></i>Entrada
                 </button>
                 <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="estoque_notas.php">📥 Notas do SEFAZ</a></li>
                     <li><a class="dropdown-item" href="#" id="ent-xml">📄 XML da nota</a></li>
                     <li><a class="dropdown-item" href="estoque_cupom_foto.php">📷 Foto do cupom</a></li>
                 </ul>

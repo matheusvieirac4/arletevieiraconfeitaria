@@ -837,6 +837,53 @@ function financeiro_sefaz_doc_para_nota(array $doc): ?array
     return null; // eventos e outros: ignora
 }
 
+// --------------------- Guarda dos XML completos (p/ importar no estoque) ---
+// A distribuição por NSU costuma trazer o resumo (resNFe, só totais) e, quando
+// há manifestação/ciência, o XML completo (procNFe) com os itens. Só o completo
+// serve pra dar entrada no estoque, então guardamos esses num diretório + índice.
+
+function financeiro_nfe_dir(): string { return __DIR__ . '/data/nfe_xml'; }
+function financeiro_nfe_index_path(): string { return financeiro_nfe_dir() . '/index.json'; }
+
+function financeiro_nfe_index(): array
+{
+    $p = financeiro_nfe_index_path();
+    if (!is_file($p)) { return []; }
+    $d = json_decode((string) file_get_contents($p), true);
+    return is_array($d) ? $d : [];
+}
+
+/** Grava o XML completo de uma NF-e e registra os metadados no índice. */
+function financeiro_nfe_guardar(string $chave, string $xml, array $nota): bool
+{
+    $chave = preg_replace('/\D/', '', $chave);
+    if (strlen($chave) !== 44) { return false; }
+    $dir = financeiro_nfe_dir();
+    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    if (@file_put_contents("{$dir}/{$chave}.xml", $xml, LOCK_EX) === false) { return false; }
+
+    $idx = financeiro_nfe_index();
+    $idx[$chave] = [
+        'chave'      => $chave,
+        'fornecedor' => $nota['fornecedor']['nome'] ?? '',
+        'numero'     => $nota['numero'] ?? '',
+        'emissao'    => $nota['emissao'] ?? '',
+        'valor'      => (string) ($nota['valor_total'] ?? ''),
+        'itens'      => count($nota['itens'] ?? []),
+        'guardada_em'=> date('c'),
+    ];
+    @file_put_contents(financeiro_nfe_index_path(), json_encode($idx, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+    return true;
+}
+
+/** XML completo guardado de uma nota, ou null. */
+function financeiro_nfe_xml(string $chave): ?string
+{
+    $chave = preg_replace('/\D/', '', $chave);
+    $p = financeiro_nfe_dir() . "/{$chave}.xml";
+    return is_file($p) ? (string) file_get_contents($p) : null;
+}
+
 /**
  * Roda a distribuição por NSU: baixa novas NF-e e enfileira como pendentes.
  * @return array{novas:int,cStat:int,xMotivo:string,ultNSU:string,maxNSU:string,paginas:int}
@@ -863,6 +910,10 @@ function financeiro_sefaz_puxar(int $maxPaginas = 10): array
             $nota = financeiro_sefaz_doc_para_nota($doc);
             if (!$nota || empty($nota['chave'])) { continue; }
             $ch = $nota['chave'];
+            // XML completo (procNFe) com itens → guarda p/ importar no estoque.
+            if (strpos($doc['schema'] ?? '', 'procNFe') === 0 && !empty($nota['itens'])) {
+                financeiro_nfe_guardar($ch, $doc['xml'], $nota);
+            }
             if (financeiro_ja_processada($ch) || isset(financeiro_pendentes_listar()[$ch])) { continue; }
             if (financeiro_pendente_salvar($ch, $nota)) { $novas++; }
         }
