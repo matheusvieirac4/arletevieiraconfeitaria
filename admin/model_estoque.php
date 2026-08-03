@@ -305,7 +305,15 @@ function estoque_num($v): ?float
 /** Normaliza campos do formulário para os binds. */
 function estoque_params(array $d): array
 {
-    $num = fn($v) => estoque_num($v);
+    // Valida a faixa do DECIMAL(10,3): fora dela o MySQL cravaria no teto
+    // (9.999.999,999) em silêncio — foi assim que saldos absurdos apareceram.
+    $num = function ($v) {
+        $n = estoque_num($v);
+        if ($n !== null && ($n > 9999999.999 || $n < -9999999.999)) {
+            throw new RuntimeException('Valor fora do intervalo permitido: ' . rtrim(rtrim(number_format($n, 3, ',', '.'), '0'), ',') . '.');
+        }
+        return $n;
+    };
     $barras = preg_replace('/\D/', '', (string) ($d['codigo_barras'] ?? ''));
     $compra = preg_replace('/\D/', '', (string) ($d['codigo_compra'] ?? ''));
     $un     = strtoupper(trim((string) ($d['unidade_medida'] ?? 'UN')));
