@@ -63,6 +63,7 @@ require __DIR__ . '/_header.php';
                 Lista de compra <?php if ($abaixo): ?><span class="badge bg-danger"><?= $abaixo ?></span><?php endif; ?>
             </a>
             <a href="estoque_auditoria.php" class="btn btn-outline-primary btn-sm"><i data-feather="clipboard" class="align-middle me-1" style="width:15px;height:15px;"></i>Auditoria</a>
+            <a href="estoque_historico.php" class="btn btn-outline-primary btn-sm"><i data-feather="clock" class="align-middle me-1" style="width:15px;height:15px;"></i>Histórico</a>
             <a href="estoque_kiosk.php" class="btn btn-dark btn-sm"><i data-feather="camera" class="align-middle me-1" style="width:15px;height:15px;"></i>Quiosque</a>
             <a href="estoque_colaboradores.php" class="btn btn-outline-secondary btn-sm"><i data-feather="users" class="align-middle me-1" style="width:15px;height:15px;"></i>Colaboradores</a>
             <a href="estoque_fornecedores.php" class="btn btn-outline-secondary btn-sm"><i data-feather="truck" class="align-middle me-1" style="width:15px;height:15px;"></i>Fornecedores</a>

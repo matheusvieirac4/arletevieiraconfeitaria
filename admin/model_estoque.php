@@ -518,6 +518,79 @@ function estoque_movimentacoes(PDO $pdo, int $itemId, int $limite = 30): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+/**
+ * Histórico unificado de movimentações (todos os itens), com filtros opcionais.
+ * $filtros: busca (nome do item/observação), tipo, origem, responsavel, de (Y-m-d), ate (Y-m-d), item_id.
+ * Retorna as linhas já com o nome do item (item_nome) e o total (para paginação).
+ */
+function estoque_historico(PDO $pdo, array $filtros = [], int $limite = 100, int $offset = 0): array
+{
+    $where = [];
+    $params = [];
+
+    if (!empty($filtros['busca'])) {
+        $where[] = '(i.nome LIKE :busca OR m.observacao LIKE :busca OR m.responsavel LIKE :busca)';
+        $params[':busca'] = '%' . $filtros['busca'] . '%';
+    }
+    if (!empty($filtros['tipo']) && in_array($filtros['tipo'], ['entrada', 'saida', 'ajuste'], true)) {
+        $where[] = 'm.tipo = :tipo';
+        $params[':tipo'] = $filtros['tipo'];
+    }
+    if (!empty($filtros['origem'])) {
+        $where[] = 'm.origem = :origem';
+        $params[':origem'] = $filtros['origem'];
+    }
+    if (!empty($filtros['responsavel'])) {
+        $where[] = 'm.responsavel = :responsavel';
+        $params[':responsavel'] = $filtros['responsavel'];
+    }
+    if (!empty($filtros['item_id'])) {
+        $where[] = 'm.item_id = :item_id';
+        $params[':item_id'] = (int) $filtros['item_id'];
+    }
+    if (!empty($filtros['de'])) {
+        $where[] = 'm.criado_em >= :de';
+        $params[':de'] = $filtros['de'] . ' 00:00:00';
+    }
+    if (!empty($filtros['ate'])) {
+        $where[] = 'm.criado_em <= :ate';
+        $params[':ate'] = $filtros['ate'] . ' 23:59:59';
+    }
+    $sqlWhere = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+    $stTotal = $pdo->prepare("SELECT COUNT(*) FROM estoque_movimentacoes m LEFT JOIN estoque_itens i ON i.id = m.item_id $sqlWhere");
+    $stTotal->execute($params);
+    $total = (int) $stTotal->fetchColumn();
+
+    $limite = max(1, min(500, $limite));
+    $offset = max(0, $offset);
+    $stmt = $pdo->prepare("
+        SELECT m.*, i.nome AS item_nome
+        FROM estoque_movimentacoes m
+        LEFT JOIN estoque_itens i ON i.id = m.item_id
+        $sqlWhere
+        ORDER BY m.criado_em DESC, m.id DESC
+        LIMIT $limite OFFSET $offset
+    ");
+    $stmt->execute($params);
+
+    return ['linhas' => $stmt->fetchAll(PDO::FETCH_ASSOC), 'total' => $total];
+}
+
+/** Valores distintos de origem já registrados (para o filtro do histórico). */
+function estoque_historico_origens(PDO $pdo): array
+{
+    return $pdo->query("SELECT DISTINCT origem FROM estoque_movimentacoes WHERE origem <> '' ORDER BY origem")
+               ->fetchAll(PDO::FETCH_COLUMN) ?: [];
+}
+
+/** Valores distintos de responsável já registrados (para o filtro do histórico). */
+function estoque_historico_responsaveis(PDO $pdo): array
+{
+    return $pdo->query("SELECT DISTINCT responsavel FROM estoque_movimentacoes WHERE responsavel IS NOT NULL AND responsavel <> '' ORDER BY responsavel")
+               ->fetchAll(PDO::FETCH_COLUMN) ?: [];
+}
+
 /** Normaliza um nome/descrição para comparar (minúsculo, sem acento, sem espaço extra). */
 function estoque_normalizar_nome(string $s): string
 {
