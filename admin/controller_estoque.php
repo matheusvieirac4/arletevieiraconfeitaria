@@ -36,7 +36,7 @@ if (($acao === 'salvar') && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($acao === 'movimentar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id   = (int) ($_POST['item_id'] ?? 0);
     $tipo = (string) ($_POST['tipo'] ?? '');
-    $qtd  = (float) str_replace(',', '.', (string) ($_POST['quantidade'] ?? '0'));
+    $qtd  = estoque_num($_POST['quantidade'] ?? '0') ?? 0;
     $obs  = trim((string) ($_POST['observacao'] ?? ''));
     $volta = 'estoque_item.php?id=' . $id;
     if ($id <= 0 || $qtd <= 0 && $tipo !== 'ajuste') {
@@ -113,9 +113,9 @@ if ($acao === 'entrada_cupom' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $linhas[] = [
             'descricao'  => $desc,
             'ean'        => '',
-            'quantidade' => (float) str_replace(',', '.', (string) ($it['quantidade'] ?? '1')),
+            'quantidade' => estoque_num($it['quantidade'] ?? '1') ?? 1,
             'unidade'    => $it['unidade'] ?? '',
-            'valor_unit' => (float) str_replace(',', '.', (string) ($it['valor_unit'] ?? '0')),
+            'valor_unit' => estoque_num($it['valor_unit'] ?? '0') ?? 0,
             'item_id'    => $casa['item_id'],
             'match'      => $casa['match'],
             'embalagem'  => estoque_qtde_da_descricao($desc) ?? 0,
@@ -145,10 +145,10 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         foreach ($itemIds as $i => $sel) {
-            $qtd = (float) str_replace(',', '.', (string) ($qtds[$i] ?? '0'));
+            $qtd = estoque_num($qtds[$i] ?? '0') ?? 0;
             if ($qtd <= 0 || $sel === 'ignorar') { continue; }
             $ean   = preg_replace('/\D/', '', (string) ($eans[$i] ?? ''));
-            $vunit = (float) str_replace(',', '.', (string) ($vunits[$i] ?? '0'));
+            $vunit = estoque_num($vunits[$i] ?? '0') ?? 0;
 
             if ($sel === 'novo') {
                 $nomeNovo = trim((string) ($descs[$i] ?? 'Novo item'));
@@ -214,7 +214,7 @@ if ($acao === 'auditoria' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($contagem as $itemId => $valor) {
             $v = trim((string) $valor);
             if ($v === '') { continue; }   // em branco não altera
-            $contado = (float) str_replace(',', '.', str_replace('.', '', $v));
+            $contado = estoque_num($v) ?? 0;
             $item = estoque_buscar($pdo, (int) $itemId);
             if (!$item) { continue; }
             $antes = (float) $item['estoque_atual'];

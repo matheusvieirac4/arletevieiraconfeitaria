@@ -275,16 +275,37 @@ function estoque_atualizar(PDO $pdo, int $id, array $d): bool
     return $pdo->prepare("UPDATE estoque_itens SET " . implode(', ', $cols) . " WHERE id=:id")->execute($p);
 }
 
+/**
+ * Parser numérico BR canônico — ÚNICO ponto de conversão de string -> número
+ * no estoque. Trata os dois formatos sem ambiguidade:
+ *   "1.234,56" -> 1234.56   (ponto=milhar, vírgula=decimal)
+ *   "1234,56"  -> 1234.56    (só vírgula = decimal)
+ *   "1.234.567"-> 1234567    (vários pontos = milhar)
+ *   "1.5"/"2"  -> 1.5 / 2    (um ponto só = decimal; casa com a saída da IA)
+ * Devolve null se não for numérico. Use `?? 0` quando precisar de default.
+ */
+function estoque_num($v): ?float
+{
+    $v = trim((string) ($v ?? ''));
+    if ($v === '') { return null; }
+    $v = preg_replace('/[^\d.,-]/', '', $v);     // tira R$, espaços, unidades...
+    $temVirgula = strpos($v, ',') !== false;
+    $temPonto   = strpos($v, '.') !== false;
+    if ($temVirgula && $temPonto) {              // BR: ponto=milhar, vírgula=decimal
+        $v = str_replace('.', '', $v);
+        $v = str_replace(',', '.', $v);
+    } elseif ($temVirgula) {                      // só vírgula = decimal
+        $v = str_replace(',', '.', $v);
+    } elseif (substr_count($v, '.') > 1) {        // vários pontos = milhar
+        $v = str_replace('.', '', $v);
+    }                                             // um ponto só (ou nenhum) = decimal
+    return is_numeric($v) ? (float) $v : null;
+}
+
 /** Normaliza campos do formulário para os binds. */
 function estoque_params(array $d): array
 {
-    $num = function ($v) {
-        $v = trim((string) ($v ?? ''));
-        if ($v === '') { return null; }
-        $v = str_replace('.', '', $v);           // milhar BR
-        $v = str_replace(',', '.', $v);          // decimal BR
-        return is_numeric($v) ? (float) $v : null;
-    };
+    $num = fn($v) => estoque_num($v);
     $barras = preg_replace('/\D/', '', (string) ($d['codigo_barras'] ?? ''));
     $compra = preg_replace('/\D/', '', (string) ($d['codigo_compra'] ?? ''));
     $un     = strtoupper(trim((string) ($d['unidade_medida'] ?? 'UN')));
@@ -323,6 +344,11 @@ function estoque_movimentar(PDO $pdo, int $itemId, string $tipo, float $qtd, str
     if (!in_array($tipo, ['entrada', 'saida', 'ajuste'], true)) {
         throw new InvalidArgumentException('Tipo de movimentação inválido.');
     }
+    // Trava de sanidade: quantidade absurda quase sempre é erro de leitura
+    // (ex.: "1,000" do cupom virando mil). Falha alto em vez de gravar silencioso.
+    if (abs($qtd) > 100000) {
+        throw new RuntimeException('Quantidade fora do esperado (' . rtrim(rtrim(number_format($qtd, 3, ',', '.'), '0'), ',') . '). Confira o valor — nada foi gravado.');
+    }
     $temResp = estoque_mov_tem_responsavel($pdo);
     $pdo->beginTransaction();
     try {
@@ -335,6 +361,11 @@ function estoque_movimentar(PDO $pdo, int $itemId, string $tipo, float $qtd, str
         if ($tipo === 'entrada')      { $novo = $atual + abs($qtd); }
         elseif ($tipo === 'saida')    { $novo = $atual - abs($qtd); }
         else                          { $novo = $qtd; }   // ajuste: saldo absoluto
+
+        // Saldo além do que a coluna DECIMAL(10,3) comporta = quase certo erro de leitura.
+        if ($novo > 9999999.999 || $novo < -9999999.999) {
+            throw new RuntimeException('O saldo resultante fica fora do intervalo permitido. Confira a quantidade — nada foi gravado.');
+        }
 
         $pdo->prepare("UPDATE estoque_itens SET estoque_atual = :s WHERE id = :id")
             ->execute([':s' => $novo, ':id' => $itemId]);
@@ -703,8 +734,8 @@ function estoque_nota_para_revisao(PDO $pdo, array $nota): array
     $linhas  = [];
     foreach ($nota['itens'] ?? [] as $it) {
         $casa = estoque_casar_item($it['ean'] ?? '', $it['descricao'] ?? '', $cache, $aliases);
-        $q    = (float) str_replace(',', '.', (string) ($it['quantidade'] ?? '0'));
-        $vtot = (float) str_replace(',', '.', (string) ($it['valor'] ?? '0'));   // vProd (total da linha)
+        $q    = estoque_num($it['quantidade'] ?? '0') ?? 0;
+        $vtot = estoque_num($it['valor'] ?? '0') ?? 0;   // vProd (total da linha)
         $linhas[] = [
             'descricao'  => $it['descricao'] ?? '',
             'ean'        => preg_replace('/\D/', '', (string) ($it['ean'] ?? '')),

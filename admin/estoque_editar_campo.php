@@ -16,15 +16,12 @@ $bruto = (string) ($_POST['valor'] ?? '');
 $permitidos = ['preco', 'estoque_minimo', 'estoque_ideal'];   // whitelist (evita SQL na coluna)
 if ($id <= 0 || !in_array($campo, $permitidos, true)) { http_response_code(400); edc_out(['error' => 'Parâmetros inválidos.']); }
 
-// Número BR: vazio = null; "1.500,00" -> 1500.00
-$v = trim($bruto);
-if ($v === '') {
+// Número BR: vazio = null; "1.500,00" -> 1500.00 (parser único do estoque)
+if (trim($bruto) === '') {
     $valor = null;
 } else {
-    $v = str_replace('.', '', $v);
-    $v = str_replace(',', '.', $v);
-    if (!is_numeric($v)) { http_response_code(400); edc_out(['error' => 'Número inválido.']); }
-    $valor = (float) $v;
+    $valor = estoque_num($bruto);
+    if ($valor === null) { http_response_code(400); edc_out(['error' => 'Número inválido.']); }
 }
 
 try {

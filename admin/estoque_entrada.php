@@ -22,6 +22,10 @@ $itensTodos = estoque_listar($pdo);
 $page_title = 'Entrada de estoque';
 $active = 'estoque';
 $fmt = fn($n) => $n === null ? '' : rtrim(rtrim(number_format((float) $n, 3, ',', '.'), '0'), ',');
+// Para o CAMPO editável de quantidade: sem separador de milhar (só vírgula decimal),
+// senão "1000" apareceria como "1.000" e seria relido como 1 pelo parser. Evita o
+// descasamento entre o que a tela mostra e o que é gravado.
+$fmtInput = fn($n) => $n === null ? '' : rtrim(rtrim(number_format((float) $n, 3, ',', ''), '0'), ',');
 require __DIR__ . '/_header.php';
 ?>
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -89,7 +93,7 @@ require __DIR__ . '/_header.php';
                                     <td>
                                         <input type="text" name="quantidade[<?= $i ?>]" class="form-control text-center"
                                                style="min-width:70px;font-size:16px;"
-                                               value="<?= $fmt($l['quantidade']) ?>" inputmode="decimal">
+                                               value="<?= $fmtInput($l['quantidade']) ?>" inputmode="decimal">
                                         <?php if ((int) ($l['embalagem'] ?? 0) > 1): ?>
                                             <div class="form-check mt-1" style="min-width:110px;">
                                                 <input class="form-check-input" type="checkbox" name="mult[<?= $i ?>]" value="1" id="mult-<?= $i ?>" checked>
