@@ -99,8 +99,13 @@ require __DIR__ . '/_header.php';
                                         <span class="small"><?= $wl ?></span>
                                     </td>
                                     <td>
+                                        <?php if (!empty($dia['especial'])):
+                                            $esp = $dia['especial'];
+                                            $ic = ['feriado' => '🎉', 'folga' => '🌴', 'abono' => '📝'][$esp['tipo']] ?? '•'; ?>
+                                            <span class="badge bg-info me-1" title="<?= htmlspecialchars((string) $esp['descricao']) ?>"><?= $ic ?> <?= htmlspecialchars($esp['descricao'] ?: ucfirst($esp['tipo'])) ?></span>
+                                        <?php endif; ?>
                                         <?php if (!$dia['batidas']): ?>
-                                            <span class="text-muted small"><?= $dia['falta_dia'] ? 'falta' : ($dia['futuro'] ? '' : '—') ?></span>
+                                            <span class="text-muted small"><?= $dia['falta_dia'] ? 'falta' : (($dia['futuro'] || !empty($dia['especial'])) ? '' : '—') ?></span>
                                         <?php else: foreach ($dia['batidas'] as $b): ?>
                                             <span class="badge bg-light text-dark border me-1" title="<?= $b['origem'] ?>">
                                                 <?= $b['tipo'] === 'entrada' ? '▶' : '⏸' ?> <?= substr($b['momento'], 11, 5) ?>

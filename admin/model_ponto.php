@@ -218,7 +218,8 @@ function ponto_status(PDO $pdo, int $colaboradorId): array
 {
     $hoje = date('Y-m-d');
     $batidas = ponto_batidas_dia($pdo, $colaboradorId, $hoje);
-    $calc = ponto_calc_dia($batidas, ponto_pessoa($pdo, $colaboradorId) ?? ponto_jornada_default(), (int) date('w'));
+    $especial = ponto_especial_do_dia($pdo, $colaboradorId, $hoje);
+    $calc = ponto_calc_dia($batidas, ponto_pessoa($pdo, $colaboradorId) ?? ponto_jornada_default(), (int) date('w'), $especial);
     $prox = ponto_proximo_tipo($pdo, $colaboradorId);
     $dentro = ($prox['tipo'] === 'saida');
     $desde = null;
@@ -300,7 +301,7 @@ function ponto_batida_excluir(PDO $pdo, int $id): void
  * Retorna trabalhado_min, esperado_min, extra_min, falta_min, saldo_min, pares,
  * aberto (esqueceu de bater saída), intervalo_min (descontado).
  */
-function ponto_calc_dia(array $batidas, array $jornada, int $w): array
+function ponto_calc_dia(array $batidas, array $jornada, int $w, ?array $especial = null): array
 {
     // Ordena por segurança.
     usort($batidas, function ($a, $b) { return strcmp($a['momento'], $b['momento']); });
@@ -331,13 +332,19 @@ function ponto_calc_dia(array $batidas, array $jornada, int $w): array
         $trabMin -= $intervalo;
     }
 
-    $espMin = ponto_esperado_min($jornada, $w);
-    $tol    = (int) ($jornada['tolerancia_min'] ?? 10);
-    $saldo  = $trabMin - $espMin;
-    $extra  = 0; $falta = 0;
-    if ($espMin > 0) {
-        if ($saldo > $tol)       { $extra = $saldo; }
-        elseif ($saldo < -$tol)  { $falta = -$saldo; }
+    if ($especial !== null) {
+        // Feriado / folga: esperado 0. Se trabalhou, tudo vira banco de horas
+        // (extra); se não trabalhou, dia neutro (sem falta).
+        $espMin = 0; $extra = $trabMin; $falta = 0; $saldo = $trabMin;
+    } else {
+        $espMin = ponto_esperado_min($jornada, $w);
+        $tol    = (int) ($jornada['tolerancia_min'] ?? 10);
+        $saldo  = $trabMin - $espMin;
+        $extra  = 0; $falta = 0;
+        if ($espMin > 0) {
+            if ($saldo > $tol)       { $extra = $saldo; }
+            elseif ($saldo < -$tol)  { $falta = -$saldo; }
+        }
     }
     return [
         'trabalhado_min' => $trabMin,
@@ -349,6 +356,7 @@ function ponto_calc_dia(array $batidas, array $jornada, int $w): array
         'aberto'         => $aberto,
         'inconsistente'  => $inconsistente,
         'intervalo_min'  => $intervalo,
+        'especial'       => $especial,   // ['tipo','descricao'] ou null
         'batidas'        => $batidas,
     ];
 }
@@ -360,6 +368,7 @@ function ponto_calc_dia(array $batidas, array $jornada, int $w): array
 function ponto_resumo_mes(PDO $pdo, array $pessoa, int $ano, int $mes): array
 {
     $porDia = ponto_batidas_mes($pdo, (int) $pessoa['id'], $ano, $mes);
+    $especiais = ponto_especiais_mes($pdo, (int) $pessoa['id'], $ano, $mes);
     $diasNoMes = (int) date('t', mktime(0, 0, 0, $mes, 1, $ano));
     $hoje = date('Y-m-d');
 
@@ -373,7 +382,7 @@ function ponto_resumo_mes(PDO $pdo, array $pessoa, int $ano, int $mes): array
         $data = sprintf('%04d-%02d-%02d', $ano, $mes, $d);
         $w = (int) date('w', strtotime($data));
         $batidas = $porDia[$data] ?? [];
-        $c = ponto_calc_dia($batidas, $pessoa, $w);
+        $c = ponto_calc_dia($batidas, $pessoa, $w, $especiais[$data] ?? null);
         $temBatida = count($batidas) > 0;
         $futuro   = $data > $hoje;
         $ehHoje   = $data === $hoje;
@@ -419,6 +428,135 @@ function ponto_dashboard(PDO $pdo, int $ano, int $mes): array
         $out[] = ['pessoa' => $p, 'totais' => $r['totais']];
     }
     return $out;
+}
+
+// ------------------- Dias especiais (feriados / folgas) ---------------------
+// Um dia especial zera a jornada esperada da pessoa nesse dia (não vira falta).
+// Escopo: colaborador_id NULL = vale para TODOS; senão, só para aquela pessoa.
+// Trabalhar num dia especial cai no banco de horas (extra) — ver ponto_calc_dia.
+
+/** A tabela de dias especiais já existe? (setup cria; degrada sem ela). */
+function ponto_tem_especiais(PDO $pdo): bool
+{
+    static $tem = null;
+    if ($tem === null) {
+        try { $pdo->query("SELECT 1 FROM ponto_dias_especiais LIMIT 1"); $tem = true; }
+        catch (\Throwable $e) { $tem = false; }
+    }
+    return $tem;
+}
+
+/** Mapa data => ['tipo','descricao'] no mês (globais + da pessoa). Pessoa vence. */
+function ponto_especiais_mes(PDO $pdo, int $colaboradorId, int $ano, int $mes): array
+{
+    if (!ponto_tem_especiais($pdo)) { return []; }
+    $ini = sprintf('%04d-%02d-01', $ano, $mes);
+    $fim = date('Y-m-d', strtotime($ini . ' +1 month'));
+    $st = $pdo->prepare("SELECT data, tipo, descricao, colaborador_id
+                         FROM ponto_dias_especiais
+                         WHERE data >= :i AND data < :f
+                           AND (colaborador_id IS NULL OR colaborador_id = :c)
+                         ORDER BY (colaborador_id IS NULL) DESC");  // globais 1º, pessoa sobrescreve
+    $st->execute([':i' => $ini, ':f' => $fim, ':c' => $colaboradorId]);
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $out[$r['data']] = ['tipo' => $r['tipo'], 'descricao' => $r['descricao'],
+                            'pessoal' => $r['colaborador_id'] !== null];
+    }
+    return $out;
+}
+
+/** Dia especial de UMA pessoa numa data (ou null). Pessoa vence global. */
+function ponto_especial_do_dia(PDO $pdo, int $colaboradorId, string $data): ?array
+{
+    if (!ponto_tem_especiais($pdo)) { return null; }
+    $st = $pdo->prepare("SELECT tipo, descricao, colaborador_id
+                         FROM ponto_dias_especiais
+                         WHERE data = :d AND (colaborador_id IS NULL OR colaborador_id = :c)
+                         ORDER BY (colaborador_id IS NULL) ASC LIMIT 1");  // pessoal 1º
+    $st->execute([':d' => $data, ':c' => $colaboradorId]);
+    $r = $st->fetch(PDO::FETCH_ASSOC);
+    return $r ? ['tipo' => $r['tipo'], 'descricao' => $r['descricao'], 'pessoal' => $r['colaborador_id'] !== null] : null;
+}
+
+/** Lista dias especiais de um ano (para a tela de gestão), com nome da pessoa. */
+function ponto_especiais_listar(PDO $pdo, int $ano): array
+{
+    if (!ponto_tem_especiais($pdo)) { return []; }
+    $st = $pdo->prepare("SELECT e.*, c.nome AS pessoa
+                         FROM ponto_dias_especiais e
+                         LEFT JOIN estoque_colaboradores c ON c.id = e.colaborador_id
+                         WHERE e.data >= :i AND e.data < :f
+                         ORDER BY e.data, pessoa");
+    $st->execute([':i' => "$ano-01-01", ':f' => ($ano + 1) . "-01-01"]);
+    return $st->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** Cria um dia especial. $colaboradorId null = todos. */
+function ponto_especial_salvar(PDO $pdo, string $data, ?int $colaboradorId, string $tipo, string $descricao): void
+{
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $data)) { throw new InvalidArgumentException('Data inválida.'); }
+    $tipos = ['feriado', 'folga', 'abono'];
+    if (!in_array($tipo, $tipos, true)) { $tipo = 'feriado'; }
+    $pdo->prepare("INSERT INTO ponto_dias_especiais (data, colaborador_id, tipo, descricao)
+                   VALUES (:d, :c, :t, :desc)")
+        ->execute([':d' => $data, ':c' => $colaboradorId, ':t' => $tipo, ':desc' => trim($descricao) ?: null]);
+}
+
+function ponto_especial_excluir(PDO $pdo, int $id): void
+{
+    $pdo->prepare("DELETE FROM ponto_dias_especiais WHERE id = :id")->execute([':id' => $id]);
+}
+
+/** Domingo de Páscoa (algoritmo de Meeus/Gauss) — base dos feriados móveis. */
+function ponto_pascoa(int $ano): string
+{
+    $a = $ano % 19; $b = intdiv($ano, 100); $c = $ano % 100;
+    $d = intdiv($b, 4); $e = $b % 4; $f = intdiv($b + 8, 25); $g = intdiv($b - $f + 1, 3);
+    $h = (19 * $a + $b - $d - $g + 15) % 30; $i = intdiv($c, 4); $k = $c % 4;
+    $l = (32 + 2 * $e + 2 * $i - $h - $k) % 7; $m = intdiv($a + 11 * $h + 22 * $l, 451);
+    $mes = intdiv($h + $l - 7 * $m + 114, 31); $dia = (($h + $l - 7 * $m + 114) % 31) + 1;
+    return sprintf('%04d-%02d-%02d', $ano, $mes, $dia);
+}
+
+/** Feriados nacionais do ano (fixos + móveis pela Páscoa). data => nome. */
+function ponto_feriados_nacionais(int $ano): array
+{
+    $pascoa = strtotime(ponto_pascoa($ano));
+    $mov = function ($dias) use ($pascoa) { return date('Y-m-d', strtotime("$dias day", $pascoa)); };
+    return [
+        "$ano-01-01" => 'Confraternização Universal',
+        $mov(-48)    => 'Carnaval (segunda) — facultativo',
+        $mov(-47)    => 'Carnaval (terça) — facultativo',
+        $mov(-46)    => 'Quarta-feira de Cinzas — facultativo',
+        $mov(-2)     => 'Sexta-feira Santa',
+        "$ano-04-21" => 'Tiradentes',
+        "$ano-05-01" => 'Dia do Trabalho',
+        $mov(60)     => 'Corpus Christi — facultativo',
+        "$ano-09-07" => 'Independência do Brasil',
+        "$ano-10-12" => 'Nossa Senhora Aparecida',
+        "$ano-11-02" => 'Finados',
+        "$ano-11-15" => 'Proclamação da República',
+        "$ano-11-20" => 'Consciência Negra',
+        "$ano-12-25" => 'Natal',
+    ];
+}
+
+/** Importa os feriados nacionais do ano como globais (idempotente). Retorna nº novos. */
+function ponto_feriados_importar(PDO $pdo, int $ano): int
+{
+    if (!ponto_tem_especiais($pdo)) { throw new RuntimeException('Rode o ponto_setup.php primeiro.'); }
+    $existe = $pdo->prepare("SELECT 1 FROM ponto_dias_especiais WHERE data = :d AND colaborador_id IS NULL LIMIT 1");
+    $ins = $pdo->prepare("INSERT INTO ponto_dias_especiais (data, colaborador_id, tipo, descricao)
+                          VALUES (:d, NULL, 'feriado', :desc)");
+    $n = 0;
+    foreach (ponto_feriados_nacionais($ano) as $data => $nome) {
+        $existe->execute([':d' => $data]);
+        if ($existe->fetchColumn()) { continue; }
+        $ins->execute([':d' => $data, ':desc' => $nome]);
+        $n++;
+    }
+    return $n;
 }
 
 // ------------------- Formatação --------------------------------------------

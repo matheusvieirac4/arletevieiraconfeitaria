@@ -55,4 +55,42 @@ if ($acao === 'batida_excluir') {
     }
 }
 
+// ---- Feriados / folgas: adicionar ----
+if ($acao === 'especial_salvar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $data  = (string) ($_POST['data'] ?? '');
+    $tipo  = (string) ($_POST['tipo'] ?? 'feriado');
+    $desc  = (string) ($_POST['descricao'] ?? '');
+    $colab = ($_POST['colaborador_id'] ?? '') === '' ? null : (int) $_POST['colaborador_id'];
+    $ano   = (int) (substr($data, 0, 4) ?: date('Y'));
+    try {
+        ponto_especial_salvar($pdo, $data, $colab, $tipo, $desc);
+        ponto_redirect('success', 'Dia registrado.', 'ponto_feriados.php?ano=' . $ano);
+    } catch (\Throwable $e) {
+        ponto_redirect('danger', 'Falha: ' . $e->getMessage(), 'ponto_feriados.php?ano=' . $ano);
+    }
+}
+
+// ---- Feriados / folgas: excluir ----
+if ($acao === 'especial_excluir') {
+    $eid = (int) ($_GET['id'] ?? 0);
+    $ano = (int) ($_GET['ano'] ?? date('Y'));
+    try {
+        ponto_especial_excluir($pdo, $eid);
+        ponto_redirect('success', 'Removido.', 'ponto_feriados.php?ano=' . $ano);
+    } catch (\Throwable $e) {
+        ponto_redirect('danger', 'Falha ao remover: ' . $e->getMessage(), 'ponto_feriados.php?ano=' . $ano);
+    }
+}
+
+// ---- Importar feriados nacionais do ano ----
+if ($acao === 'feriados_importar') {
+    $ano = (int) ($_GET['ano'] ?? date('Y'));
+    try {
+        $n = ponto_feriados_importar($pdo, $ano);
+        ponto_redirect('success', $n > 0 ? "$n feriado(s) importado(s)." : 'Nenhum novo (já estavam lançados).', 'ponto_feriados.php?ano=' . $ano);
+    } catch (\Throwable $e) {
+        ponto_redirect('danger', 'Falha ao importar: ' . $e->getMessage(), 'ponto_feriados.php?ano=' . $ano);
+    }
+}
+
 ponto_redirect('danger', 'Ação inválida.');

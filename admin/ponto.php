@@ -44,6 +44,7 @@ require __DIR__ . '/_header.php';
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
             <h1 class="mb-0">Controle de ponto</h1>
             <div class="d-flex gap-2">
+                <a href="ponto_feriados.php" class="btn btn-outline-secondary btn-sm"><i data-feather="calendar" class="align-middle"></i> Feriados e folgas</a>
                 <a href="ponto_kiosk.php" target="_blank" class="btn btn-outline-secondary btn-sm"><i data-feather="clock" class="align-middle"></i> Abrir relógio</a>
                 <a href="ponto_export.php?mes=<?= htmlspecialchars($mesRef) ?>" class="btn btn-outline-success btn-sm"><i data-feather="download" class="align-middle"></i> Exportar (contabilidade)</a>
             </div>

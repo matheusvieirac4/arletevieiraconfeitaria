@@ -54,6 +54,24 @@ try {
     ");
     $log[] = 'OK  tabela ponto_jornada';
 
+    // Dias especiais: feriados (globais) e folgas/abonos (globais ou por pessoa).
+    // Zeram a jornada esperada do dia — não viram falta; trabalho vira banco.
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ponto_dias_especiais (
+            id             INT AUTO_INCREMENT PRIMARY KEY,
+            data           DATE NOT NULL,
+            colaborador_id INT NULL,   -- NULL = vale para todos
+            tipo           ENUM('feriado','folga','abono') NOT NULL DEFAULT 'feriado',
+            descricao      VARCHAR(160) NULL,
+            criado_em      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX (data),
+            INDEX (colaborador_id),
+            CONSTRAINT fk_especial_colab FOREIGN KEY (colaborador_id)
+                REFERENCES estoque_colaboradores(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $log[] = 'OK  tabela ponto_dias_especiais';
+
     $log[] = '';
     $log[] = 'Pronto. Cadastre/ajuste a jornada de cada pessoa em /admin/ponto.php';
     $log[] = 'As pessoas e PINs são os mesmos do quiosque (Estoque -> Colaboradores).';
