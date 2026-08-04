@@ -116,6 +116,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 <div class="kx-top">
     <div class="d-flex gap-2">
         <button class="btn btn-light btn-sm" id="btn-buscar">🔍 Buscar item</button>
+        <a class="btn btn-outline-light btn-sm" href="ponto_kiosk.php">🕐 Ponto</a>
         <button class="btn btn-outline-light btn-sm" id="btn-trocar">Trocar usuário</button>
     </div>
 </div>

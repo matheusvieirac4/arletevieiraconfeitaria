@@ -16,6 +16,7 @@ $navItems = [
     'links_bio' => ['links_bio.php', 'Links da bio', 'link'],
     'financeiro'=> ['financeiro.php','Financeiro',   'dollar-sign'],
     'estoque'   => ['estoque.php',   'Estoque',      'package'],
+    'ponto'     => ['ponto.php',     'Ponto',        'clock'],
     'curriculos'=> ['curriculos.php','Currículos',   'briefcase'],
 ];
 ?>
