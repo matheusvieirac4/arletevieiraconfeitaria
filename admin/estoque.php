@@ -170,6 +170,8 @@ require __DIR__ . '/_header.php';
                data-msg="Ler as descrições e preencher Unidade/Conteúdo (5 KG, 1 L, 200ML...) nos itens?">
                 Detectar unidade/conteúdo pelas descrições
             </a>
+            &nbsp;·&nbsp;
+            <a href="estoque_corrigir_saldos.php" class="text-decoration-none">Corrigir saldos divergentes</a>
         </p>
 <script>
 // Cada opção do dropdown de Entrada abre o seletor de arquivo e já envia.
