@@ -114,7 +114,7 @@ require __DIR__ . '/_header.php';
             <input type="hidden" name="acao" value="aplicar">
             <div class="d-flex gap-2 mb-3">
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="sel-todos">Marcar todos</button>
-                <button class="btn btn-success btn-sm ms-auto js-confirm" data-msg="Aplicar a correção de saldo nos itens marcados? Cada um recebe um ajuste no histórico.">Corrigir marcados</button>
+                <button type="submit" class="btn btn-success btn-sm ms-auto" id="btn-corrigir">Corrigir marcados</button>
             </div>
             <?php foreach ($suspeitos as $s): ?>
                 <div class="card mb-3">
@@ -156,6 +156,14 @@ require __DIR__ . '/_header.php';
         <script>
         document.getElementById('sel-todos')?.addEventListener('click', function () {
             document.querySelectorAll('.chk-item').forEach(c => c.checked = true);
+        });
+        // Confirmação antes de enviar (o js-confirm do painel é só para links <a>).
+        document.getElementById('btn-corrigir')?.closest('form').addEventListener('submit', function (e) {
+            const n = document.querySelectorAll('.chk-item:checked').length;
+            if (!n) { e.preventDefault(); alert('Marque pelo menos um item.'); return; }
+            if (!confirm('Aplicar a correção de saldo em ' + n + ' item(ns)? Cada um recebe um ajuste no histórico (reversível).')) {
+                e.preventDefault();
+            }
         });
         </script>
         <?php endif; ?>
