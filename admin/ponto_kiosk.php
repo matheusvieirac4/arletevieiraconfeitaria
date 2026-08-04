@@ -24,11 +24,13 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 <style>
     html, body { height: 100%; margin: 0; background: #14171c; color: #fff; overflow: hidden; }
     body { font-family: system-ui, sans-serif; }
-    .pt-top { position: fixed; top: 0; left: 0; right: 0; z-index: 20; display: flex; justify-content: space-between;
-              align-items: center; padding: 12px 16px; background: rgba(0,0,0,.35); }
+    /* z-index acima dos overlays (40 > 30): a barra fica sempre visível. */
+    .pt-top { position: fixed; top: 0; left: 0; right: 0; z-index: 40; display: flex; justify-content: space-between;
+              align-items: center; padding: 12px 16px; background: rgba(0,0,0,.55); backdrop-filter: blur(4px); }
     .pt-relogio { font-size: 1.3rem; font-weight: 700; letter-spacing: .02em; }
+    /* padding-top folgado p/ o conteúdo não ficar embaixo da barra. */
     .pt-overlay { position: fixed; inset: 0; z-index: 30; background: #14171c;
-                  display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; overflow:auto; }
+                  display: none; flex-direction: column; align-items: center; justify-content: center; padding: 76px 20px 20px; overflow:auto; }
     .pt-overlay.show { display: flex; }
     .pt-card { width: 100%; max-width: 560px; text-align: center; }
     .pt-nome { font-size: 2rem; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
@@ -66,7 +68,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 </script>
 
 <div class="pt-top">
-    <a href="estoque_kiosk.php" class="btn btn-outline-light btn-sm">📦 Estoque</a>
+    <a href="estoque_kiosk.php" class="btn btn-light btn-sm">← Voltar</a>
     <div class="pt-relogio" id="relogio">--:--</div>
     <?php if ($kioskAdmin): ?>
         <a href="ponto.php" class="btn btn-outline-light btn-sm">Sair</a>
