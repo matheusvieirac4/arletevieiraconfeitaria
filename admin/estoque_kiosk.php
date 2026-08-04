@@ -79,6 +79,12 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     .pt-estado { display:inline-block; padding: 8px 18px; border-radius: 999px; font-size: 1.1rem; font-weight: 700; margin-bottom: 18px; }
     .pt-dentro { background: #14351f; color: #4ade80; border: 1px solid #216c3a; }
     .pt-fora   { background: #2a3038; color: #cbd2da; border: 1px solid #3a424c; }
+    /* Stand-by: tela preta por cima de tudo; câmera desligada por baixo. Um toque acorda. */
+    .kx-standby { position: fixed; inset: 0; z-index: 60; background: #000; color: #566173;
+                  display: none; flex-direction: column; align-items: center; justify-content: center; }
+    .kx-standby.show { display: flex; }
+    .kx-standby .zzz { font-size: 3rem; opacity: .85; }
+    .kx-standby .txt { margin-top: 12px; font-size: 1.05rem; letter-spacing: .02em; }
 </style>
 </head>
 <body>
@@ -109,10 +115,17 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
             }
         } catch (e) { /* sem suporte / negado: ignora */ }
     }
+    async function soltar() {
+        try { if (lock) { await lock.release(); lock = null; } } catch (e) {}
+    }
     document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') { segurar(); }
+        // Em stand-by não reaquire: deixa a tela apagar sozinha (economiza bateria/calor).
+        if (document.visibilityState === 'visible' && !window.__standby) { segurar(); }
     });
-    document.addEventListener('touchend', segurar, false);   // reforça em gesto
+    document.addEventListener('touchend', function () { if (!window.__standby) { segurar(); } }, false);
+    // Expõe pro stand-by soltar/reaquirir a trava de tela.
+    window.__wakeSegurar = segurar;
+    window.__wakeSoltar = soltar;
     segurar();
 })();
 </script>
@@ -205,6 +218,12 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     </div>
 </div>
 
+<!-- Stand-by: aparece após 1h sem toque (câmera desligada). Toque para começar. -->
+<div class="kx-standby" id="ov-standby">
+    <div class="zzz">💤</div>
+    <div class="txt">Toque para começar</div>
+</div>
+
 <!-- Sucesso -->
 <div class="kx-overlay" id="ov-ok">
     <div class="kx-card">
@@ -245,13 +264,18 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     function mostrar(el) { Object.values(ov).forEach(o => o.classList.remove('show')); if (el) { el.classList.add('show'); } }
 
     // Volta para a captura (mesmo colaborador) — após cancelar um card.
-    function voltarParaScan() { mostrar(null); pausado = false; _buscaT0 = performance.now(); resetInatividade(); }
+    // Liga a câmera só agora (fica desligada na lista de nomes e no modo ponto).
+    function voltarParaScan() {
+        mostrar(null);
+        if (!camStream) { iniciarCamera(); }
+        pausado = false; _buscaT0 = performance.now(); resetInatividade();
+    }
     // Volta para a lista de nomes (encerra o colaborador) — após sucesso/timeout.
-    // Sempre volta ao modo "retirada" (o padrão da tela inicial).
+    // Sempre volta ao modo "retirada" (o padrão da tela inicial). Desliga a câmera.
     function voltarParaNomes() {
         colaboradorId = null; colaboradorNome = ''; clearInatividade();
         pontoMode = false; pontoId = null; pontoNome = ''; pontoPin = ''; aplicarModo();
-        pausado = true; mostrar(ov.nomes);
+        pausado = true; pararCamera(); mostrar(ov.nomes);
     }
     function resetInatividade() {
         clearInatividade();
@@ -747,9 +771,54 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         });
     }
 
+    // ---------- Stand-by (economia): após 1h sem toque, desliga a câmera ----------
+    // A câmera ligada é o que esquenta o aparelho e drena a bateria. Depois de 1h
+    // parado, paramos o vídeo e soltamos a trava de tela (a tela apaga sozinha).
+    // Qualquer toque acorda: religa a câmera e volta para a lista de nomes.
+    const STANDBY_MS = 30 * 1000;   // TESTE: 30s (voltar para 60*60*1000 = 1h depois de aprovado)
+    let standbyTimer = null, emStandby = false;
+    const elStandby = document.getElementById('ov-standby');
+
+    function pararCamera() {
+        scanToken++;            // encerra o scanLoop em andamento
+        pausado = true;
+        if (camStream) { try { camStream.getTracks().forEach(t => t.stop()); } catch (e) {} camStream = null; }
+        const v = document.getElementById('video');
+        if (v) { try { v.pause(); v.srcObject = null; } catch (e) {} }
+    }
+    function entrarStandby() {
+        if (emStandby) { return; }
+        emStandby = true; window.__standby = true;
+        clearInatividade();
+        pararCamera();
+        if (window.__wakeSoltar) { window.__wakeSoltar(); }   // deixa a tela apagar
+        mostrar(null);
+        elStandby.classList.add('show');
+    }
+    function sairStandby() {
+        if (!emStandby) { return; }
+        emStandby = false; window.__standby = false;
+        elStandby.classList.remove('show');
+        if (window.__wakeSegurar) { window.__wakeSegurar(); }
+        voltarParaNomes();      // volta limpo para a lista de nomes (câmera desligada)
+        armarStandby();
+    }
+    function armarStandby() {
+        if (standbyTimer) { clearTimeout(standbyTimer); }
+        standbyTimer = setTimeout(entrarStandby, STANDBY_MS);
+    }
+    // Qualquer interação adia o stand-by (quando acordado).
+    function atividade() { if (!emStandby) { armarStandby(); } }
+    document.addEventListener('touchstart', atividade, true);
+    document.addEventListener('click', atividade, true);
+    // Toque no overlay preto acorda.
+    elStandby.addEventListener('click', sairStandby);
+    elStandby.addEventListener('touchstart', function (e) { e.preventDefault(); sairStandby(); }, { passive: false });
+    armarStandby();
+
     carregarNomes();
     if (_debug) { const d = document.getElementById('dbg'); if (d) { d.style.display = 'block'; d.textContent = 'debug ligado…'; } }
-    iniciarCamera();
+    // A câmera NÃO liga aqui: só abre quando o colaborador entra com o PIN (voltarParaScan).
 })();
 </script>
 </body>
