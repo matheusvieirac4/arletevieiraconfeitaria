@@ -36,7 +36,8 @@ require __DIR__ . '/_header.php';
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <div>
                 <h1 class="mb-0"><?= htmlspecialchars($pessoa['nome']) ?>
-                    <span class="badge bg-<?= $pessoa['tipo'] === 'socio' ? 'info' : 'secondary' ?> align-middle"><?= $pessoa['tipo'] === 'socio' ? 'Sócio' : 'Freelancer' ?></span>
+                    <?php $ti = ponto_tipo_info($pessoa['tipo']); ?>
+                    <span class="badge bg-<?= $ti[1] ?> align-middle"><?= $ti[0] ?></span>
                 </h1>
                 <div class="text-muted"><?= htmlspecialchars($mesLabel) ?></div>
             </div>
@@ -143,7 +144,8 @@ require __DIR__ . '/_header.php';
                             <div class="mb-3">
                                 <label class="form-label">Tipo</label>
                                 <select name="tipo" class="form-select">
-                                    <option value="freelancer" <?= $pessoa['tipo'] !== 'socio' ? 'selected' : '' ?>>Freelancer</option>
+                                    <option value="freelancer" <?= $pessoa['tipo'] === 'freelancer' ? 'selected' : '' ?>>Freelancer</option>
+                                    <option value="colaborador" <?= $pessoa['tipo'] === 'colaborador' ? 'selected' : '' ?>>Colaborador</option>
                                     <option value="socio" <?= $pessoa['tipo'] === 'socio' ? 'selected' : '' ?>>Sócio</option>
                                 </select>
                             </div>

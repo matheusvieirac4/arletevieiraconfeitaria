@@ -118,7 +118,8 @@ require __DIR__ . '/_header.php';
                                     <?php if ($t['abertos'] > 0): ?><span class="badge bg-warning text-dark ms-1" title="dias em aberto"><?= $t['abertos'] ?> aberto(s)</span><?php endif; ?>
                                 </td>
                                 <td class="text-center">
-                                    <span class="badge bg-<?= $p['tipo'] === 'socio' ? 'info' : 'secondary' ?>"><?= $p['tipo'] === 'socio' ? 'Sócio' : 'Freelancer' ?></span>
+                                    <?php $ti = ponto_tipo_info($p['tipo']); ?>
+                                    <span class="badge bg-<?= $ti[1] ?>"><?= $ti[0] ?></span>
                                 </td>
                                 <td class="text-end"><?= (int) $t['dias_trabalhados'] ?></td>
                                 <td class="text-end fw-semibold"><?= ponto_hm($t['trabalhado_min']) ?></td>

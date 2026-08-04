@@ -90,7 +90,7 @@ function ponto_pessoa(PDO $pdo, int $id, bool $soAtivos = true): ?array
 function ponto_jornada_salvar(PDO $pdo, int $colaboradorId, array $d): void
 {
     if ($colaboradorId <= 0) { throw new InvalidArgumentException('Pessoa inválida.'); }
-    $tipo = ($d['tipo'] ?? 'freelancer') === 'socio' ? 'socio' : 'freelancer';
+    $tipo = in_array($d['tipo'] ?? '', ['socio', 'freelancer', 'colaborador'], true) ? $d['tipo'] : 'freelancer';
     $temMeta = !empty($d['tem_meta']) ? 1 : 0;
     $hora = function ($v) { $v = (float) str_replace(',', '.', (string) $v); return max(0, min(24, $v)); };
     $params = [
@@ -582,4 +582,14 @@ function ponto_hhmm(int $min): string
 function ponto_dia_semana(int $w): string
 {
     return ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][$w] ?? '';
+}
+
+/** Rótulo + cor do badge por tipo de pessoa: [texto, cor-bootstrap]. */
+function ponto_tipo_info(string $tipo): array
+{
+    switch ($tipo) {
+        case 'socio':       return ['Sócio', 'info'];
+        case 'colaborador': return ['Colaborador', 'primary'];
+        default:            return ['Freelancer', 'secondary'];
+    }
 }

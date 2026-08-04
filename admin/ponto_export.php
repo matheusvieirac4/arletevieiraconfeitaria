@@ -25,7 +25,7 @@ foreach (ponto_dashboard($pdo, $ano, $mes) as $l) {
     $meta = !empty($p['tem_meta']);
     fputcsv($out, [
         $p['nome'],
-        $p['tipo'] === 'socio' ? 'Socio' : 'Freelancer',
+        ponto_tipo_info($p['tipo'])[0],
         (int) $t['dias_trabalhados'],
         ponto_hhmm($t['trabalhado_min']),
         $meta ? ponto_hhmm($t['esperado_min']) : '',

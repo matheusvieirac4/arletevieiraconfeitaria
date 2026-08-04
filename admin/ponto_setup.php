@@ -35,7 +35,7 @@ try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS ponto_jornada (
             colaborador_id         INT NOT NULL PRIMARY KEY,
-            tipo                   ENUM('socio','freelancer') NOT NULL DEFAULT 'freelancer',
+            tipo                   ENUM('socio','freelancer','colaborador') NOT NULL DEFAULT 'freelancer',
             tem_meta               TINYINT(1) NOT NULL DEFAULT 1,
             h_dom DECIMAL(4,2) NOT NULL DEFAULT 0,
             h_seg DECIMAL(4,2) NOT NULL DEFAULT 0,
@@ -71,6 +71,19 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
     $log[] = 'OK  tabela ponto_dias_especiais';
+
+    // Migração: adiciona o tipo 'colaborador' ao enum (se a tabela é antiga).
+    try {
+        $col = $pdo->query("SHOW COLUMNS FROM ponto_jornada LIKE 'tipo'")->fetch(PDO::FETCH_ASSOC);
+        if ($col && strpos((string) $col['Type'], "'colaborador'") === false) {
+            $pdo->exec("ALTER TABLE ponto_jornada MODIFY tipo ENUM('socio','freelancer','colaborador') NOT NULL DEFAULT 'freelancer'");
+            $log[] = 'OK  enum tipo: colaborador adicionado';
+        } else {
+            $log[] = '..  enum tipo já tem colaborador';
+        }
+    } catch (\Throwable $e) {
+        $log[] = 'ERRO ao migrar tipo: ' . $e->getMessage();
+    }
 
     $log[] = '';
     $log[] = 'Pronto. Cadastre/ajuste a jornada de cada pessoa em /admin/ponto.php';
