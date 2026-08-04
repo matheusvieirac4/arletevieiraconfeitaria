@@ -87,8 +87,7 @@ require __DIR__ . '/_header.php';
                             </tr></thead>
                             <tbody>
                             <?php foreach ($resumo['dias'] as $dia):
-                                $temAlgo = count($dia['batidas']) > 0 || $dia['esperado_min'] > 0;
-                                if (!$temAlgo && $dia['futuro']) { continue; }
+                                if ($dia['futuro']) { continue; }   // dia que ainda não chegou
                                 $wl = ponto_dia_semana($dia['w']);
                                 $fds = ($dia['w'] === 0 || $dia['w'] === 6);
                                 $pend = $dia['aberto'] || !empty($dia['inconsistente']);
@@ -114,8 +113,8 @@ require __DIR__ . '/_header.php';
                                     </td>
                                     <td class="text-end"><?= $dia['trabalhado_min'] > 0 ? ponto_hm($dia['trabalhado_min']) : '' ?></td>
                                     <td class="text-end text-muted"><?= $dia['esperado_min'] > 0 ? ponto_hm($dia['esperado_min']) : '' ?></td>
-                                    <td class="text-end <?= $dia['saldo_min'] < 0 && $dia['esperado_min'] > 0 ? 'text-danger' : ($dia['extra_min'] > 0 ? 'text-success' : '') ?>">
-                                        <?php if ($temMeta && $dia['esperado_min'] > 0 && ($dia['batidas'] || $dia['falta_dia'])): echo ($dia['saldo_min'] >= 0 ? '+' : '') . ponto_hm($dia['saldo_min']); endif; ?>
+                                    <td class="text-end <?= $dia['fechado'] && $dia['saldo_min'] < 0 && $dia['esperado_min'] > 0 ? 'text-danger' : ($dia['fechado'] && $dia['extra_min'] > 0 ? 'text-success' : '') ?>">
+                                        <?php if ($temMeta && $dia['fechado'] && $dia['esperado_min'] > 0 && ($dia['batidas'] || $dia['falta_dia'])): echo ($dia['saldo_min'] >= 0 ? '+' : '') . ponto_hm($dia['saldo_min']); elseif ($dia['ehHoje']): ?><span class="badge bg-primary">hoje</span><?php endif; ?>
                                     </td>
                                     <td class="text-end">
                                         <button type="button" class="btn btn-link btn-sm p-0 js-add-batida"

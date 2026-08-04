@@ -375,23 +375,35 @@ function ponto_resumo_mes(PDO $pdo, array $pessoa, int $ano, int $mes): array
         $batidas = $porDia[$data] ?? [];
         $c = ponto_calc_dia($batidas, $pessoa, $w);
         $temBatida = count($batidas) > 0;
-        $futuro = $data > $hoje;
+        $futuro   = $data > $hoje;
+        $ehHoje   = $data === $hoje;
+        // Só dias FECHADOS (anteriores a hoje) entram no fechamento do mês.
+        // Hoje ainda está correndo e o futuro não chegou — não geram esperado
+        // nem falta (senão o mês inteiro viraria "falta" logo no começo).
+        $fechado  = (!$futuro && !$ehHoje);
 
-        if ($temBatida) { $tot['dias_trabalhados']++; }
-        $tot['trabalhado_min'] += $c['trabalhado_min'];
-        $tot['esperado_min']   += $c['esperado_min'];
-        $tot['extra_min']      += $c['extra_min'];
-        $tot['intervalo_min']  += $c['intervalo_min'];
-        if ($c['aberto'] || !empty($c['inconsistente'])) { $tot['abertos']++; }
+        $faltouDia = false;
+        if ($fechado) {
+            if ($temBatida) { $tot['dias_trabalhados']++; }
+            $tot['trabalhado_min'] += $c['trabalhado_min'];
+            $tot['esperado_min']   += $c['esperado_min'];
+            $tot['extra_min']      += $c['extra_min'];
+            $tot['intervalo_min']  += $c['intervalo_min'];
+            if ($c['aberto'] || !empty($c['inconsistente'])) { $tot['abertos']++; }
 
-        // Falta do dia: tinha jornada esperada, não é futuro e ninguém bateu.
-        $faltouDia = ($c['esperado_min'] > 0 && !$temBatida && !$futuro);
-        if ($faltouDia) { $tot['falta_dias']++; $tot['falta_min'] += $c['esperado_min']; }
-        else            { $tot['falta_min'] += $c['falta_min']; }
+            $faltouDia = ($c['esperado_min'] > 0 && !$temBatida);
+            if ($faltouDia) { $tot['falta_dias']++; $tot['falta_min'] += $c['esperado_min']; }
+            else            { $tot['falta_min'] += $c['falta_min']; }
+        } elseif ($ehHoje) {
+            // Hoje ainda está correndo: não entra no fechamento (trabalhado/
+            // esperado/falta) para o saldo continuar consistente. Só sinaliza
+            // pendência (entrada sem saída / batidas inconsistentes) de hoje.
+            if ($c['aberto'] || !empty($c['inconsistente'])) { $tot['abertos']++; }
+        }
 
         $dias[] = [
             'data' => $data, 'w' => $w, 'futuro' => $futuro,
-            'falta_dia' => $faltouDia,
+            'ehHoje' => $ehHoje, 'fechado' => $fechado, 'falta_dia' => $faltouDia,
         ] + $c;
     }
     $tot['saldo_min'] = $tot['trabalhado_min'] - $tot['esperado_min'];
