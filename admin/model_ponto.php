@@ -405,9 +405,10 @@ function ponto_resumo_mes(PDO $pdo, array $pessoa, int $ano, int $mes): array
             else            { $tot['falta_min'] += $c['falta_min']; }
         } elseif ($ehHoje) {
             // Hoje ainda está correndo: não entra no fechamento (trabalhado/
-            // esperado/falta) para o saldo continuar consistente. Só sinaliza
-            // pendência (entrada sem saída / batidas inconsistentes) de hoje.
-            if ($c['aberto'] || !empty($c['inconsistente'])) { $tot['abertos']++; }
+            // esperado/falta) para o saldo continuar consistente. Uma entrada
+            // aberta HOJE é normal (a pessoa está trabalhando) — não é
+            // pendência; só marca se as batidas estiverem inconsistentes.
+            if (!empty($c['inconsistente'])) { $tot['abertos']++; }
         }
 
         $dias[] = [
