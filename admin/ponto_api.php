@@ -41,7 +41,10 @@ if ($acao === 'bater' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $r = ponto_registrar($pdo, $id, 'kiosk');
         pt_out(['ok' => true, 'nome' => $nome, 'tipo' => $r['tipo'],
-                'hora' => substr($r['momento'], 11, 5), 'status' => ponto_status($pdo, $id)]);
+                'hora' => substr($r['momento'], 11, 5),
+                'duplicado' => !empty($r['duplicado']),
+                'esqueceu' => !empty($r['esqueceu']),
+                'status' => ponto_status($pdo, $id)]);
     } catch (\Throwable $e) {
         pt_erro('Falha ao bater ponto: ' . $e->getMessage(), 500);
     }

@@ -128,21 +128,72 @@ function ponto_esperado_min(array $jornada, int $w): int
 
 // ------------------- Batidas (relógio de ponto) -----------------------------
 
+/** Janela (segundos) em que um novo toque é tratado como duplicado acidental. */
+const PONTO_DEDUP_SEG = 60;
+
+/** Última batida da pessoa (qualquer dia). Null se nunca bateu. */
+function ponto_ultima_batida(PDO $pdo, int $colaboradorId): ?array
+{
+    $st = $pdo->prepare("SELECT id, momento, tipo FROM ponto_batidas
+                         WHERE colaborador_id = :c
+                         ORDER BY momento DESC, id DESC LIMIT 1");
+    $st->execute([':c' => $colaboradorId]);
+    $r = $st->fetch(PDO::FETCH_ASSOC);
+    return $r ?: null;
+}
+
 /**
- * Registra uma batida. Se $tipo for null, decide automaticamente pelo estado do
- * dia (toggle): se a pessoa está "dentro" (última batida do dia é entrada sem
- * saída), registra saída; senão, entrada. Devolve ['tipo','momento'].
+ * Decide o próximo tipo (entrada/saída) a partir da ÚLTIMA batida real:
+ *  - sem batida, ou última = saída            -> entrada
+ *  - última = entrada no MESMO dia            -> saída
+ *  - última = entrada de um dia ANTERIOR      -> entrada (esqueceu a saída;
+ *                                                sinaliza 'esqueceu')
+ * Também sinaliza 'duplicado' quando a última batida foi há poucos segundos.
+ */
+function ponto_proximo_tipo(PDO $pdo, int $colaboradorId, ?string $agora = null): array
+{
+    $agora = $agora ?: date('Y-m-d H:i:s');
+    $ult = ponto_ultima_batida($pdo, $colaboradorId);
+    $duplicado = $ult && (strtotime($agora) - strtotime($ult['momento'])) < PONTO_DEDUP_SEG
+                       && (strtotime($agora) - strtotime($ult['momento'])) >= 0;
+
+    if (!$ult || $ult['tipo'] === 'saida') {
+        return ['tipo' => 'entrada', 'esqueceu' => false, 'duplicado' => $duplicado, 'ultima' => $ult];
+    }
+    // Última é entrada em aberto.
+    $mesmoDia = substr($ult['momento'], 0, 10) === substr($agora, 0, 10);
+    if ($mesmoDia) {
+        return ['tipo' => 'saida', 'esqueceu' => false, 'duplicado' => $duplicado, 'ultima' => $ult];
+    }
+    // Entrada aberta de um dia anterior: a pessoa esqueceu de bater a saída.
+    // Começa uma nova entrada hoje e sinaliza para o admin corrigir o dia velho.
+    return ['tipo' => 'entrada', 'esqueceu' => true, 'duplicado' => false,
+            'aberta_em' => $ult['momento'], 'ultima' => $ult];
+}
+
+/**
+ * Registra uma batida. Se $tipo for null, o servidor decide (entrada/saída) pela
+ * última batida real — ver ponto_proximo_tipo. Uma trava anti-duplicidade
+ * ignora toques repetidos em menos de PONTO_DEDUP_SEG. Devolve
+ * ['tipo','momento','esqueceu','duplicado'].
  */
 function ponto_registrar(PDO $pdo, int $colaboradorId, string $origem = 'kiosk', ?string $momento = null, ?string $tipo = null, string $criadoPor = ''): array
 {
     if ($colaboradorId <= 0) { throw new InvalidArgumentException('Pessoa inválida.'); }
     $ts = $momento ? date('Y-m-d H:i:s', strtotime($momento)) : date('Y-m-d H:i:s');
     $data = substr($ts, 0, 10);
-    if ($tipo === null) {
-        $tipo = ponto_dentro($pdo, $colaboradorId, $data) ? 'saida' : 'entrada';
+
+    $decisao = ponto_proximo_tipo($pdo, $colaboradorId, $ts);
+    // Toque repetido em poucos segundos (só no fluxo automático do quiosque):
+    // não cria batida nova — devolve a última como já registrada.
+    if ($tipo === null && !empty($decisao['duplicado']) && $decisao['ultima']) {
+        return ['tipo' => $decisao['ultima']['tipo'], 'momento' => $decisao['ultima']['momento'],
+                'esqueceu' => false, 'duplicado' => true];
     }
+    if ($tipo === null) { $tipo = $decisao['tipo']; }
     $tipo = $tipo === 'saida' ? 'saida' : 'entrada';
     $origem = $origem === 'admin' ? 'admin' : 'kiosk';
+
     $pdo->prepare("
         INSERT INTO ponto_batidas (colaborador_id, data, momento, tipo, origem, criado_por)
         VALUES (:c, :d, :m, :t, :o, :p)
@@ -150,17 +201,16 @@ function ponto_registrar(PDO $pdo, int $colaboradorId, string $origem = 'kiosk',
         ':c' => $colaboradorId, ':d' => $data, ':m' => $ts,
         ':t' => $tipo, ':o' => $origem, ':p' => ($criadoPor !== '' ? $criadoPor : null),
     ]);
-    return ['tipo' => $tipo, 'momento' => $ts];
+    return ['tipo' => $tipo, 'momento' => $ts,
+            'esqueceu' => !empty($decisao['esqueceu']), 'duplicado' => false];
 }
 
-/** A pessoa está "dentro" agora nesse dia? (última batida do dia é entrada). */
-function ponto_dentro(PDO $pdo, int $colaboradorId, string $data): bool
+/** A pessoa está "dentro" agora? (última batida real é uma entrada de hoje). */
+function ponto_dentro(PDO $pdo, int $colaboradorId, ?string $data = null): bool
 {
-    $st = $pdo->prepare("SELECT tipo FROM ponto_batidas
-                         WHERE colaborador_id = :c AND data = :d
-                         ORDER BY momento DESC, id DESC LIMIT 1");
-    $st->execute([':c' => $colaboradorId, ':d' => $data]);
-    return $st->fetchColumn() === 'entrada';
+    $hoje = $data ?: date('Y-m-d');
+    $ult = ponto_ultima_batida($pdo, $colaboradorId);
+    return $ult && $ult['tipo'] === 'entrada' && substr($ult['momento'], 0, 10) === $hoje;
 }
 
 /** Estado atual para a tela do quiosque. */
@@ -169,7 +219,8 @@ function ponto_status(PDO $pdo, int $colaboradorId): array
     $hoje = date('Y-m-d');
     $batidas = ponto_batidas_dia($pdo, $colaboradorId, $hoje);
     $calc = ponto_calc_dia($batidas, ponto_pessoa($pdo, $colaboradorId) ?? ponto_jornada_default(), (int) date('w'));
-    $dentro = ponto_dentro($pdo, $colaboradorId, $hoje);
+    $prox = ponto_proximo_tipo($pdo, $colaboradorId);
+    $dentro = ($prox['tipo'] === 'saida');
     $desde = null;
     if ($dentro) {
         for ($i = count($batidas) - 1; $i >= 0; $i--) {
@@ -181,7 +232,8 @@ function ponto_status(PDO $pdo, int $colaboradorId): array
         'desde'          => $desde,
         'batidas'        => array_map(function ($b) { return ['tipo' => $b['tipo'], 'hora' => substr($b['momento'], 11, 5)]; }, $batidas),
         'trabalhado_min' => $calc['trabalhado_min'],
-        'proximo'        => $dentro ? 'saida' : 'entrada',
+        'proximo'        => $prox['tipo'],
+        'esqueceu'       => !empty($prox['esqueceu']),
     ];
 }
 
@@ -252,16 +304,18 @@ function ponto_calc_dia(array $batidas, array $jornada, int $w): array
 {
     // Ordena por segurança.
     usort($batidas, function ($a, $b) { return strcmp($a['momento'], $b['momento']); });
-    $bruto = 0; $pares = 0; $aberto = false; $abertaDesde = null;
+    $bruto = 0; $pares = 0; $aberto = false; $inconsistente = false; $abertaDesde = null;
     foreach ($batidas as $b) {
         if ($b['tipo'] === 'entrada') {
-            if ($abertaDesde !== null) { /* entrada dupla: mantém a mais recente */ }
+            if ($abertaDesde !== null) { $inconsistente = true; /* entrada sobre entrada */ }
             $abertaDesde = strtotime($b['momento']);
         } else { // saída
             if ($abertaDesde !== null) {
                 $dur = strtotime($b['momento']) - $abertaDesde;
                 if ($dur > 0) { $bruto += $dur; $pares++; }
                 $abertaDesde = null;
+            } else {
+                $inconsistente = true; // saída sem entrada (esqueceu a entrada)
             }
         }
     }
@@ -293,6 +347,7 @@ function ponto_calc_dia(array $batidas, array $jornada, int $w): array
         'saldo_min'      => $saldo,
         'pares'          => $pares,
         'aberto'         => $aberto,
+        'inconsistente'  => $inconsistente,
         'intervalo_min'  => $intervalo,
         'batidas'        => $batidas,
     ];
@@ -327,7 +382,7 @@ function ponto_resumo_mes(PDO $pdo, array $pessoa, int $ano, int $mes): array
         $tot['esperado_min']   += $c['esperado_min'];
         $tot['extra_min']      += $c['extra_min'];
         $tot['intervalo_min']  += $c['intervalo_min'];
-        if ($c['aberto']) { $tot['abertos']++; }
+        if ($c['aberto'] || !empty($c['inconsistente'])) { $tot['abertos']++; }
 
         // Falta do dia: tinha jornada esperada, não é futuro e ninguém bateu.
         $faltouDia = ($c['esperado_min'] > 0 && !$temBatida && !$futuro);

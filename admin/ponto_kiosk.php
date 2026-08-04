@@ -244,11 +244,21 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
                 document.getElementById('bt-acao').disabled = false;
                 if (d.error) { alert(d.error); return; }
                 const entrada = d.tipo === 'entrada';
-                document.getElementById('ok-icone').textContent = entrada ? '👋' : '✅';
-                document.getElementById('ok-msg').textContent = pinNome + ' — ' + (entrada ? 'ENTRADA' : 'SAÍDA') + ' ' + d.hora;
-                document.getElementById('ok-sub').textContent = entrada ? 'Bom trabalho!' : ('Trabalhado hoje: ' + hm(d.status.trabalhado_min));
+                if (d.duplicado) {
+                    // Toque repetido em poucos segundos: nada foi duplicado.
+                    document.getElementById('ok-icone').textContent = '⏱️';
+                    document.getElementById('ok-msg').textContent = 'Você já bateu agora há pouco';
+                    document.getElementById('ok-sub').textContent = 'Última: ' + (entrada ? 'ENTRADA' : 'SAÍDA') + ' ' + d.hora;
+                } else {
+                    document.getElementById('ok-icone').textContent = entrada ? '👋' : '✅';
+                    document.getElementById('ok-msg').textContent = pinNome + ' — ' + (entrada ? 'ENTRADA' : 'SAÍDA') + ' ' + d.hora;
+                    // Se virou ENTRADA porque esqueceu a saída de um dia anterior, avisa.
+                    document.getElementById('ok-sub').textContent = d.esqueceu
+                        ? '⚠ Você não bateu a saída no último dia — avise o gestor.'
+                        : (entrada ? 'Bom trabalho!' : ('Trabalhado hoje: ' + hm(d.status.trabalhado_min)));
+                }
                 mostrar(ov.ok);
-                voltarTimer = setTimeout(voltarParaNomes, 2200);
+                voltarTimer = setTimeout(voltarParaNomes, d.esqueceu ? 3800 : 2200);
             })
             .catch(function () { document.getElementById('bt-acao').disabled = false; alert('Falha ao bater ponto.'); });
     };

@@ -91,7 +91,8 @@ require __DIR__ . '/_header.php';
                                 if (!$temAlgo && $dia['futuro']) { continue; }
                                 $wl = ponto_dia_semana($dia['w']);
                                 $fds = ($dia['w'] === 0 || $dia['w'] === 6);
-                                $rowClass = $dia['falta_dia'] ? 'table-danger' : ($dia['aberto'] ? 'table-warning' : '');
+                                $pend = $dia['aberto'] || !empty($dia['inconsistente']);
+                                $rowClass = $dia['falta_dia'] ? 'table-danger' : ($pend ? 'table-warning' : '');
                             ?>
                                 <tr class="<?= $rowClass ?>">
                                     <td class="<?= $fds ? 'text-muted' : '' ?>">
@@ -108,7 +109,8 @@ require __DIR__ . '/_header.php';
                                                    class="text-danger text-decoration-none ms-1 js-confirm" data-msg="Remover a batida <?= $b['tipo'] ?> <?= substr($b['momento'], 11, 5) ?>?">×</a>
                                             </span>
                                         <?php endforeach; endif; ?>
-                                        <?php if ($dia['aberto']): ?><span class="badge bg-warning text-dark">em aberto</span><?php endif; ?>
+                                        <?php if ($dia['aberto']): ?><span class="badge bg-warning text-dark">sem saída</span><?php endif; ?>
+                                        <?php if (!empty($dia['inconsistente'])): ?><span class="badge bg-warning text-dark">batidas inconsistentes</span><?php endif; ?>
                                     </td>
                                     <td class="text-end"><?= $dia['trabalhado_min'] > 0 ? ponto_hm($dia['trabalhado_min']) : '' ?></td>
                                     <td class="text-end text-muted"><?= $dia['esperado_min'] > 0 ? ponto_hm($dia['esperado_min']) : '' ?></td>
