@@ -116,7 +116,6 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 <div class="kx-top">
     <div class="d-flex gap-2">
         <button class="btn btn-light btn-sm" id="btn-buscar">🔍 Buscar item</button>
-        <a class="btn btn-outline-light btn-sm" href="ponto_kiosk.php">🕐 Ponto</a>
         <button class="btn btn-outline-light btn-sm" id="btn-trocar">Trocar usuário</button>
     </div>
 </div>
@@ -130,6 +129,9 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 <!-- Passo 1: escolher o colaborador -->
 <div class="kx-overlay show" id="ov-nomes">
     <div class="kx-card kx-grade">
+        <div class="d-flex justify-content-center mb-4">
+            <a href="ponto_kiosk.php" class="btn btn-outline-light btn-lg">🕐 Bater ponto</a>
+        </div>
         <div class="kx-nome mb-3">Quem está retirando?</div>
         <div id="nomes-lista" class="kx-nomes"></div>
         <div id="nomes-vazio" class="kx-saldo d-none">Nenhum colaborador cadastrado. Cadastre em Estoque → Colaboradores.</div>
