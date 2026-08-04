@@ -75,6 +75,10 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     .pin-pad button { background: #1b1f26; border: 2px solid #2a3038; color: #fff; border-radius: 16px; padding: 22px 0; font-size: 2rem; font-weight: 700; }
     .shake { animation: shake .35s; }
     @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-10px)} 75%{transform:translateX(10px)} }
+    /* Pílula de estado do ponto (dentro/fora) */
+    .pt-estado { display:inline-block; padding: 8px 18px; border-radius: 999px; font-size: 1.1rem; font-weight: 700; margin-bottom: 18px; }
+    .pt-dentro { background: #14351f; color: #4ade80; border: 1px solid #216c3a; }
+    .pt-fora   { background: #2a3038; color: #cbd2da; border: 1px solid #3a424c; }
 </style>
 </head>
 <body>
@@ -130,9 +134,9 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 <div class="kx-overlay show" id="ov-nomes">
     <div class="kx-card kx-grade">
         <div class="d-flex justify-content-center mb-4">
-            <a href="ponto_kiosk.php" class="btn btn-outline-light btn-lg">🕐 Bater ponto</a>
+            <button type="button" id="btn-bater-ponto" class="btn btn-outline-light btn-lg">🕐 Bater ponto</button>
         </div>
-        <div class="kx-nome mb-3">Quem está retirando?</div>
+        <div class="kx-nome mb-3" id="nomes-titulo">Quem está retirando?</div>
         <div id="nomes-lista" class="kx-nomes"></div>
         <div id="nomes-vazio" class="kx-saldo d-none">Nenhum colaborador cadastrado. Cadastre em Estoque → Colaboradores.</div>
         <?php if ($kioskAdmin): ?>
@@ -189,10 +193,22 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     </div>
 </div>
 
+<!-- Ponto: bater entrada/saída (mesma tela, sem trocar de página) -->
+<div class="kx-overlay" id="ov-ponto">
+    <div class="kx-card">
+        <div class="kx-nome" id="pt-nome"></div>
+        <div class="kx-saldo mb-1" id="pt-data"></div>
+        <div><span class="pt-estado" id="pt-estado"></span></div>
+        <button class="btn btn-kx mb-3" id="pt-acao"></button>
+        <button class="btn btn-outline-light btn-kx" id="pt-cancelar">Cancelar</button>
+        <div class="kx-saldo mt-3" id="pt-batidas"></div>
+    </div>
+</div>
+
 <!-- Sucesso -->
 <div class="kx-overlay" id="ov-ok">
     <div class="kx-card">
-        <div class="kx-check">✅</div>
+        <div class="kx-check" id="ok-icone">✅</div>
         <div class="kx-nome mt-2" id="ok-msg"></div>
         <div class="kx-saldo" id="ok-saldo"></div>
     </div>
@@ -209,12 +225,21 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         item: document.getElementById('ov-item'),
         novo: document.getElementById('ov-novo'),
         busca: document.getElementById('ov-busca'),
+        ponto: document.getElementById('ov-ponto'),
         ok: document.getElementById('ov-ok'),
     };
     let facing = 'user', pausado = true, ultimo = '', ultimoT = 0;
     let itemAtual = null, codigoPendente = '';
     let colaboradorId = null, colaboradorNome = '', pinBuffer = '', pinSel = null;
     let inatividade = null;
+    // Modo ponto: mesma grade de nomes + PIN, mas bate ponto em vez de dar baixa.
+    const PONTO_API = 'ponto_api.php';
+    let pontoMode = false, pontoId = null, pontoNome = '', pontoPin = '';
+    function hmMin(min) { min = Math.max(0, min | 0); const h = Math.floor(min / 60), m = min % 60; return h + 'h' + (m > 0 ? String(m).padStart(2, '0') : ''); }
+    function aplicarModo() {
+        document.getElementById('nomes-titulo').textContent = pontoMode ? 'Quem está batendo o ponto?' : 'Quem está retirando?';
+        document.getElementById('btn-bater-ponto').textContent = pontoMode ? '📦 Retirar item' : '🕐 Bater ponto';
+    }
 
     function fmt(n) { return (Math.round(n * 1000) / 1000).toLocaleString('pt-BR'); }
     function mostrar(el) { Object.values(ov).forEach(o => o.classList.remove('show')); if (el) { el.classList.add('show'); } }
@@ -222,8 +247,10 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     // Volta para a captura (mesmo colaborador) — após cancelar um card.
     function voltarParaScan() { mostrar(null); pausado = false; _buscaT0 = performance.now(); resetInatividade(); }
     // Volta para a lista de nomes (encerra o colaborador) — após sucesso/timeout.
+    // Sempre volta ao modo "retirada" (o padrão da tela inicial).
     function voltarParaNomes() {
         colaboradorId = null; colaboradorNome = ''; clearInatividade();
+        pontoMode = false; pontoId = null; pontoNome = ''; pontoPin = ''; aplicarModo();
         pausado = true; mostrar(ov.nomes);
     }
     function resetInatividade() {
@@ -280,9 +307,22 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
             pad.appendChild(b);
         });
     })();
-    document.getElementById('pin-voltar').onclick = voltarParaNomes;
+    // Voltar do PIN: preserva o modo atual (ponto ou retirada), sem sair dele.
+    document.getElementById('pin-voltar').onclick = function () { pausado = true; mostrar(ov.nomes); };
+
+    // Alterna entre "retirar item" e "bater ponto" na própria tela inicial.
+    document.getElementById('btn-bater-ponto').onclick = function () {
+        pontoMode = !pontoMode; aplicarModo();
+    };
+
+    function pinErrado() {
+        pinBuffer = ''; renderDots();
+        const dots = document.getElementById('pin-dots');
+        dots.classList.add('shake'); setTimeout(() => dots.classList.remove('shake'), 400);
+    }
 
     function verificarPin() {
+        if (pontoMode) { verificarPinPonto(); return; }
         const fd = new FormData();
         fd.append('colaborador_id', pinSel); fd.append('pin', pinBuffer);
         fetch(API + '?acao=pin', { method: 'POST', body: fd, credentials: 'same-origin' })
@@ -292,13 +332,69 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
                     colaboradorId = pinSel; colaboradorNome = d.nome;
                     voltarParaScan();
                     hint.textContent = colaboradorNome + ' — aponte o código de barras';
-                } else {
-                    pinBuffer = ''; renderDots();
-                    const dots = document.getElementById('pin-dots');
-                    dots.classList.add('shake'); setTimeout(() => dots.classList.remove('shake'), 400);
-                }
+                } else { pinErrado(); }
             });
     }
+
+    // ---------- Ponto: PIN + bater (sem trocar de página) ----------
+    function verificarPinPonto() {
+        const fd = new FormData();
+        fd.append('colaborador_id', pinSel); fd.append('pin', pinBuffer);
+        fetch(PONTO_API + '?acao=pin', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(function (d) {
+                if (d && d.ok) { pontoId = pinSel; pontoNome = d.nome; pontoPin = pinBuffer; abrirPonto(d.status); }
+                else { pinErrado(); }
+            })
+            .catch(function () { pinErrado(); });
+    }
+    function abrirPonto(status) {
+        document.getElementById('pt-nome').textContent = pontoNome;
+        document.getElementById('pt-data').textContent =
+            new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+        const est = document.getElementById('pt-estado');
+        const acao = document.getElementById('pt-acao');
+        if (status.dentro) {
+            est.className = 'pt-estado pt-dentro';
+            est.textContent = '● Dentro desde ' + (status.desde || '--:--') + ' · ' + hmMin(status.trabalhado_min);
+            acao.className = 'btn btn-danger btn-kx mb-3'; acao.textContent = '⏸ Registrar SAÍDA';
+        } else {
+            est.className = 'pt-estado pt-fora';
+            est.textContent = status.trabalhado_min > 0 ? ('Fora · hoje ' + hmMin(status.trabalhado_min)) : 'Fora';
+            acao.className = 'btn btn-success btn-kx mb-3'; acao.textContent = '▶ Registrar ENTRADA';
+        }
+        const bt = (status.batidas || []).map(function (b) { return (b.tipo === 'entrada' ? '▶ ' : '⏸ ') + b.hora; }).join('   ');
+        document.getElementById('pt-batidas').textContent = bt ? ('Hoje: ' + bt) : '';
+        mostrar(ov.ponto);
+    }
+    document.getElementById('pt-cancelar').onclick = function () { pausado = true; mostrar(ov.nomes); };
+    document.getElementById('pt-acao').onclick = function () {
+        this.disabled = true;
+        const fd = new FormData();
+        fd.append('colaborador_id', pontoId); fd.append('pin', pontoPin);
+        fetch(PONTO_API + '?acao=bater', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(function (d) {
+                document.getElementById('pt-acao').disabled = false;
+                if (d.error) { alert(d.error); return; }
+                const entrada = d.tipo === 'entrada';
+                if (d.duplicado) {
+                    document.getElementById('ok-icone').textContent = '⏱️';
+                    document.getElementById('ok-msg').textContent = 'Você já bateu agora há pouco';
+                    document.getElementById('ok-saldo').textContent = 'Última: ' + (entrada ? 'ENTRADA' : 'SAÍDA') + ' ' + d.hora;
+                } else {
+                    document.getElementById('ok-icone').textContent = entrada ? '👋' : '✅';
+                    document.getElementById('ok-msg').textContent = pontoNome + ' — ' + (entrada ? 'ENTRADA' : 'SAÍDA') + ' ' + d.hora;
+                    document.getElementById('ok-saldo').textContent = d.esqueceu
+                        ? '⚠ Você não bateu a saída no último dia — avise o gestor.'
+                        : (entrada ? 'Bom trabalho!' : ('Trabalhado hoje: ' + hmMin(d.status.trabalhado_min)));
+                }
+                mostrar(ov.ok);
+                clearInatividade();
+                inatividade = setTimeout(voltarParaNomes, d.esqueceu ? 3800 : 2000);
+            })
+            .catch(function () { document.getElementById('pt-acao').disabled = false; alert('Falha ao bater ponto.'); });
+    };
 
     // ---------- Câmera + leitor de barras (ROI rápido) ----------
     // Prioridade 1: BarcodeDetector NATIVO do navegador (Android Chrome). Usa o
