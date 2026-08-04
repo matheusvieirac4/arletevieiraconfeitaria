@@ -2,7 +2,8 @@
 // Quiosque de baixa de estoque — página full-screen para o celular na porta.
 // Fluxo: escolhe o nome -> digita o PIN -> câmera lê o código -> confirma a
 // quantidade -> sucesso -> volta para a lista de nomes. Cada baixa fica
-// atribuída ao colaborador. ZXing lê código de barras EAN e QR.
+// atribuída ao colaborador. Leitura: BarcodeDetector nativo (rápido, quando o
+// aparelho suporta) com ZXing como reserva. Lê EAN, UPC, CODE-128/39, ITF e QR.
 require_once __DIR__ . '/_session.php';
 require_once 'model_estoque.php';
 // Nunca cachear: o navegador do celular estava servindo JS antigo.
@@ -195,7 +196,6 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script>
 (function () {
     const API = 'estoque_api.php';
@@ -298,10 +298,38 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     }
 
     // ---------- Câmera + leitor de barras (ROI rápido) ----------
-    // Em vez de decodificar o quadro inteiro num loop lento (padrão do ZXing),
-    // recortamos a FAIXA CENTRAL (onde a pessoa aponta) e decodificamos ~14x/seg
-    // um pedaço pequeno — leitura quase instantânea com imagem boa.
+    // Prioridade 1: BarcodeDetector NATIVO do navegador (Android Chrome). Usa o
+    // motor de barras do próprio sistema — muito mais rápido e preciso que JS.
+    // Prioridade 2 (reserva): ZXing recortando a FAIXA CENTRAL (ROI) ~16x/seg.
+    // Removemos o OCR (Tesseract): os números impressos ao redor do código de
+    // barras faziam ele "ler" dígitos a mais/a menos e gerar códigos errados.
     let mfReader = null, camStream = null, scanToken = 0, BARCODE_HINTS = null;
+    let nativeDetector = null;   // BarcodeDetector nativo, quando disponível
+    // Confirmação: só aceita um código depois de vê-lo em 2 quadros seguidos.
+    // Barato (~1 quadro) e elimina a leitura solta/errada de um quadro ruim.
+    let _cand = '', _candN = 0;
+    const FORMATOS = ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'];
+    async function iniciarDetectorNativo() {
+        try {
+            if (!('BarcodeDetector' in window)) { return; }
+            let sup = FORMATOS;
+            try {
+                const disp = await window.BarcodeDetector.getSupportedFormats();
+                sup = FORMATOS.filter(f => disp.includes(f));
+            } catch (e) {}
+            if (!sup.length) { return; }
+            nativeDetector = new window.BarcodeDetector({ formats: sup });
+        } catch (e) { nativeDetector = null; }
+    }
+    // Confirma o código em 2 quadros seguidos antes de disparar o fluxo.
+    function confirmar(codigo, modo, fmt, ms) {
+        if (codigo === _cand) { _candN++; }
+        else { _cand = codigo; _candN = 1; }
+        if (_candN < 2) { return; }
+        _cand = ''; _candN = 0;
+        logScan(codigo, modo, fmt, ms);
+        onScan(codigo);
+    }
     const _roi = document.createElement('canvas');
     const _roiCtx = _roi.getContext('2d', { willReadFrequently: true });
     const _flip = document.createElement('canvas');
@@ -382,16 +410,22 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     }
 
     async function iniciarCamera() {
-        if (typeof ZXing === 'undefined') { hint.textContent = 'Falha ao carregar o leitor. Recarregue.'; return; }
-        if (!roiSuportado()) { iniciarCameraLegacy(); return; }
-        if (!mfReader) { mfReader = new ZXing.MultiFormatReader(); BARCODE_HINTS = montarHints(); }
+        await iniciarDetectorNativo();
+        const temZXing = (typeof ZXing !== 'undefined');
+        // Sem detector nativo E sem ZXing não há como ler.
+        if (!nativeDetector && !temZXing) { hint.textContent = 'Falha ao carregar o leitor. Recarregue.'; return; }
+        // Só cai no ZXing "quadro inteiro" se não houver nativo nem ROI.
+        if (!nativeDetector && !roiSuportado()) { iniciarCameraLegacy(); return; }
+        if (temZXing && !mfReader) { mfReader = new ZXing.MultiFormatReader(); BARCODE_HINTS = montarHints(); }
         const v = document.getElementById('video');
         try {
             if (camStream) { camStream.getTracks().forEach(t => t.stop()); }
+            // Resolução alta ajuda muito o código pequeno da câmera FRONTAL (que
+            // costuma ser pior que a traseira). Pedimos 1080p e caímos pro que der.
             camStream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: facing,
-                    width: { ideal: 1280 }, height: { ideal: 720 },
+                    width: { ideal: 1920 }, height: { ideal: 1080 },
                     frameRate: { ideal: 30 },
                     advanced: [{ focusMode: 'continuous' }]
                 }
@@ -400,7 +434,8 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
             await v.play();
             try {
                 const st = camStream.getVideoTracks()[0].getSettings();
-                _camInfo = (st.facingMode || facing) + ' ' + (st.width || '?') + '×' + (st.height || '?');
+                _camInfo = (st.facingMode || facing) + ' ' + (st.width || '?') + '×' + (st.height || '?')
+                         + (nativeDetector ? ' · nativo' : ' · zxing');
             } catch (e) { _camInfo = facing; }
             scanToken++;
             scanLoop(scanToken);
@@ -414,13 +449,40 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(src));
         return mfReader.decode(bmp, BARCODE_HINTS);   // lança se não achar
     }
-    function scanLoop(token) {
+    // Debug do caminho nativo (código já vem como texto + formato).
+    function dbgUpdateNativo(codigo, fmt, ms) {
+        const el = document.getElementById('dbg'); if (!el) { return; }
+        _dbgAtt++;
+        const now = performance.now();
+        if (now - _dbgFpsT > 1000) { _dbgFps = _dbgAtt; _dbgAtt = 0; _dbgFpsT = now; }
+        const cam = _camInfo ? '<br><span style="opacity:.7">📷 ' + _camInfo + '</span>' : '';
+        if (codigo) {
+            el.innerHTML = '<b style="color:#3fd07a">LEU</b> nativo · ' + fmt + ' · ' + Math.round(ms) + 'ms · ' + _dbgFps + '/s' + cam;
+        } else {
+            el.innerHTML = 'nativo · ' + Math.round(ms) + 'ms · ' + _dbgFps + '/s (procurando…)' + cam;
+        }
+    }
+
+    async function scanLoop(token) {
         if (token !== scanToken) { return; }   // loop antigo morre ao trocar câmera
         // Blindado: qualquer erro num quadro é ignorado; o loop SEMPRE reagenda.
         try {
             const v = document.getElementById('video');
             if (!pausado && v && v.videoWidth) {
                 _tick++;
+                // Caminho rápido: detector nativo lê o quadro inteiro (pega até
+                // código fora do centro). Sem recorte/OCR, sem código inventado.
+                if (nativeDetector) {
+                    const t0 = performance.now();
+                    let codes = [];
+                    try { codes = await nativeDetector.detect(v); } catch (e) { codes = []; }
+                    const ms = performance.now() - t0;
+                    const hit = (codes && codes.length) ? codes[0] : null;
+                    if (_debug) { dbgUpdateNativo(hit ? hit.rawValue : '', hit ? (hit.format || '?') : '', ms); }
+                    if (hit && hit.rawValue && !pausado) { confirmar(String(hit.rawValue), 'nativo', hit.format || '?', ms); }
+                    if (token === scanToken) { setTimeout(function () { scanLoop(token); }, 40); }
+                    return;
+                }
                 const cw = v.videoWidth, ch = v.videoHeight;
                 let modo;
                 // 2 de cada 3 quadros: FAIXA CENTRAL (rápido, códigos pequenos).
@@ -457,8 +519,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
                 if (_debug) { dbgUpdate(modo, result, _ms); }
                 if (result) {
                     const _fmt = result.getBarcodeFormat ? formatoNome(result.getBarcodeFormat()) : '?';
-                    logScan(result.getText(), modo, _fmt, _ms);
-                    onScan(result.getText());
+                    confirmar(result.getText(), modo, _fmt, _ms);
                 }
             }
         } catch (e) { /* quadro num estado ruim: ignora */ }
@@ -479,7 +540,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         } catch (e) {}
     }
 
-    // Fluxo único de leitura (usado pelo leitor de barras E pelo OCR).
+    // Fluxo único de leitura do leitor de barras.
     function processarLeitura(codigo) {
         if (pausado) { return; }
         const agora = Date.now();
@@ -490,52 +551,11 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     }
     function onScan(texto) { processarLeitura(texto); }
 
-    // Valida o dígito verificador de EAN-8/UPC-A/EAN-13/GTIN-14 (padrão GTIN).
-    function barcodeValido(code) {
-        if (![8, 12, 13, 14].includes(code.length) || !/^\d+$/.test(code)) { return false; }
-        const d = code.split('').map(Number);
-        const check = d.pop();
-        let soma = 0, w = 3;
-        for (let i = d.length - 1; i >= 0; i--) { soma += d[i] * w; w = (w === 3 ? 1 : 3); }
-        return ((10 - (soma % 10)) % 10) === check;
-    }
     function lookup(codigo) {
         fetch(API + '?acao=lookup&codigo=' + encodeURIComponent(codigo), { credentials: 'same-origin' })
             .then(r => r.json())
             .then(function (d) { if (d.found) { abrirItem(d.item); } else { abrirNovo(d.codigo || codigo); } })
             .catch(() => voltarParaScan());
-    }
-
-    // ---------- OCR (Tesseract) como 2ª via ----------
-    // Lê os DÍGITOS impressos sob o código de barras. Aceita item novo também;
-    // a proteção contra leitura torta é o dígito verificador (barcodeValido).
-    let ocrWorker = null, ocrBusy = false;
-    async function iniciarOcr() {
-        if (typeof Tesseract === 'undefined') { return; }
-        try {
-            ocrWorker = await Tesseract.createWorker('eng');
-            await ocrWorker.setParameters({ tessedit_char_whitelist: '0123456789' });
-            setInterval(tickOcr, 2500);   // fallback lento; o ZXing (ROI) é o caminho rápido
-        } catch (e) {}
-    }
-    async function tickOcr() {
-        const v = document.getElementById('video');
-        if (!ocrWorker || ocrBusy || pausado || !colaboradorId || !v.videoWidth) { return; }
-        ocrBusy = true;
-        try {
-            // Recorta a faixa central (onde a pessoa aponta) — mais rápido e preciso.
-            const cw = v.videoWidth, ch = v.videoHeight;
-            const rw = Math.floor(cw * 0.8), rh = Math.floor(ch * 0.4);
-            const rx = Math.floor((cw - rw) / 2), ry = Math.floor((ch - rh) / 2);
-            const cv = document.createElement('canvas'); cv.width = rw; cv.height = rh;
-            cv.getContext('2d').drawImage(v, rx, ry, rw, rh, 0, 0, rw, rh);
-            const res = await ocrWorker.recognize(cv);
-            const runs = (res.data.text.match(/\d{8,14}/g) || []);
-            for (const run of runs) {
-                if (!pausado && barcodeValido(run)) { processarLeitura(run); break; }
-            }
-        } catch (e) {}
-        ocrBusy = false;
     }
 
     // ---------- Card do item ----------
@@ -631,7 +651,6 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     carregarNomes();
     if (_debug) { const d = document.getElementById('dbg'); if (d) { d.style.display = 'block'; d.textContent = 'debug ligado…'; } }
     iniciarCamera();
-    iniciarOcr();
 })();
 </script>
 </body>
