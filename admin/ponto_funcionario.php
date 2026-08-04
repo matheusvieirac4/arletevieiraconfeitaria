@@ -116,7 +116,8 @@ require __DIR__ . '/_header.php';
                                         <?php if ($temMeta && $dia['esperado_min'] > 0 && ($dia['batidas'] || $dia['falta_dia'])): echo ($dia['saldo_min'] >= 0 ? '+' : '') . ponto_hm($dia['saldo_min']); endif; ?>
                                     </td>
                                     <td class="text-end">
-                                        <button class="btn btn-link btn-sm p-0 js-add-batida" data-data="<?= $dia['data'] ?>">+ batida</button>
+                                        <button type="button" class="btn btn-link btn-sm p-0 js-add-batida"
+                                                data-bs-toggle="modal" data-bs-target="#modal-batida" data-data="<?= $dia['data'] ?>">+ batida</button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -219,16 +220,15 @@ require __DIR__ . '/_header.php';
             </div>
         </div>
         <script>
-        (function () {
-            const modalEl = document.getElementById('modal-batida');
-            const modal = new bootstrap.Modal(modalEl);
-            document.addEventListener('click', function (e) {
-                const b = e.target.closest('.js-add-batida');
-                if (!b) { return; }
-                document.getElementById('mb-data').value = b.dataset.data || '';
-                document.getElementById('mb-hora').value = '';
-                modal.show();
-            });
-        })();
+        // O AdminKit (Bootstrap) abre o modal pelo data-bs-toggle. Aqui só
+        // preenchemos a data do dia clicado antes de ele aparecer.
+        document.addEventListener('click', function (e) {
+            const b = e.target.closest('.js-add-batida');
+            if (!b) { return; }
+            document.getElementById('mb-data').value = b.dataset.data || '';
+            document.getElementById('mb-hora').value = '';
+            const sel = document.querySelector('#modal-batida select[name="tipo"]');
+            if (sel) { sel.value = 'entrada'; }
+        });
         </script>
 <?php require __DIR__ . '/_footer.php'; ?>
