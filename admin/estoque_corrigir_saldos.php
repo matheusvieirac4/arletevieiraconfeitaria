@@ -53,7 +53,51 @@ function corr_suspeitos(PDO $pdo): array
     return $out;
 }
 
+// Campos numéricos SEM histórico. Um valor absurdo aqui só pode ser o teto
+// cravado pelo bug — não há de onde recalcular, então a correção é limpar.
+const CORR_CAMPOS = ['preco', 'conteudo', 'estoque_minimo', 'estoque_ideal'];
+const CORR_LIMITE = 100000;
+
+/** Itens com algum campo (preço/conteúdo/mínimo/ideal) em valor absurdo. */
+function corr_campos_absurdos(PDO $pdo): array
+{
+    $cols = implode(', ', CORR_CAMPOS);
+    $itens = $pdo->query("SELECT id, nome, $cols FROM estoque_itens ORDER BY nome")->fetchAll(PDO::FETCH_ASSOC);
+    $out = [];
+    foreach ($itens as $it) {
+        $ruins = [];
+        foreach (CORR_CAMPOS as $c) {
+            if ($it[$c] !== null && abs((float) $it[$c]) > CORR_LIMITE) { $ruins[] = $c; }
+        }
+        if ($ruins) { $out[] = ['id' => (int) $it['id'], 'nome' => $it['nome'], 'ruins' => $ruins, 'valores' => $it]; }
+    }
+    return $out;
+}
+
 $flash = null;
+
+// ---- Limpar campos absurdos (preço/conteúdo/mínimo/ideal) ----
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'limpar_campos') {
+    $ids = array_map('intval', (array) ($_POST['itens'] ?? []));
+    $ok = 0;
+    foreach ($ids as $iid) {
+        if ($iid <= 0) { continue; }
+        $st = $pdo->prepare("SELECT " . implode(', ', CORR_CAMPOS) . " FROM estoque_itens WHERE id = :id");
+        $st->execute([':id' => $iid]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$row) { continue; }
+        $sets = [];
+        foreach (CORR_CAMPOS as $c) {
+            if ($row[$c] !== null && abs((float) $row[$c]) > CORR_LIMITE) { $sets[] = "$c = NULL"; }
+        }
+        if (!$sets) { continue; }
+        $pdo->prepare("UPDATE estoque_itens SET " . implode(', ', $sets) . " WHERE id = :id")->execute([':id' => $iid]);
+        $ok++;
+    }
+    $_SESSION['estoque_flash'] = ['tipo' => 'success', 'texto' => "$ok item(ns) com campos limpos. Reabra cada um e preencha preço, conteúdo, mínimo e ideal corretos."];
+    header('Location: estoque_corrigir_saldos.php');
+    exit;
+}
 
 // ---- Aplicar correções selecionadas ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'aplicar') {
@@ -87,9 +131,11 @@ $flash = $_SESSION['estoque_flash'] ?? null;
 unset($_SESSION['estoque_flash']);
 
 $suspeitos = corr_suspeitos($pdo);
+$camposRuins = corr_campos_absurdos($pdo);
 
 $page_title = 'Corrigir saldos';
 $active = 'estoque';
+$rotuloCampo = ['preco' => 'Preço', 'conteudo' => 'Conteúdo', 'estoque_minimo' => 'Mínimo', 'estoque_ideal' => 'Ideal'];
 $f = fn($n) => rtrim(rtrim(number_format((float) $n, 3, ',', '.'), '0'), ',');
 require __DIR__ . '/_header.php';
 ?>
@@ -107,9 +153,12 @@ require __DIR__ . '/_header.php';
             <div class="alert alert-<?= htmlspecialchars($flash['tipo']) ?>"><?= htmlspecialchars($flash['texto']) ?></div>
         <?php endif; ?>
 
-        <?php if (!$suspeitos): ?>
-            <div class="alert alert-success">✓ Nenhum saldo divergente. Está tudo consistente com o histórico.</div>
-        <?php else: ?>
+        <?php if (!$suspeitos && !$camposRuins): ?>
+            <div class="alert alert-success">✓ Nada divergente. Saldos batem com o histórico e não há campos com valor absurdo.</div>
+        <?php endif; ?>
+
+        <?php if ($suspeitos): ?>
+        <h5 class="mb-2">Saldos divergentes do histórico</h5>
         <form method="post" action="estoque_corrigir_saldos.php">
             <input type="hidden" name="acao" value="aplicar">
             <div class="d-flex gap-2 mb-3">
@@ -162,6 +211,53 @@ require __DIR__ . '/_header.php';
             const n = document.querySelectorAll('.chk-item:checked').length;
             if (!n) { e.preventDefault(); alert('Marque pelo menos um item.'); return; }
             if (!confirm('Aplicar a correção de saldo em ' + n + ' item(ns)? Cada um recebe um ajuste no histórico (reversível).')) {
+                e.preventDefault();
+            }
+        });
+        </script>
+        <?php endif; ?>
+
+        <?php if ($camposRuins): ?>
+        <h5 class="mb-2 mt-4">Campos com valor absurdo (sem histórico)</h5>
+        <p class="text-muted">
+            Preço, conteúdo, mínimo e ideal <strong>não têm histórico</strong> — não dá para recalcular.
+            Limpar deixa o campo em branco para você preencher o valor certo depois no item.
+        </p>
+        <form method="post" action="estoque_corrigir_saldos.php">
+            <input type="hidden" name="acao" value="limpar_campos">
+            <div class="d-flex gap-2 mb-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="sel-todos-c">Marcar todos</button>
+                <button type="submit" class="btn btn-warning btn-sm ms-auto" id="btn-limpar">Limpar campos marcados</button>
+            </div>
+            <div class="card">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr class="small text-muted">
+                        <th style="width:40px;"></th><th>Item</th><th>Campos a limpar (valor atual)</th>
+                    </tr></thead>
+                    <tbody>
+                    <?php foreach ($camposRuins as $c): ?>
+                        <tr>
+                            <td><input class="form-check-input chk-campo" type="checkbox" name="itens[]" value="<?= $c['id'] ?>" checked></td>
+                            <td class="fw-semibold"><?= htmlspecialchars($c['nome']) ?></td>
+                            <td class="small">
+                                <?php foreach ($c['ruins'] as $campo): ?>
+                                    <span class="badge bg-light text-dark border me-1"><?= htmlspecialchars($rotuloCampo[$campo] ?? $campo) ?>: <?= $f($c['valores'][$campo]) ?></span>
+                                <?php endforeach; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </form>
+        <script>
+        document.getElementById('sel-todos-c')?.addEventListener('click', function () {
+            document.querySelectorAll('.chk-campo').forEach(c => c.checked = true);
+        });
+        document.getElementById('btn-limpar')?.closest('form').addEventListener('submit', function (e) {
+            const n = document.querySelectorAll('.chk-campo:checked').length;
+            if (!n) { e.preventDefault(); alert('Marque pelo menos um item.'); return; }
+            if (!confirm('Limpar os campos absurdos de ' + n + ' item(ns)? Eles ficam em branco para você preencher depois.')) {
                 e.preventDefault();
             }
         });
