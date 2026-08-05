@@ -276,12 +276,12 @@ function estoque_atualizar(PDO $pdo, int $id, array $d): bool
 }
 
 /**
- * Parser numérico BR canônico — ÚNICO ponto de conversão de string -> número
- * no estoque. Trata os dois formatos sem ambiguidade:
- *   "1.234,56" -> 1234.56   (ponto=milhar, vírgula=decimal)
- *   "1234,56"  -> 1234.56    (só vírgula = decimal)
- *   "1.234.567"-> 1234567    (vários pontos = milhar)
- *   "1.5"/"2"  -> 1.5 / 2    (um ponto só = decimal; casa com a saída da IA)
+ * Parser numérico de fonte de MÁQUINA (cupom via IA e XML da NF-e), onde o
+ * PONTO é o separador DECIMAL (a IA é instruída a devolver "1234.56", o XML
+ * usa "1.0000"). Um ponto só = decimal. NÃO use para o que o usuário digita —
+ * para isso é estoque_num_manual (onde ponto = milhar).
+ *   "1.234,56" -> 1234.56 | "1234,56" -> 1234.56 | "1.234.567" -> 1234567
+ *   "1.000" -> 1 (decimal!) | "1.5"/"2" -> 1.5 / 2
  * Devolve null se não for numérico. Use `?? 0` quando precisar de default.
  */
 function estoque_num($v): ?float
@@ -290,16 +290,45 @@ function estoque_num($v): ?float
     if ($v === '') { return null; }
     $v = preg_replace('/[^\d.,-]/', '', $v);     // tira R$, espaços, unidades...
     $temVirgula = strpos($v, ',') !== false;
-    $temPonto   = strpos($v, '.') !== false;
-    if ($temVirgula && $temPonto) {              // BR: ponto=milhar, vírgula=decimal
+    if ($temVirgula) {                            // vírgula presente: ponto=milhar, vírgula=decimal
         $v = str_replace('.', '', $v);
-        $v = str_replace(',', '.', $v);
-    } elseif ($temVirgula) {                      // só vírgula = decimal
         $v = str_replace(',', '.', $v);
     } elseif (substr_count($v, '.') > 1) {        // vários pontos = milhar
         $v = str_replace('.', '', $v);
     }                                             // um ponto só (ou nenhum) = decimal
     return is_numeric($v) ? (float) $v : null;
+}
+
+/**
+ * Parser numérico do que o USUÁRIO DIGITA (formato BR): vírgula é decimal e
+ * PONTO é separador de MILHAR. É o oposto de estoque_num no caso do ponto
+ * sozinho: aqui "1.000" = 1000 (mil), como a pessoa espera na auditoria/entrada.
+ * Heurística do ponto sozinho (sem vírgula):
+ *   - grupo de 3 dígitos sem zero à esquerda ("1.000", "10.000") = MILHAR
+ *   - senão é decimal ("1.5", "0.750", "100.00") — cobre quem digita ponto decimal
+ *   "1.234,56" -> 1234.56 | "1.000" -> 1000 | "1,5" -> 1.5 | "0.750" -> 0.75
+ * Devolve null se não for numérico.
+ */
+function estoque_num_manual($v): ?float
+{
+    $v = trim((string) ($v ?? ''));
+    if ($v === '') { return null; }
+    $v = preg_replace('/[^\d.,-]/', '', $v);
+    $neg = strncmp($v, '-', 1) === 0;
+    $v = str_replace('-', '', $v);
+    if (strpos($v, ',') !== false) {              // vírgula = decimal; ponto = milhar
+        $v = str_replace('.', '', $v);
+        $v = str_replace(',', '.', $v);
+    } elseif (substr_count($v, '.') > 1) {        // "1.234.567" = milhar
+        $v = str_replace('.', '', $v);
+    } elseif (strpos($v, '.') !== false) {        // um ponto só: milhar ou decimal?
+        [$ip, $dp] = explode('.', $v, 2);
+        $ehMilhar = strlen($dp) === 3 && ctype_digit($ip) && ctype_digit($dp)
+                    && $ip !== '' && $ip[0] !== '0';   // "1.000" sim; "0.750"/"1.5" não
+        if ($ehMilhar) { $v = $ip . $dp; }        // 1.000 -> 1000
+    }                                             // senão mantém ponto decimal
+    if (!is_numeric($v)) { return null; }
+    return $neg ? -((float) $v) : (float) $v;
 }
 
 /** Normaliza campos do formulário para os binds. */
@@ -308,7 +337,7 @@ function estoque_params(array $d): array
     // Valida a faixa do DECIMAL(10,3): fora dela o MySQL cravaria no teto
     // (9.999.999,999) em silêncio — foi assim que saldos absurdos apareceram.
     $num = function ($v) {
-        $n = estoque_num($v);
+        $n = estoque_num_manual($v);
         if ($n !== null && ($n > 9999999.999 || $n < -9999999.999)) {
             throw new RuntimeException('Valor fora do intervalo permitido: ' . rtrim(rtrim(number_format($n, 3, ',', '.'), '0'), ',') . '.');
         }

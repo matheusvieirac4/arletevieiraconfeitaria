@@ -20,7 +20,7 @@ if ($id <= 0 || !in_array($campo, $permitidos, true)) { http_response_code(400);
 if (trim($bruto) === '') {
     $valor = null;
 } else {
-    $valor = estoque_num($bruto);
+    $valor = estoque_num_manual($bruto);
     if ($valor === null) { http_response_code(400); edc_out(['error' => 'Número inválido.']); }
 }
 

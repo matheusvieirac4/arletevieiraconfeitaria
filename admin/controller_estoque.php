@@ -36,7 +36,7 @@ if (($acao === 'salvar') && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($acao === 'movimentar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id   = (int) ($_POST['item_id'] ?? 0);
     $tipo = (string) ($_POST['tipo'] ?? '');
-    $qtd  = estoque_num($_POST['quantidade'] ?? '0') ?? 0;
+    $qtd  = estoque_num_manual($_POST['quantidade'] ?? '0') ?? 0;
     $obs  = trim((string) ($_POST['observacao'] ?? ''));
     $volta = 'estoque_item.php?id=' . $id;
     if ($id <= 0 || $qtd <= 0 && $tipo !== 'ajuste') {
@@ -145,10 +145,10 @@ if ($acao === 'entrada_confirmar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         foreach ($itemIds as $i => $sel) {
-            $qtd = estoque_num($qtds[$i] ?? '0') ?? 0;
+            $qtd = estoque_num_manual($qtds[$i] ?? '0') ?? 0;   // campo revisado pelo humano
             if ($qtd <= 0 || $sel === 'ignorar') { continue; }
             $ean   = preg_replace('/\D/', '', (string) ($eans[$i] ?? ''));
-            $vunit = estoque_num($vunits[$i] ?? '0') ?? 0;
+            $vunit = estoque_num_manual($vunits[$i] ?? '0') ?? 0;
 
             if ($sel === 'novo') {
                 $nomeNovo = trim((string) ($descs[$i] ?? 'Novo item'));
@@ -214,7 +214,7 @@ if ($acao === 'auditoria' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($contagem as $itemId => $valor) {
             $v = trim((string) $valor);
             if ($v === '') { continue; }   // em branco não altera
-            $contado = estoque_num($v) ?? 0;
+            $contado = estoque_num_manual($v) ?? 0;
             $item = estoque_buscar($pdo, (int) $itemId);
             if (!$item) { continue; }
             $antes = (float) $item['estoque_atual'];
