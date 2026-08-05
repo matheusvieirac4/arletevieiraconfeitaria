@@ -172,6 +172,8 @@ require __DIR__ . '/_header.php';
             </a>
             &nbsp;·&nbsp;
             <a href="estoque_corrigir_saldos.php" class="text-decoration-none">Corrigir saldos divergentes</a>
+            &nbsp;·&nbsp;
+            <a href="estoque_revisar_auditoria.php" class="text-decoration-none">Revisar auditoria</a>
         </p>
 <script>
 // Cada opção do dropdown de Entrada abre o seletor de arquivo e já envia.
