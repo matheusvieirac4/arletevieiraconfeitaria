@@ -59,7 +59,7 @@ if ($acao === 'pin' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---- Baixa (saída) ----
 if ($acao === 'baixa' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id    = (int) ($_POST['item_id'] ?? 0);
-    $qtd   = (float) str_replace(',', '.', (string) ($_POST['quantidade'] ?? '0'));
+    $qtd   = estoque_num_manual($_POST['quantidade'] ?? '0') ?? 0;   // digitado no quiosque
     $colab = (int) ($_POST['colaborador_id'] ?? 0);
     if ($id <= 0 || $qtd <= 0) { api_erro('Item ou quantidade inválidos.'); }
     // O responsável vem do id do colaborador (o cliente não injeta o nome).
