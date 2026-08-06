@@ -120,7 +120,7 @@ $linkOutroModo = 'ficha_pdf.php?tipo=' . $tipo . $qsIds . '&modo=' . ($mostrarCu
             <div class="sec">Modo de preparo</div>
             <p style="white-space:pre-wrap;margin:6px 2px;"><?= $esc($rec['preparo']) ?></p>
         <?php endif; ?>
-        <div class="rodape">Gerado em <?= date('d/m/Y H:i') ?> · custo com preços atuais do estoque</div>
+        <div class="rodape">Gerado em <?= date('d/m/Y H:i') ?><?= $mostrarCusto ? ' · custo com preços atuais do estoque' : '' ?></div>
     </div>
     <?php endforeach; ?>
 <?php else: ?>
@@ -163,7 +163,7 @@ $linkOutroModo = 'ficha_pdf.php?tipo=' . $tipo . $qsIds . '&modo=' . ($mostrarCu
         $bloco('Ingredientes (embalagens e itens diretos)', $c['linhas']['ingrediente']);
         $bloco('Recheios (receitas)', $c['linhas']['recheio']);
         ?>
-        <div class="rodape">Gerado em <?= date('d/m/Y H:i') ?> · custo com preços atuais do estoque</div>
+        <div class="rodape">Gerado em <?= date('d/m/Y H:i') ?><?= $mostrarCusto ? ' · custo com preços atuais do estoque' : '' ?></div>
     </div>
     <?php endforeach; ?>
 <?php endif; ?>
