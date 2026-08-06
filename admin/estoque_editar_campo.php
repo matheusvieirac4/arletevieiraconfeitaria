@@ -3,6 +3,7 @@
 // POST: id, campo, valor. Devolve JSON {ok, abaixo} ou {error}.
 require_once __DIR__ . '/_auth.php';
 require_once 'model_estoque.php';
+require_once 'model_ficha.php';   // habilita o snapshot de ficha ao mudar preço
 header('Content-Type: application/json; charset=utf-8');
 
 function edc_out($d): void { echo json_encode($d, JSON_UNESCAPED_UNICODE); exit; }
@@ -25,6 +26,10 @@ if (trim($bruto) === '') {
 }
 
 try {
+    // Preço mudou? Congela as fichas que usam o item ANTES de gravar o novo preço.
+    if ($campo === 'preco') {
+        estoque_snapshot_ficha_se_preco_mudou($pdo, $id, $valor);
+    }
     $pdo->prepare("UPDATE estoque_itens SET {$campo} = :v WHERE id = :id")
         ->execute([':v' => $valor, ':id' => $id]);
     $it = estoque_buscar($pdo, $id);

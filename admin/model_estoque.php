@@ -271,6 +271,8 @@ function estoque_atualizar(PDO $pdo, int $id, array $d): bool
 {
     $p = estoque_params($d);
     $p[':id'] = $id;
+    // Antes de gravar: se o preço mudou, congela as fichas que usam este item.
+    estoque_snapshot_ficha_se_preco_mudou($pdo, $id, $p[':preco'] ?? null);
     $cols = estoque_cols_editaveis($pdo, $p);
     return $pdo->prepare("UPDATE estoque_itens SET " . implode(', ', $cols) . " WHERE id=:id")->execute($p);
 }
@@ -823,8 +825,29 @@ function estoque_qtde_da_descricao(string $desc): ?int
 function estoque_atualizar_preco(PDO $pdo, int $itemId, float $preco): void
 {
     if ($preco <= 0 || $itemId <= 0) { return; }
+    $preco = round($preco, 2);
+    estoque_snapshot_ficha_se_preco_mudou($pdo, $itemId, $preco);
     $pdo->prepare("UPDATE estoque_itens SET preco = :p WHERE id = :id")
-        ->execute([':p' => round($preco, 2), ':id' => $itemId]);
+        ->execute([':p' => $preco, ':id' => $itemId]);
+}
+
+/**
+ * Gancho para a Ficha Técnica: se o preço do item vai realmente mudar (e havia
+ * um preço antes), congela o custo/CMV das fichas que usam o item ANTES do
+ * update. Acoplamento fraco via function_exists — o estoque não depende da ficha.
+ */
+function estoque_snapshot_ficha_se_preco_mudou(PDO $pdo, int $itemId, ?float $novoPreco): void
+{
+    if (!function_exists('ficha_snapshot_por_item')) { return; }
+    $st = $pdo->prepare("SELECT preco FROM estoque_itens WHERE id = :id");
+    $st->execute([':id' => $itemId]);
+    $atual = $st->fetchColumn();
+    if ($atual === false || $atual === null) { return; }   // sem preço anterior: nada a comparar
+    $atual = (float) $atual;
+    $novo = $novoPreco === null ? null : (float) $novoPreco;
+    if ($novo === null || abs($atual - $novo) >= 0.005) {
+        ficha_snapshot_por_item($pdo, $itemId, 'preco', estoque_responsavel_atual());
+    }
 }
 
 /** Grava o código de barras (UNIDADE, escaneado no quiosque) se ainda não tiver. */

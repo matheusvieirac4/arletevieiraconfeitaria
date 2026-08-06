@@ -49,6 +49,7 @@ foreach ($receitas as $r) {
 $compIngred = array_values(array_filter($comps, fn($c) => $c['bloco'] === 'ingrediente'));
 $compRech   = array_values(array_filter($comps, fn($c) => $c['bloco'] === 'recheio'));
 
+$categorias = ficha_categorias_nomes($pdo, 'produto');
 $reais = fn($n) => $n === null ? '—' : 'R$ ' . number_format((float) $n, 2, ',', '.');
 $flash = $_SESSION['ficha_flash'] ?? null;
 unset($_SESSION['ficha_flash']);
@@ -67,8 +68,14 @@ require __DIR__ . '/_header.php';
                     <input type="text" name="nome" class="form-control" required value="<?= htmlspecialchars($prod['nome'] ?? '') ?>" placeholder="Ex.: BOMBOM DE MORANGO">
                 </div>
                 <div class="col-6 col-md-3">
-                    <label class="form-label">Categoria</label>
-                    <input type="text" name="categoria" class="form-control" value="<?= htmlspecialchars($prod['categoria'] ?? '') ?>" placeholder="Ex.: Bombom">
+                    <label class="form-label">Categoria <a href="ficha_categorias.php?tipo=produto" class="small text-decoration-none" title="Gerenciar categorias">(gerenciar)</a></label>
+                    <?php $catAtual = $prod['categoria'] ?? ''; ?>
+                    <select name="categoria" class="form-select">
+                        <option value="">— sem categoria —</option>
+                        <?php foreach ($categorias as $cn): ?>
+                            <option value="<?= htmlspecialchars($cn, ENT_QUOTES) ?>" <?= $catAtual === $cn ? 'selected' : '' ?>><?= htmlspecialchars($cn) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label">Preço de venda</label>
@@ -118,9 +125,10 @@ require __DIR__ . '/_header.php';
                 </div>
             </div>
 
-            <div class="d-flex gap-2">
+            <div class="d-flex flex-wrap gap-2">
                 <button class="btn btn-primary">Salvar produto</button>
                 <?php if ($id > 0): ?>
+                    <a href="ficha_pdf.php?tipo=produto&id=<?= $id ?>" target="_blank" class="btn btn-outline-secondary">📄 Baixar PDF</a>
                     <a href="controller_ficha.php?acao=cmv_registrar&id=<?= $id ?>" class="btn btn-outline-dark js-confirm" data-msg="Congelar o custo/CMV atual no histórico?">Registrar CMV agora</a>
                     <a href="controller_ficha.php?acao=produto_excluir&id=<?= $id ?>" class="btn btn-outline-danger js-confirm" data-msg="Remover este produto?">Excluir</a>
                 <?php endif; ?>
@@ -132,7 +140,7 @@ require __DIR__ . '/_header.php';
             <div class="card-header"><strong>Histórico de CMV</strong> <span class="text-muted small">(últimos registros)</span></div>
             <div class="table-responsive">
                 <table class="table table-sm mb-0">
-                    <thead><tr><th>Data</th><th class="text-end">Custo</th><th class="text-end">Preço</th><th class="text-end">CMV</th><th>Por</th></tr></thead>
+                    <thead><tr><th>Data</th><th class="text-end">Custo</th><th class="text-end">Preço</th><th class="text-end">CMV</th><th>Motivo</th><th>Por</th></tr></thead>
                     <tbody>
                     <?php foreach ($historico as $h): ?>
                         <tr>
@@ -140,6 +148,7 @@ require __DIR__ . '/_header.php';
                             <td class="text-end"><?= $reais($h['custo']) ?></td>
                             <td class="text-end"><?= $reais($h['preco_venda']) ?></td>
                             <td class="text-end"><?= $h['cmv_pct'] !== null ? number_format((float) $h['cmv_pct'], 1, ',', '.') . '%' : '—' ?></td>
+                            <td class="small text-muted"><?= htmlspecialchars(($h['motivo'] ?? '') === 'preco' ? 'mudança de preço' : ($h['motivo'] ?? '—')) ?></td>
                             <td class="text-muted small"><?= htmlspecialchars($h['responsavel'] ?? '—') ?></td>
                         </tr>
                     <?php endforeach; ?>

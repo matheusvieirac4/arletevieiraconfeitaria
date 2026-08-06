@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/_auth.php';
 require_once 'model_estoque.php';
+require_once 'model_ficha.php';   // habilita o snapshot de ficha ao mudar preço
 
 $acao = $_GET['acao'] ?? '';
 

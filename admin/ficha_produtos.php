@@ -22,7 +22,9 @@ $cmvBadge = function (?float $cmv): string {
 };
 
 $busca = trim((string) ($_GET['busca'] ?? ''));
-$produtos = ficha_produtos_listar($pdo, $busca);
+$cat   = trim((string) ($_GET['categoria'] ?? ''));
+$produtos = ficha_produtos_listar($pdo, $busca, $cat);
+$categorias = ficha_categorias_nomes($pdo, 'produto');
 
 $flash = $_SESSION['ficha_flash'] ?? null;
 unset($_SESSION['ficha_flash']);
@@ -32,11 +34,21 @@ require __DIR__ . '/_header.php';
         <div class="d-flex flex-wrap gap-2 mb-4">
             <a href="ficha_produto.php" class="btn btn-success btn-sm">+ Novo produto</a>
             <a href="ficha_receitas.php" class="btn btn-outline-primary btn-sm">Receitas</a>
+            <a href="ficha_categorias.php?tipo=produto" class="btn btn-outline-secondary btn-sm">Categorias</a>
+            <button type="button" id="btn-pdf" class="btn btn-outline-dark btn-sm" disabled>📄 Baixar PDF dos selecionados</button>
         </div>
 
-        <form method="get" class="row g-2 mb-3" style="max-width:600px;">
+        <form method="get" class="row g-2 mb-3" style="max-width:760px;">
             <div class="col-12 col-md">
-                <input type="text" name="busca" class="form-control" placeholder="Buscar por nome ou categoria" value="<?= htmlspecialchars($busca) ?>">
+                <input type="text" name="busca" class="form-control" placeholder="Buscar por nome" value="<?= htmlspecialchars($busca) ?>">
+            </div>
+            <div class="col-auto">
+                <select name="categoria" class="form-select" onchange="this.form.submit()">
+                    <option value="">Todas as categorias</option>
+                    <?php foreach ($categorias as $cn): ?>
+                        <option value="<?= htmlspecialchars($cn, ENT_QUOTES) ?>" <?= $cat === $cn ? 'selected' : '' ?>><?= htmlspecialchars($cn) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div class="col-auto"><button class="btn btn-outline-secondary">Buscar</button></div>
         </form>
@@ -46,6 +58,7 @@ require __DIR__ . '/_header.php';
                 <table class="table table-hover align-middle mb-0 bg-white">
                     <thead>
                         <tr>
+                            <th style="width:34px"><input type="checkbox" id="check-all" class="form-check-input"></th>
                             <th>Produto</th>
                             <th>Categoria</th>
                             <th class="text-end">Custo</th>
@@ -57,12 +70,13 @@ require __DIR__ . '/_header.php';
                     </thead>
                     <tbody>
                     <?php if (!$produtos): ?>
-                        <tr><td colspan="7" class="text-muted text-center py-4">Nenhum produto cadastrado.</td></tr>
+                        <tr><td colspan="8" class="text-muted text-center py-4">Nenhum produto cadastrado.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($produtos as $p):
                         $c = ficha_produto_custo($pdo, (int) $p['id']);
                     ?>
                         <tr>
+                            <td><input type="checkbox" class="form-check-input check-item" value="<?= (int) $p['id'] ?>"></td>
                             <td><a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="text-decoration-none fw-semibold"><?= htmlspecialchars($p['nome']) ?></a></td>
                             <td class="text-muted"><?= htmlspecialchars($p['categoria'] ?? '—') ?></td>
                             <td class="text-end"><?= $reais($c['custo_total']) ?></td>
@@ -78,5 +92,23 @@ require __DIR__ . '/_header.php';
                 </table>
             </div>
         </div>
-        <p class="text-muted small mt-2"><?= count($produtos) ?> produto(s)<?= $busca ? ' (filtrado)' : '' ?>. CMV: <span class="badge bg-success">≤35%</span> <span class="badge bg-warning text-dark">≤45%</span> <span class="badge bg-danger">&gt;45%</span></p>
+        <p class="text-muted small mt-2"><?= count($produtos) ?> produto(s)<?= ($busca || $cat) ? ' (filtrado)' : '' ?>. CMV: <span class="badge bg-success">≤35%</span> <span class="badge bg-warning text-dark">≤45%</span> <span class="badge bg-danger">&gt;45%</span></p>
+<script>
+// Seleção múltipla → abre o PDF com os produtos escolhidos (um por folha).
+(function () {
+    const all = document.getElementById('check-all');
+    const btn = document.getElementById('btn-pdf');
+    const marcadas = () => Array.from(document.querySelectorAll('.check-item:checked')).map(c => c.value);
+    const atualiza = () => { btn.disabled = marcadas().length === 0; };
+    all.addEventListener('change', () => {
+        document.querySelectorAll('.check-item').forEach(c => { c.checked = all.checked; });
+        atualiza();
+    });
+    document.querySelectorAll('.check-item').forEach(c => c.addEventListener('change', atualiza));
+    btn.addEventListener('click', () => {
+        const ids = marcadas();
+        if (ids.length) { window.open('ficha_pdf.php?tipo=produto&ids=' + ids.join(','), '_blank'); }
+    });
+})();
+</script>
 <?php require __DIR__ . '/_footer.php'; ?>

@@ -77,23 +77,84 @@ try {
     ");
     $log[] = 'OK  tabela ficha_produto_componentes';
 
-    // -- Histórico de CMV: custo congelado por produto numa data ---------------
+    // -- Histórico de custo/CMV: custo congelado numa data. Serve produtos (com
+    // CMV) e receitas (com custo/un). ref_id aponta para ficha_produtos.id OU
+    // ficha_receitas.id conforme 'tipo' — sem FK porque a referência é dupla. --
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS ficha_cmv_snapshots (
             id          INT AUTO_INCREMENT PRIMARY KEY,
-            produto_id  INT NOT NULL,
+            tipo        ENUM('produto','receita') NOT NULL DEFAULT 'produto',
+            ref_id      INT NOT NULL,
             custo       DECIMAL(12,4) NOT NULL DEFAULT 0,
+            custo_por_g DECIMAL(14,6) NULL,
             preco_venda DECIMAL(10,2) NULL,
             cmv_pct     DECIMAL(6,2) NULL,
+            motivo      VARCHAR(64) NULL,
             responsavel VARCHAR(120) NULL,
             observacao  VARCHAR(255) NULL,
             criado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX (produto_id),
-            INDEX (criado_em),
-            CONSTRAINT fk_cmv_produto FOREIGN KEY (produto_id) REFERENCES ficha_produtos(id) ON DELETE CASCADE
+            INDEX (tipo, ref_id),
+            INDEX (criado_em)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
     $log[] = 'OK  tabela ficha_cmv_snapshots';
+
+    // -- Categorias das fichas (por tipo), para filtrar receitas/produtos ------
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ficha_categorias (
+            id        INT AUTO_INCREMENT PRIMARY KEY,
+            tipo      ENUM('receita','produto') NOT NULL,
+            nome      VARCHAR(120) NOT NULL,
+            ativo     TINYINT(1) NOT NULL DEFAULT 1,
+            criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_cat (tipo, nome)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $log[] = 'OK  tabela ficha_categorias';
+
+    // Semeia categorias de exemplo (só as que faltam — idempotente).
+    $seedCats = [
+        'receita' => ['Massas', 'Doces', 'Recheios', 'Coberturas', 'Ganaches'],
+        'produto' => ['Doces', 'Salgados', 'Bolos', 'Cookies', 'Brownies', 'Bolos de pote', 'Tortas'],
+    ];
+    $insCat = $pdo->prepare("INSERT IGNORE INTO ficha_categorias (tipo, nome) VALUES (:t, :n)");
+    $nCat = 0;
+    foreach ($seedCats as $tp => $nomes) {
+        foreach ($nomes as $nm) {
+            if ($insCat->execute([':t' => $tp, ':n' => $nm]) && $insCat->rowCount() > 0) { $nCat++; }
+        }
+    }
+    $log[] = "OK  $nCat categoria(s) de exemplo semeada(s).";
+
+    // Migração: tabela de snapshots da 1ª versão (só produto_id/FK) → modelo novo.
+    try {
+        $temRef = $pdo->query("SHOW COLUMNS FROM ficha_cmv_snapshots LIKE 'ref_id'")->fetch();
+        $temProd = $pdo->query("SHOW COLUMNS FROM ficha_cmv_snapshots LIKE 'produto_id'")->fetch();
+        if ($temProd && !$temRef) {
+            // Versão antiga detectada; recria vazia no formato novo (não havia dados
+            // porque o setup ainda não tinha rodado em produção).
+            $pdo->exec("DROP TABLE ficha_cmv_snapshots");
+            $pdo->exec("
+                CREATE TABLE ficha_cmv_snapshots (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    tipo ENUM('produto','receita') NOT NULL DEFAULT 'produto',
+                    ref_id INT NOT NULL,
+                    custo DECIMAL(12,4) NOT NULL DEFAULT 0,
+                    custo_por_g DECIMAL(14,6) NULL,
+                    preco_venda DECIMAL(10,2) NULL,
+                    cmv_pct DECIMAL(6,2) NULL,
+                    motivo VARCHAR(64) NULL,
+                    responsavel VARCHAR(120) NULL,
+                    observacao VARCHAR(255) NULL,
+                    criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    INDEX (tipo, ref_id), INDEX (criado_em)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ");
+            $log[] = 'OK  ficha_cmv_snapshots migrada para o formato novo (tipo/ref_id).';
+        }
+    } catch (\Throwable $e) {
+        $log[] = 'ERRO ao migrar ficha_cmv_snapshots: ' . $e->getMessage();
+    }
 
     $log[] = '';
     $log[] = 'Pronto. Acesse /admin/ficha_receitas.php para começar cadastrando as receitas.';

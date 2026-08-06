@@ -34,6 +34,9 @@ foreach ($itensEstoque as $it) {
     ];
 }
 $unidades = estoque_unidades_medida();
+$categorias = ficha_categorias_nomes($pdo, 'receita');
+$historico = $id > 0 ? ficha_receita_historico($pdo, $id, 20) : [];
+$reais = fn($n) => $n === null ? '—' : 'R$ ' . number_format((float) $n, 2, ',', '.');
 
 $flash = $_SESSION['ficha_flash'] ?? null;
 unset($_SESSION['ficha_flash']);
@@ -52,8 +55,14 @@ require __DIR__ . '/_header.php';
                     <input type="text" name="nome" class="form-control" required value="<?= htmlspecialchars($rec['nome'] ?? '') ?>" placeholder="Ex.: MASSA DE BEIJINHO">
                 </div>
                 <div class="col-6 col-md-3">
-                    <label class="form-label">Categoria</label>
-                    <input type="text" name="categoria" class="form-control" value="<?= htmlspecialchars($rec['categoria'] ?? '') ?>" placeholder="Ex.: Recheio">
+                    <label class="form-label">Categoria <a href="ficha_categorias.php?tipo=receita" class="small text-decoration-none" title="Gerenciar categorias">(gerenciar)</a></label>
+                    <?php $catAtual = $rec['categoria'] ?? ''; ?>
+                    <select name="categoria" class="form-select">
+                        <option value="">— sem categoria —</option>
+                        <?php foreach ($categorias as $cn): ?>
+                            <option value="<?= htmlspecialchars($cn, ENT_QUOTES) ?>" <?= $catAtual === $cn ? 'selected' : '' ?>><?= htmlspecialchars($cn) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label">% de evaporação</label>
@@ -102,13 +111,37 @@ require __DIR__ . '/_header.php';
                 <textarea name="preparo" class="form-control" rows="3"><?= htmlspecialchars($rec['preparo'] ?? '') ?></textarea>
             </div>
 
-            <div class="d-flex gap-2">
+            <div class="d-flex flex-wrap gap-2">
                 <button class="btn btn-primary">Salvar receita</button>
                 <?php if ($id > 0): ?>
+                    <a href="ficha_pdf.php?tipo=receita&id=<?= $id ?>" target="_blank" class="btn btn-outline-secondary">📄 Baixar PDF</a>
+                    <a href="controller_ficha.php?acao=receita_snapshot&id=<?= $id ?>" class="btn btn-outline-dark js-confirm" data-msg="Congelar o custo atual desta receita no histórico?">Registrar custo agora</a>
                     <a href="controller_ficha.php?acao=receita_excluir&id=<?= $id ?>" class="btn btn-outline-danger js-confirm" data-msg="Remover esta receita?">Excluir</a>
                 <?php endif; ?>
             </div>
         </form>
+
+        <?php if ($historico): ?>
+        <div class="card mt-4">
+            <div class="card-header"><strong>Histórico de custo</strong> <span class="text-muted small">(congela a cada mudança de preço no estoque)</span></div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Data</th><th class="text-end">Custo total</th><th class="text-end">Custo/un</th><th>Motivo</th><th>Por</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($historico as $h): ?>
+                        <tr>
+                            <td><?= date('d/m/Y H:i', strtotime($h['criado_em'])) ?></td>
+                            <td class="text-end"><?= $reais($h['custo']) ?></td>
+                            <td class="text-end"><?= $h['custo_por_g'] !== null ? 'R$ ' . number_format((float) $h['custo_por_g'], 4, ',', '.') : '—' ?></td>
+                            <td class="small text-muted"><?= htmlspecialchars($h['motivo'] === 'preco' ? 'mudança de preço' : ($h['motivo'] ?? '—')) ?></td>
+                            <td class="text-muted small"><?= htmlspecialchars($h['responsavel'] ?? '—') ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php endif; ?>
 
 <script>
 const MAPA_CUSTO = <?= json_encode($mapaCusto, JSON_UNESCAPED_UNICODE) ?>;

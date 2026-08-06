@@ -31,6 +31,19 @@ if ($acao === 'receita_excluir') {
     ficha_redirect('success', 'Receita removida.', 'ficha_receitas.php');
 }
 
+// ---- Registrar custo da receita no histórico (snapshot manual) ----
+if ($acao === 'receita_snapshot') {
+    $id = (int) ($_GET['id'] ?? 0);
+    $volta = 'ficha_receita.php?id=' . $id;
+    if ($id <= 0) { ficha_redirect('danger', 'Receita inválida.', 'ficha_receitas.php'); }
+    try {
+        ficha_receita_snapshot($pdo, $id, estoque_responsavel_atual());
+        ficha_redirect('success', 'Custo registrado no histórico.', $volta);
+    } catch (\Throwable $e) {
+        ficha_redirect('danger', 'Falha ao registrar: ' . $e->getMessage(), $volta);
+    }
+}
+
 // ---- Salvar produto (cabeçalho + componentes) ----
 if ($acao === 'produto_salvar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int) ($_POST['id'] ?? 0);
@@ -80,6 +93,27 @@ if ($acao === 'cmv_registrar_todos') {
     } catch (\Throwable $e) {
         ficha_redirect('danger', 'Falha ao registrar em lote: ' . $e->getMessage(), 'ficha_cmv.php');
     }
+}
+
+// ---- Categorias: criar / excluir ----
+if ($acao === 'cat_salvar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $tipo = (string) ($_POST['tipo'] ?? '');
+    $nome = trim((string) ($_POST['nome'] ?? ''));
+    $volta = 'ficha_categorias.php?tipo=' . ($tipo === 'produto' ? 'produto' : 'receita');
+    if ($nome === '') { ficha_redirect('danger', 'Informe o nome da categoria.', $volta); }
+    try {
+        ficha_categoria_salvar($pdo, $tipo, $nome);
+        ficha_redirect('success', 'Categoria adicionada.', $volta);
+    } catch (\Throwable $e) {
+        ficha_redirect('danger', 'Falha: ' . $e->getMessage(), $volta);
+    }
+}
+
+if ($acao === 'cat_excluir') {
+    $id = (int) ($_GET['id'] ?? 0);
+    $tipo = (string) ($_GET['tipo'] ?? 'receita');
+    if ($id > 0) { ficha_categoria_excluir($pdo, $id); }
+    ficha_redirect('success', 'Categoria removida.', 'ficha_categorias.php?tipo=' . ($tipo === 'produto' ? 'produto' : 'receita'));
 }
 
 header('Location: ficha_receitas.php');

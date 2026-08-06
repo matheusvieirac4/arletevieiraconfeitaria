@@ -41,13 +41,17 @@ function ficha_exigir_setup(): void
 // RECEITAS
 // ---------------------------------------------------------------------------
 
-function ficha_receitas_listar(PDO $pdo, string $busca = ''): array
+function ficha_receitas_listar(PDO $pdo, string $busca = '', string $categoria = ''): array
 {
     $sql = "SELECT * FROM ficha_receitas WHERE ativo = 1";
     $params = [];
     if ($busca !== '') {
         $sql .= " AND (nome LIKE :b OR categoria LIKE :b)";
         $params[':b'] = '%' . $busca . '%';
+    }
+    if ($categoria !== '') {
+        $sql .= " AND categoria = :cat";
+        $params[':cat'] = $categoria;
     }
     $sql .= " ORDER BY nome";
     $stmt = $pdo->prepare($sql);
@@ -181,13 +185,17 @@ function ficha_receita_custo(PDO $pdo, int $receitaId): array
 // PRODUTOS
 // ---------------------------------------------------------------------------
 
-function ficha_produtos_listar(PDO $pdo, string $busca = ''): array
+function ficha_produtos_listar(PDO $pdo, string $busca = '', string $categoria = ''): array
 {
     $sql = "SELECT * FROM ficha_produtos WHERE ativo = 1";
     $params = [];
     if ($busca !== '') {
         $sql .= " AND (nome LIKE :b OR categoria LIKE :b)";
         $params[':b'] = '%' . $busca . '%';
+    }
+    if ($categoria !== '') {
+        $sql .= " AND categoria = :cat";
+        $params[':cat'] = $categoria;
     }
     $sql .= " ORDER BY nome";
     $stmt = $pdo->prepare($sql);
@@ -333,20 +341,37 @@ function ficha_produto_custo(PDO $pdo, int $produtoId): array
 }
 
 // ---------------------------------------------------------------------------
-// CMV — histórico (snapshots)
+// CMV / custo — histórico (snapshots)
 // ---------------------------------------------------------------------------
 
-/** Congela o custo/CMV atual de um produto no histórico. */
-function ficha_cmv_registrar(PDO $pdo, int $produtoId, string $responsavel = '', string $obs = ''): void
+/** Congela o custo/CMV atual de um PRODUTO no histórico. */
+function ficha_cmv_registrar(PDO $pdo, int $produtoId, string $responsavel = '', string $motivo = 'manual', string $obs = ''): void
 {
     $c = ficha_produto_custo($pdo, $produtoId);
-    $pdo->prepare("INSERT INTO ficha_cmv_snapshots (produto_id, custo, preco_venda, cmv_pct, responsavel, observacao)
-                   VALUES (:p, :c, :v, :m, :r, :o)")
+    $pdo->prepare("INSERT INTO ficha_cmv_snapshots (tipo, ref_id, custo, preco_venda, cmv_pct, motivo, responsavel, observacao)
+                   VALUES ('produto', :p, :c, :v, :m, :mo, :r, :o)")
         ->execute([
             ':p' => $produtoId,
             ':c' => round($c['custo_total'], 4),
             ':v' => $c['preco_venda'],
             ':m' => $c['cmv_pct'] !== null ? round($c['cmv_pct'], 2) : null,
+            ':mo' => $motivo !== '' ? $motivo : null,
+            ':r' => $responsavel !== '' ? $responsavel : null,
+            ':o' => $obs !== '' ? mb_substr($obs, 0, 250) : null,
+        ]);
+}
+
+/** Congela o custo atual de uma RECEITA no histórico (sem CMV — não tem venda). */
+function ficha_receita_snapshot(PDO $pdo, int $receitaId, string $responsavel = '', string $motivo = 'manual', string $obs = ''): void
+{
+    $c = ficha_receita_custo($pdo, $receitaId);
+    $pdo->prepare("INSERT INTO ficha_cmv_snapshots (tipo, ref_id, custo, custo_por_g, motivo, responsavel, observacao)
+                   VALUES ('receita', :p, :c, :g, :mo, :r, :o)")
+        ->execute([
+            ':p' => $receitaId,
+            ':c' => round($c['custo_total'], 4),
+            ':g' => $c['custo_por_g'] !== null ? round($c['custo_por_g'], 6) : null,
+            ':mo' => $motivo !== '' ? $motivo : null,
             ':r' => $responsavel !== '' ? $responsavel : null,
             ':o' => $obs !== '' ? mb_substr($obs, 0, 250) : null,
         ]);
@@ -356,8 +381,127 @@ function ficha_cmv_registrar(PDO $pdo, int $produtoId, string $responsavel = '',
 function ficha_cmv_historico(PDO $pdo, int $produtoId, int $limite = 60): array
 {
     $limite = max(1, min(500, $limite));
-    $stmt = $pdo->prepare("SELECT * FROM ficha_cmv_snapshots WHERE produto_id = :id
+    $stmt = $pdo->prepare("SELECT * FROM ficha_cmv_snapshots WHERE tipo = 'produto' AND ref_id = :id
                            ORDER BY criado_em DESC, id DESC LIMIT $limite");
     $stmt->execute([':id' => $produtoId]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** Snapshots de uma receita (mais recentes primeiro). */
+function ficha_receita_historico(PDO $pdo, int $receitaId, int $limite = 60): array
+{
+    $limite = max(1, min(500, $limite));
+    $stmt = $pdo->prepare("SELECT * FROM ficha_cmv_snapshots WHERE tipo = 'receita' AND ref_id = :id
+                           ORDER BY criado_em DESC, id DESC LIMIT $limite");
+    $stmt->execute([':id' => $receitaId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Gatilho de mudança de preço no estoque: congela o custo/CMV de TODAS as
+ * receitas e produtos que usam o item (direta ou indiretamente) ANTES de o
+ * preço ser atualizado — assim o histórico marca o custo válido até aquela troca.
+ *
+ * Dedupe por requisição (static): numa nota com vários itens do mesmo produto,
+ * cada ficha é congelada uma única vez (o estado anterior à nota).
+ * É defensivo: se as tabelas da ficha ainda não existem, não faz nada.
+ */
+function ficha_snapshot_por_item(PDO $pdo, int $itemId, string $motivo = 'preco', string $responsavel = ''): void
+{
+    static $feitos = [];   // "produto:ID" / "receita:ID" já congelados nesta requisição
+    if ($itemId <= 0 || !ficha_pronto($pdo)) { return; }
+
+    try {
+        // Receitas que usam o item diretamente.
+        $st = $pdo->prepare("SELECT DISTINCT receita_id FROM ficha_receita_itens WHERE item_id = :i");
+        $st->execute([':i' => $itemId]);
+        $receitaIds = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+
+        // Produtos que usam o item diretamente (bloco de ingredientes).
+        $st = $pdo->prepare("SELECT DISTINCT produto_id FROM ficha_produto_componentes
+                             WHERE tipo = 'item' AND ref_id = :i");
+        $st->execute([':i' => $itemId]);
+        $produtoIds = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+
+        // Produtos que usam alguma dessas receitas (bloco de recheios).
+        if ($receitaIds) {
+            $in = implode(',', array_fill(0, count($receitaIds), '?'));
+            $st = $pdo->prepare("SELECT DISTINCT produto_id FROM ficha_produto_componentes
+                                 WHERE tipo = 'receita' AND ref_id IN ($in)");
+            $st->execute($receitaIds);
+            foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $pid) { $produtoIds[] = (int) $pid; }
+        }
+        $produtoIds = array_values(array_unique($produtoIds));
+
+        foreach ($receitaIds as $rid) {
+            $k = "receita:$rid";
+            if (isset($feitos[$k])) { continue; }
+            $feitos[$k] = true;
+            ficha_receita_snapshot($pdo, $rid, $responsavel, $motivo);
+        }
+        foreach ($produtoIds as $pid) {
+            $k = "produto:$pid";
+            if (isset($feitos[$k])) { continue; }
+            $feitos[$k] = true;
+            ficha_cmv_registrar($pdo, $pid, $responsavel, $motivo);
+        }
+    } catch (\Throwable $e) {
+        // Nunca deixa o snapshot quebrar a atualização de preço do estoque.
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CATEGORIAS (por tipo: receita | produto) — para filtrar as fichas
+// ---------------------------------------------------------------------------
+
+/** A tabela de categorias já existe? (setup cria). */
+function ficha_tem_categorias(PDO $pdo): bool
+{
+    static $tem = null;
+    if ($tem === null) {
+        try { $pdo->query("SELECT 1 FROM ficha_categorias LIMIT 1"); $tem = true; }
+        catch (\Throwable $e) { $tem = false; }
+    }
+    return $tem;
+}
+
+/** Categorias cadastradas de um tipo. */
+function ficha_categorias_listar(PDO $pdo, string $tipo): array
+{
+    if (!ficha_tem_categorias($pdo) || !in_array($tipo, ['receita', 'produto'], true)) { return []; }
+    $st = $pdo->prepare("SELECT * FROM ficha_categorias WHERE tipo = :t AND ativo = 1 ORDER BY nome");
+    $st->execute([':t' => $tipo]);
+    return $st->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Nomes para o SELECT do formulário: categorias cadastradas + as que já constam
+ * nas fichas (para não perder valores antigos). Ordenadas.
+ */
+function ficha_categorias_nomes(PDO $pdo, string $tipo): array
+{
+    $nomes = [];
+    foreach (ficha_categorias_listar($pdo, $tipo) as $c) { $nomes[$c['nome']] = true; }
+    $tabela = $tipo === 'receita' ? 'ficha_receitas' : 'ficha_produtos';
+    try {
+        foreach ($pdo->query("SELECT DISTINCT categoria FROM $tabela WHERE categoria IS NOT NULL AND categoria <> ''")->fetchAll(PDO::FETCH_COLUMN) as $n) {
+            $nomes[$n] = true;
+        }
+    } catch (\Throwable $e) { /* ignora */ }
+    $lista = array_keys($nomes);
+    natcasesort($lista);
+    return array_values($lista);
+}
+
+function ficha_categoria_salvar(PDO $pdo, string $tipo, string $nome): void
+{
+    $nome = trim($nome);
+    if ($nome === '' || !in_array($tipo, ['receita', 'produto'], true)) { return; }
+    $pdo->prepare("INSERT IGNORE INTO ficha_categorias (tipo, nome) VALUES (:t, :n)")
+        ->execute([':t' => $tipo, ':n' => $nome]);
+}
+
+function ficha_categoria_excluir(PDO $pdo, int $id): void
+{
+    $pdo->prepare("UPDATE ficha_categorias SET ativo = 0 WHERE id = :id")->execute([':id' => $id]);
 }
