@@ -136,7 +136,7 @@ $camposRuins = corr_campos_absurdos($pdo);
 $page_title = 'Corrigir saldos';
 $active = 'estoque';
 $rotuloCampo = ['preco' => 'Preço', 'conteudo' => 'Conteúdo', 'estoque_minimo' => 'Mínimo', 'estoque_ideal' => 'Ideal'];
-$f = fn($n) => rtrim(rtrim(number_format((float) $n, 3, ',', '.'), '0'), ',');
+$f = fn($n) => estoque_qtd($n, '0');   // quantidades de estoque são inteiras
 require __DIR__ . '/_header.php';
 ?>
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">

@@ -142,7 +142,7 @@ require __DIR__ . '/_header.php';
                             </td>
                             <td class="text-end text-nowrap">R$&nbsp;<input type="text" class="inline-edit" style="width:78px" inputmode="decimal" placeholder="—"
                                        data-id="<?= (int) $it['id'] ?>" data-campo="preco" value="<?= $it['preco'] !== null ? number_format((float) $it['preco'], 2, ',', '') : '' ?>"></td>
-                            <td class="text-end fw-semibold"><?= $fmt($it['estoque_atual']) ?></td>
+                            <td class="text-end fw-semibold"><?= estoque_qtd($it['estoque_atual'], '0') ?></td>
                             <td class="text-end"><input type="text" class="inline-edit" style="width:58px" inputmode="decimal" placeholder="—"
                                        data-id="<?= (int) $it['id'] ?>" data-campo="estoque_minimo" value="<?= $raw($min) ?>"></td>
                             <td class="text-end"><input type="text" class="inline-edit" style="width:58px" inputmode="decimal" placeholder="—"

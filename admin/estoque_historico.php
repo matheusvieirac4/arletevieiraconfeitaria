@@ -34,7 +34,7 @@ $resps   = estoque_historico_responsaveis($pdo);
 
 $page_title = 'Histórico';
 $active = 'estoque';
-$fmt = fn($n) => $n === null ? '—' : rtrim(rtrim(number_format((float) $n, 3, ',', '.'), '0'), ',');
+$fmt = fn($n) => estoque_qtd($n);   // quantidades de estoque são inteiras
 
 // Mantém os filtros ao trocar de página.
 $qsPag = fn($p) => 'estoque_historico.php?' . http_build_query(array_filter([

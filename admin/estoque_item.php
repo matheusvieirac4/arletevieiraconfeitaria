@@ -101,7 +101,7 @@ require __DIR__ . '/_header.php';
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Estoque atual</label>
-                                    <input type="text" name="estoque_atual" class="form-control" value="<?= $fmt($item['estoque_atual'] ?? '0') ?>" inputmode="decimal">
+                                    <input type="text" name="estoque_atual" class="form-control" value="<?= estoque_qtd($item['estoque_atual'] ?? '0', '') ?>" inputmode="numeric">
                                     <div class="form-text">Prefira ajustar pela movimentação (mantém histórico).</div>
                                 </div>
                                 <div class="col-md-4">
@@ -139,7 +139,7 @@ require __DIR__ . '/_header.php';
                 <div class="card mb-4">
                     <div class="card-header fw-semibold">Movimentar saldo</div>
                     <div class="card-body">
-                        <div class="mb-3">Saldo atual: <span class="fs-4 fw-bold"><?= $fmt($item['estoque_atual']) ?></span></div>
+                        <div class="mb-3">Saldo atual: <span class="fs-4 fw-bold"><?= estoque_qtd($item['estoque_atual'], '0') ?></span></div>
                         <form method="post" action="controller_estoque.php?acao=movimentar" class="row g-2">
                             <input type="hidden" name="item_id" value="<?= (int) $id ?>">
                             <div class="col-5">
@@ -180,7 +180,7 @@ require __DIR__ . '/_header.php';
                                     <?php $risca = $estornado ? 'text-decoration-line-through opacity-50' : ''; ?>
                                     <tr>
                                         <td class="text-nowrap small text-muted <?= $risca ?>"><?= htmlspecialchars(date('d/m H:i', strtotime($m['criado_em']))) ?></td>
-                                        <td class="fw-semibold <?= $estornado ? 'text-muted ' . $risca : $cor ?>"><?= $sinal ?> <?= $fmt($m['quantidade']) ?></td>
+                                        <td class="fw-semibold <?= $estornado ? 'text-muted ' . $risca : $cor ?>"><?= $sinal ?> <?= estoque_qtd($m['quantidade']) ?></td>
                                         <td class="small text-muted">
                                             <span class="<?= $risca ?>"><?= htmlspecialchars($m['origem']) ?><?= $m['observacao'] ? ' · ' . htmlspecialchars($m['observacao']) : '' ?><?php if (!empty($m['responsavel'])): ?> · por <?= htmlspecialchars($m['responsavel']) ?><?php endif; ?></span>
                                             <?php if ($estornado): ?>
@@ -193,7 +193,7 @@ require __DIR__ . '/_header.php';
                                                    class="text-danger text-decoration-none js-confirm" title="Estornar"
                                                    data-msg="Estornar esta movimentação? O saldo volta e a linha fica riscada no histórico.">↩︎ estornar</a>
                                             <?php else: ?>
-                                                → <?= $fmt($m['saldo_apos']) ?>
+                                                → <?= estoque_qtd($m['saldo_apos']) ?>
                                             <?php endif; ?>
                                         </td>
                                     </tr>

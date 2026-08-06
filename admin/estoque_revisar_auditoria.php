@@ -81,7 +81,7 @@ $rows = $pdo->query("
 
 $page_title = 'Revisar auditoria';
 $active = 'estoque';
-$f = fn($n) => $n === null ? '—' : rtrim(rtrim(number_format((float) $n, 3, ',', '.'), '0'), ',');
+$f = fn($n) => estoque_qtd($n);   // quantidades de estoque são inteiras
 require __DIR__ . '/_header.php';
 ?>
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">

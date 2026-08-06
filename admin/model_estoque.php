@@ -333,6 +333,16 @@ function estoque_num_manual($v): ?float
     return $neg ? -((float) $v) : (float) $v;
 }
 
+/**
+ * Formata uma QUANTIDADE de estoque para exibição: inteiro, SEM separador de
+ * milhar (evita "4.000" parecer 4 ou decimal). Ex.: 4000 -> "4000". null -> $vazio.
+ */
+function estoque_qtd($n, string $vazio = '—'): string
+{
+    if ($n === null || $n === '') { return $vazio; }
+    return number_format(round((float) $n), 0, '', '');
+}
+
 /** Normaliza campos do formulário para os binds. */
 function estoque_params(array $d): array
 {

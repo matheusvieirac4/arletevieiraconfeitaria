@@ -260,7 +260,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         document.getElementById('btn-bater-ponto').textContent = pontoMode ? '📦 Retirar item' : '🕐 Bater ponto';
     }
 
-    function fmt(n) { return (Math.round(n * 1000) / 1000).toLocaleString('pt-BR'); }
+    function fmt(n) { return String(Math.round(n)); }   // saldo é sempre inteiro
     function mostrar(el) { Object.values(ov).forEach(o => o.classList.remove('show')); if (el) { el.classList.add('show'); } }
 
     // Volta para a captura (mesmo colaborador) — após cancelar um card.
