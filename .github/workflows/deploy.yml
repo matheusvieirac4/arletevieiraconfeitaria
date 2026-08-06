@@ -14,6 +14,7 @@ jobs:
 
       - name: Enviar arquivos via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        timeout-minutes: 8       # falha rápido (em vez de travar 15 min e perder o log)
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
@@ -21,6 +22,8 @@ jobs:
           protocol: ftps
           port: 21
           server-dir: ./
+          log-level: verbose      # mostra o passo exato onde falha (conexão/login/upload)
+          timeout: 60000          # 60s por operação FTP
           # Nunca enviar/sincronizar estes itens (existem só no servidor):
           exclude: |
             **/.git*
