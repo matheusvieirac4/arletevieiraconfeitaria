@@ -127,7 +127,7 @@ $linkOutroModo = 'ficha_pdf.php?tipo=' . $tipo . $qsIds . '&modo=' . ($mostrarCu
     <?php foreach ($ids as $pid):
         $prod = ficha_produto_buscar($pdo, $pid);
         if (!$prod) { continue; }
-        $c = ficha_produto_custo($pdo, $pid);
+        $c = ficha_precificar($pdo, $pid);
         $cmv = $c['cmv_pct'];
         $cmvCls = $cmv === null ? '' : ($cmv <= 35 ? 'ok' : ($cmv <= 45 ? 'med' : 'alto'));
     ?>
@@ -141,9 +141,14 @@ $linkOutroModo = 'ficha_pdf.php?tipo=' . $tipo . $qsIds . '&modo=' . ($mostrarCu
         </div>
         <?php if ($mostrarCusto): ?>
         <div class="resumo">
-            <div class="box"><div class="rot">Custo total</div><div class="val"><?= $reais($c['custo_total']) ?></div></div>
-            <div class="box"><div class="rot">Preço de venda</div><div class="val"><?= $reais($c['preco_venda']) ?></div></div>
-            <div class="box"><div class="rot">Margem</div><div class="val"><?= $reais($c['margem']) ?></div></div>
+            <div class="box"><div class="rot">Custo do prato</div><div class="val"><?= $reais($c['custo_total']) ?></div></div>
+            <div class="box"><div class="rot">Custo + fixo/var</div><div class="val"><?= $reais($c['custo_com_overhead']) ?></div></div>
+            <div class="box"><div class="rot">Preço Direta</div><div class="val"><?= $reais($c['preco_direta']) ?></div></div>
+            <div class="box"><div class="rot">Margem contrib. Direta</div><div class="val"><?= $c['margem_direta_pct'] !== null ? number_format($c['margem_direta_pct'], 1, ',', '.') . '%' : '—' ?></div></div>
+            <?php if ($c['vende_ifood']): ?>
+            <div class="box"><div class="rot">Preço iFood</div><div class="val"><?= $reais($c['preco_ifood']) ?></div></div>
+            <div class="box"><div class="rot">Margem contrib. iFood</div><div class="val"><?= $c['margem_ifood_pct'] !== null ? number_format($c['margem_ifood_pct'], 1, ',', '.') . '%' : '—' ?></div></div>
+            <?php endif; ?>
             <div class="box"><div class="rot">CMV</div><div class="val"><?php if ($cmv === null): ?>—<?php else: ?><span class="cmv <?= $cmvCls ?>"><?= number_format($cmv, 1, ',', '.') ?>%</span><?php endif; ?></div></div>
         </div>
         <?php endif; ?>

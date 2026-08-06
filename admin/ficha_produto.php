@@ -50,6 +50,8 @@ $compIngred = array_values(array_filter($comps, fn($c) => $c['bloco'] === 'ingre
 $compRech   = array_values(array_filter($comps, fn($c) => $c['bloco'] === 'recheio'));
 
 $categorias = ficha_categorias_nomes($pdo, 'produto');
+$cfg = ficha_config_get($pdo);
+$rawPct = fn($v) => $v === null ? '' : rtrim(rtrim(number_format((float) $v, 3, ',', ''), '0'), ',');
 $reais = fn($n) => $n === null ? '—' : 'R$ ' . number_format((float) $n, 2, ',', '.');
 $flash = $_SESSION['ficha_flash'] ?? null;
 unset($_SESSION['ficha_flash']);
@@ -78,11 +80,30 @@ require __DIR__ . '/_header.php';
                     </select>
                 </div>
                 <div class="col-6 col-md-3">
-                    <label class="form-label">Preço de venda</label>
+                    <label class="form-label">Markup Direta <span class="text-muted small">(padrão <?= number_format($cfg['markup_direta_padrao'], 2, ',', '.') ?>%)</span></label>
                     <div class="input-group">
-                        <span class="input-group-text">R$</span>
-                        <input type="text" name="preco_venda" id="f-preco" class="form-control text-end" inputmode="decimal" value="<?= $prod && $prod['preco_venda'] !== null ? number_format((float) $prod['preco_venda'], 2, ',', '') : '' ?>">
+                        <input type="text" name="markup_direta" id="f-mkdir" class="form-control text-end" inputmode="decimal" placeholder="<?= number_format($cfg['markup_direta_padrao'], 2, ',', '') ?>" value="<?= $rawPct($prod['markup_direta'] ?? null) ?>">
+                        <span class="input-group-text">%</span>
                     </div>
+                </div>
+            </div>
+            <div class="row g-3 mb-4 align-items-end">
+                <div class="col-6 col-md-3">
+                    <div class="form-check form-switch">
+                        <input type="hidden" name="vende_ifood" value="0">
+                        <input type="checkbox" name="vende_ifood" value="1" id="f-vendeifood" class="form-check-input" <?= (!$prod || (int) ($prod['vende_ifood'] ?? 1) === 1) ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="f-vendeifood">Vende no iFood</label>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label">Markup iFood <span class="text-muted small">(padrão <?= number_format($cfg['markup_ifood_padrao'], 2, ',', '.') ?>%)</span></label>
+                    <div class="input-group">
+                        <input type="text" name="markup_ifood" id="f-mkif" class="form-control text-end" inputmode="decimal" placeholder="<?= number_format($cfg['markup_ifood_padrao'], 2, ',', '') ?>" value="<?= $rawPct($prod['markup_ifood'] ?? null) ?>">
+                        <span class="input-group-text">%</span>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6">
+                    <div class="small text-muted">Markups em branco usam o padrão do negócio. Ajuste as taxas e o overhead em <a href="ficha_config.php">⚙️ Precificação</a>.</div>
                 </div>
             </div>
 
@@ -118,10 +139,13 @@ require __DIR__ . '/_header.php';
 
             <div class="card mb-3 bg-light">
                 <div class="card-body d-flex flex-wrap gap-4 align-items-center">
-                    <div><span class="text-muted d-block small">Custo total</span><span class="fs-4 fw-bold" id="custo-total">R$ 0,00</span></div>
-                    <div><span class="text-muted d-block small">Preço de venda</span><span class="fs-4" id="preco-show">—</span></div>
-                    <div><span class="text-muted d-block small">Margem</span><span class="fs-4" id="margem-show">—</span></div>
-                    <div><span class="text-muted d-block small">CMV</span><span class="fs-4 fw-bold" id="cmv-show">—</span></div>
+                    <div><span class="text-muted d-block small">Custo do prato</span><span class="fs-5 fw-bold" id="custo-total">R$ 0,00</span></div>
+                    <div><span class="text-muted d-block small">Custo + fixo/var</span><span class="fs-5" id="custo-overhead">—</span></div>
+                    <div class="border-start ps-4"><span class="text-muted d-block small">Preço Direta</span><span class="fs-4 fw-bold text-success" id="preco-direta">—</span></div>
+                    <div><span class="text-muted d-block small">Margem contrib. Direta</span><span class="fs-5 fw-bold" id="margem-direta">—</span></div>
+                    <div class="border-start ps-4" id="box-ifood"><span class="text-muted d-block small">Preço iFood</span><span class="fs-4 fw-bold" id="preco-ifood">—</span></div>
+                    <div id="box-ifood2"><span class="text-muted d-block small">Margem contrib. iFood</span><span class="fs-5 fw-bold" id="margem-ifood">—</span></div>
+                    <div class="border-start ps-4"><span class="text-muted d-block small">CMV</span><span class="fs-5 fw-bold" id="cmv-show">—</span></div>
                 </div>
             </div>
 
@@ -166,6 +190,7 @@ const ITENS = <?= json_encode(array_map(fn($it) => ['id' => (int) $it['id'], 'no
 const RECEITAS = <?= json_encode(array_map(fn($r) => ['id' => (int) $r['id'], 'nome' => $r['nome']], $receitas), JSON_UNESCAPED_UNICODE) ?>;
 const PRE_INGRED = <?= json_encode(array_map(fn($c) => ['ref' => (int) $c['ref_id'], 'qtd' => (float) $c['quantidade']], $compIngred), JSON_UNESCAPED_UNICODE) ?>;
 const PRE_RECH = <?= json_encode(array_map(fn($c) => ['ref' => (int) $c['ref_id'], 'qtd' => (float) $c['quantidade']], $compRech), JSON_UNESCAPED_UNICODE) ?>;
+const CFG = <?= json_encode($cfg, JSON_UNESCAPED_UNICODE) ?>;
 
 function numBR(v) {
     v = String(v || '').trim().replace(/[^\d.,-]/g, '');
@@ -228,27 +253,61 @@ function recalc() {
         tbody.parentElement.querySelector('.subtotal').textContent = fmtReais(sub);
     });
     document.getElementById('custo-total').textContent = fmtReais(custoTotal);
-    const preco = numBR(document.getElementById('f-preco').value);
-    const precoShow = document.getElementById('preco-show');
-    const margemShow = document.getElementById('margem-show');
-    const cmvShow = document.getElementById('cmv-show');
-    if (preco > 0) {
-        precoShow.textContent = fmtReais(preco);
-        const margem = preco - custoTotal;
-        margemShow.textContent = fmtReais(margem);
-        margemShow.className = 'fs-4' + (margem < 0 ? ' text-danger fw-bold' : '');
-        const cmv = (custoTotal / preco) * 100;
-        cmvShow.textContent = cmv.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%';
-        cmvShow.className = 'fs-4 fw-bold ' + (cmv <= 35 ? 'text-success' : (cmv <= 45 ? 'text-warning' : 'text-danger'));
+    precificar(custoTotal);
+}
+
+const pct1 = n => n.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%';
+const corMargem = m => m < 0 ? 'text-danger' : (m >= 30 ? 'text-success' : (m >= 15 ? 'text-warning' : 'text-danger'));
+
+// Replica ficha_precificar() do PHP: C = B/(1-overhead); Direta = C/(1-mkDir);
+// iFood = C*(1+mkIf)/(1-taxasIfood). Margem de contribuição em % (lucro/preço).
+function precificar(B) {
+    const overhead = CFG.overhead_pct / 100;
+    const taxasIfood  = (CFG.taxa_cartao + CFG.taxa_ifood + CFG.taxa_imposto + CFG.taxa_pgto_app) / 100;
+    const taxasDireta = (CFG.taxa_cartao + CFG.taxa_imposto + CFG.taxa_pgto_app) / 100;
+    const mkDir = (numBR(document.getElementById('f-mkdir').value) || CFG.markup_direta_padrao) / 100;
+    const mkIf  = (numBR(document.getElementById('f-mkif').value)  || CFG.markup_ifood_padrao) / 100;
+    const vendeIfood = document.getElementById('f-vendeifood').checked;
+
+    const C = overhead < 1 ? B / (1 - overhead) : null;
+    document.getElementById('custo-overhead').textContent = C != null ? fmtReais(C) : '—';
+
+    // Direta.
+    const precoDireta = (C != null && mkDir < 1) ? C / (1 - mkDir) : null;
+    const elPD = document.getElementById('preco-direta'), elMD = document.getElementById('margem-direta');
+    const elCmv = document.getElementById('cmv-show');
+    if (precoDireta != null && precoDireta > 0) {
+        elPD.textContent = fmtReais(precoDireta);
+        const lucro = precoDireta - (C + precoDireta * taxasDireta);
+        const m = lucro / precoDireta * 100;
+        elMD.textContent = pct1(m); elMD.className = 'fs-5 fw-bold ' + corMargem(m);
+        const cmv = B / precoDireta * 100;
+        elCmv.textContent = pct1(cmv); elCmv.className = 'fs-5 fw-bold ' + (cmv <= 35 ? 'text-success' : (cmv <= 45 ? 'text-warning' : 'text-danger'));
     } else {
-        precoShow.textContent = '—'; margemShow.textContent = '—'; cmvShow.textContent = '—';
-        margemShow.className = cmvShow.className = 'fs-4';
+        elPD.textContent = '—'; elMD.textContent = '—'; elMD.className = 'fs-5 fw-bold';
+        elCmv.textContent = '—'; elCmv.className = 'fs-5 fw-bold';
+    }
+
+    // iFood.
+    const b1 = document.getElementById('box-ifood'), b2 = document.getElementById('box-ifood2');
+    const elPI = document.getElementById('preco-ifood'), elMI = document.getElementById('margem-ifood');
+    if (vendeIfood && C != null && taxasIfood < 1) {
+        b1.style.display = ''; b2.style.display = '';
+        const F = C * (1 + mkIf);
+        const precoIfood = F / (1 - taxasIfood);
+        elPI.textContent = fmtReais(precoIfood);
+        const lucro = precoIfood - (C + F * taxasIfood);
+        const m = precoIfood > 0 ? lucro / precoIfood * 100 : 0;
+        elMI.textContent = pct1(m); elMI.className = 'fs-5 fw-bold ' + corMargem(m);
+    } else {
+        b1.style.display = 'none'; b2.style.display = 'none';
     }
 }
 
 document.querySelectorAll('.add-linha').forEach(btn =>
     btn.addEventListener('click', () => novaLinha(btn.dataset.bloco)));
-document.getElementById('f-preco').addEventListener('input', recalc);
+['f-mkdir', 'f-mkif'].forEach(id => document.getElementById(id).addEventListener('input', recalc));
+document.getElementById('f-vendeifood').addEventListener('change', recalc);
 
 PRE_INGRED.forEach(c => novaLinha('ingrediente', c.ref, String(c.qtd).replace('.', ',')));
 PRE_RECH.forEach(c => novaLinha('recheio', c.ref, String(c.qtd).replace('.', ',')));

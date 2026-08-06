@@ -156,6 +156,43 @@ try {
         $log[] = 'ERRO ao migrar ficha_cmv_snapshots: ' . $e->getMessage();
     }
 
+    // -- Configuração do negócio (precificação): overhead, taxas e markups -----
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ficha_config (
+            chave VARCHAR(64) NOT NULL PRIMARY KEY,
+            valor VARCHAR(64) NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $log[] = 'OK  tabela ficha_config';
+
+    // Valores padrão (só insere o que faltar — não sobrescreve o que você editou).
+    $seedCfg = [
+        'overhead_pct'         => '50.638924',  // custos fixos + variáveis (%)
+        'taxa_cartao'          => '0',
+        'taxa_ifood'           => '23',
+        'taxa_imposto'         => '4',
+        'taxa_pgto_app'        => '3.5',
+        'markup_direta_padrao' => '42.30',
+        'markup_ifood_padrao'  => '40.50',
+    ];
+    $insCfg = $pdo->prepare("INSERT IGNORE INTO ficha_config (chave, valor) VALUES (:c, :v)");
+    foreach ($seedCfg as $c => $v) { $insCfg->execute([':c' => $c, ':v' => $v]); }
+    $log[] = 'OK  configuração do negócio semeada (edite em ficha_config.php).';
+
+    // Migração: colunas de precificação por produto (markups + flag iFood).
+    try {
+        if (!$pdo->query("SHOW COLUMNS FROM ficha_produtos LIKE 'markup_direta'")->fetch()) {
+            $pdo->exec("ALTER TABLE ficha_produtos ADD COLUMN markup_direta DECIMAL(6,3) NULL AFTER preco_venda");
+            $pdo->exec("ALTER TABLE ficha_produtos ADD COLUMN markup_ifood  DECIMAL(6,3) NULL AFTER markup_direta");
+            $pdo->exec("ALTER TABLE ficha_produtos ADD COLUMN vende_ifood   TINYINT(1) NOT NULL DEFAULT 1 AFTER markup_ifood");
+            $log[] = 'OK  colunas markup_direta/markup_ifood/vende_ifood adicionadas em ficha_produtos.';
+        } else {
+            $log[] = '..  colunas de precificação já existem em ficha_produtos.';
+        }
+    } catch (\Throwable $e) {
+        $log[] = 'ERRO ao migrar precificação: ' . $e->getMessage();
+    }
+
     $log[] = '';
     $log[] = 'Pronto. Acesse /admin/ficha_receitas.php para começar cadastrando as receitas.';
 } catch (\Throwable $e) {
