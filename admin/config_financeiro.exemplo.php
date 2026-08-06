@@ -19,7 +19,17 @@ return [
     // OPCIONAL — IA (Gemini) para ler texto livre e foto de cupom sem QR.
     // Chave grátis em https://aistudio.google.com/apikey . Deixe vazio para desativar.
     'gemini_api_key' => '',
+
+    // Modelo único (compatibilidade). Se preencher 'gemini_models' abaixo, este é ignorado.
     'gemini_model'   => 'gemini-flash-latest',
+
+    // FILA DE MODELOS (prioridade). Quando um estoura o limite diário (429) ou
+    // fica sobrecarregado (503), a chamada cai AUTOMATICAMENTE no próximo — cada
+    // modelo tem cota própria no plano gratuito. Pode ser array OU lista com
+    // vírgula. Use os IDs exatos que aparecem no seu painel (aistudio). Reservas
+    // padrão (flash/flash-lite/2.5) são sempre acrescentadas ao fim.
+    // Ex.: ['gemini-3.5-flash', 'gemini-3-flash', 'gemini-2.5-flash-lite']
+    'gemini_models'  => [],
 
     // OPCIONAL — Puxador de NF-e (modelo 55) do SEFAZ com certificado A1.
     // Guarde o .pfx/.p12 FORA do public_html (ex.: /home/USUARIO/certs/cert.p12).

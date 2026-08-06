@@ -14,13 +14,27 @@ class GeminiClient
 {
     private const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-    private string $apiKey;
-    private string $model;
+    // Modelos de reserva (cada um tem cota própria no plano gratuito). Entram no
+    // fim da fila para que, se o modelo escolhido estourar o limite (429), a
+    // chamada caia automaticamente no próximo em vez de falhar.
+    private const FALLBACK_PADRAO = [
+        'gemini-flash-latest',
+        'gemini-flash-lite-latest',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+    ];
 
-    public function __construct(string $apiKey, string $model = 'gemini-flash-latest')
+    private string $apiKey;
+    /** @var string[] Fila de modelos em ordem de prioridade. */
+    private array $models;
+    /** Último modelo que efetivamente respondeu (para logs/tela). */
+    private string $modeloUsado = '';
+
+    /** @param string|string[] $model Um modelo, uma lista separada por vírgula, ou um array. */
+    public function __construct(string $apiKey, $model = 'gemini-flash-latest')
     {
         $this->apiKey = $apiKey;
-        $this->model  = $model;
+        $this->models = self::montarLista($model);
     }
 
     public static function fromConfig(array $cfg): self
@@ -28,8 +42,37 @@ class GeminiClient
         if (empty($cfg['gemini_api_key'])) {
             throw new GeminiException('IA não configurada: falta gemini_api_key.');
         }
-        $model = !empty($cfg['gemini_model']) ? $cfg['gemini_model'] : 'gemini-flash-latest';
+        // Aceita gemini_models (array ou lista com vírgula) OU gemini_model (um só).
+        $model = !empty($cfg['gemini_models'])
+            ? $cfg['gemini_models']
+            : (!empty($cfg['gemini_model']) ? $cfg['gemini_model'] : 'gemini-flash-latest');
         return new self($cfg['gemini_api_key'], $model);
+    }
+
+    /** Monta a fila de modelos a partir de string, CSV ou array, com reservas no fim. */
+    private static function montarLista($model): array
+    {
+        if (is_array($model)) {
+            $lista = $model;
+        } else {
+            $lista = strpos((string) $model, ',') !== false
+                ? explode(',', (string) $model)
+                : [(string) $model];
+        }
+        $lista = array_values(array_filter(array_map('trim', $lista)));
+        if (!$lista) { $lista = ['gemini-flash-latest']; }
+
+        // Acrescenta as reservas que ainda não estão na fila (sem duplicar).
+        foreach (self::FALLBACK_PADRAO as $m) {
+            if (!in_array($m, $lista, true)) { $lista[] = $m; }
+        }
+        return $lista;
+    }
+
+    /** Nome do modelo que respondeu a última chamada (vazio se nada rodou ainda). */
+    public function modeloUsado(): string
+    {
+        return $this->modeloUsado;
     }
 
     /** Extrai um lançamento a partir de texto livre. */
@@ -348,7 +391,11 @@ class GeminiClient
         return $this->normalizar($this->chamar($parts, $this->schema()));
     }
 
-    /** Faz a chamada ao Gemini com um schema e devolve o JSON decodificado. */
+    /**
+     * Faz a chamada ao Gemini com um schema e devolve o JSON decodificado.
+     * Percorre a fila de modelos: se um estourar o limite (429) ou estiver
+     * sobrecarregado (503), passa AUTOMATICAMENTE para o próximo modelo.
+     */
     private function chamar(array $parts, array $schema): array
     {
         $body = json_encode([
@@ -359,11 +406,58 @@ class GeminiClient
             ],
         ], JSON_UNESCAPED_UNICODE);
 
-        $url = self::BASE . '/models/' . rawurlencode($this->model) . ':generateContent';
+        $erros = [];
+        foreach ($this->models as $modelo) {
+            [$status, $resp, $erroConexao] = $this->requisitar($modelo, $body);
 
-        // Timeout de conexão às vezes estola ("0 bytes"): tenta até 3 vezes.
+            // Não obteve resposta nenhuma (rede/timeout): tenta o próximo modelo.
+            if ($status === 0) {
+                $erros[] = "$modelo: $erroConexao";
+                continue;
+            }
+
+            $json = json_decode($resp, true);
+
+            // Limite de uso (429) ou sobrecarga (503): cai para o próximo modelo.
+            if ($status === 429 || $status === 503) {
+                $erros[] = "$modelo: " . ($json['error']['message'] ?? "HTTP $status");
+                continue;
+            }
+
+            // Outro erro HTTP (400, 403...): trocar de modelo não resolve.
+            if ($status < 200 || $status >= 300) {
+                $msg = $json['error']['message'] ?? substr((string) $resp, 0, 300);
+                throw new GeminiException("Gemini falhou no modelo $modelo (HTTP $status): $msg");
+            }
+
+            // Sucesso.
+            $texto = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
+            $dados = json_decode($texto, true);
+            if (!is_array($dados)) {
+                throw new GeminiException("O modelo $modelo não devolveu um JSON válido.");
+            }
+            $this->modeloUsado = $modelo;
+            return $dados;
+        }
+
+        throw new GeminiException(
+            'Todos os modelos do Gemini falharam (limite/conexão): ' . implode(' | ', $erros)
+        );
+    }
+
+    /**
+     * Requisita UM modelo, com o retry de conexão (o timeout às vezes estola em
+     * "0 bytes"). Só repete em falha de rede — um 429/erro HTTP volta na hora.
+     * @return array{0:int,1:string|false,2:string} [status, corpo, erroConexao]
+     */
+    private function requisitar(string $modelo, string $body): array
+    {
+        $url = self::BASE . '/models/' . rawurlencode($modelo) . ':generateContent';
+
         $tentativas = 3;
         $ultimoErro = '';
+        $resp = false;
+        $status = 0;
         for ($t = 1; $t <= $tentativas; $t++) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
@@ -375,31 +469,16 @@ class GeminiClient
                 CURLOPT_CONNECTTIMEOUT => 15,
             ]);
             $resp = curl_exec($ch);
-            $errno = curl_errno($ch);
             $err   = curl_error($ch);
             $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
 
-            if ($resp !== false && $status > 0) { break; }   // resposta chegou
+            if ($resp !== false && $status > 0) { break; }   // resposta chegou (inclusive 429)
             $ultimoErro = $err ?: "sem resposta (HTTP $status)";
-            if ($t < $tentativas) { sleep(2); }              // pequena pausa e tenta de novo
-        }
-        if ($resp === false || $status === 0) {
-            throw new GeminiException("Erro de conexão com o Gemini após {$tentativas} tentativas: {$ultimoErro}");
+            if ($t < $tentativas) { sleep(2); }              // pausa e tenta de novo (só rede)
         }
 
-        $json = json_decode($resp, true);
-        if ($status < 200 || $status >= 300) {
-            $msg = $json['error']['message'] ?? substr($resp, 0, 300);
-            throw new GeminiException("Gemini falhou (HTTP $status): $msg");
-        }
-
-        $texto = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
-        $dados = json_decode($texto, true);
-        if (!is_array($dados)) {
-            throw new GeminiException('O Gemini não devolveu um JSON válido.');
-        }
-        return $dados;
+        return [$status, $resp, $ultimoErro];
     }
 
     /** Garante todas as chaves do lançamento e datas padrão. */
