@@ -23,6 +23,11 @@ if (trim($bruto) === '') {
 } else {
     $valor = estoque_num_manual($bruto);
     if ($valor === null) { http_response_code(400); edc_out(['error' => 'Número inválido.']); }
+    // Mínimo e ideal são quantidades → inteiro. Só preço aceita decimal.
+    if ($campo !== 'preco' && abs($valor - round($valor)) > 0.0005) {
+        http_response_code(400); edc_out(['error' => 'Precisa ser um número inteiro (o estoque conta unidades).']);
+    }
+    if ($campo !== 'preco') { $valor = round($valor); }
 }
 
 try {

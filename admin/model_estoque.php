@@ -345,6 +345,15 @@ function estoque_params(array $d): array
         }
         return $n;
     };
+    // Quantidades (saldo, mínimo, ideal) são sempre inteiras — só preço e
+    // conteúdo (peso/volume da embalagem) aceitam casa decimal.
+    $int = function ($v, string $rotulo) use ($num) {
+        $n = $num($v);
+        if ($n !== null && abs($n - round($n)) > 0.0005) {
+            throw new RuntimeException($rotulo . ' precisa ser um número inteiro (o estoque conta unidades). Valor: ' . rtrim(rtrim(number_format($n, 3, ',', '.'), '0'), ',') . '.');
+        }
+        return $n === null ? null : round($n);
+    };
     $barras = preg_replace('/\D/', '', (string) ($d['codigo_barras'] ?? ''));
     $compra = preg_replace('/\D/', '', (string) ($d['codigo_compra'] ?? ''));
     $un     = strtoupper(trim((string) ($d['unidade_medida'] ?? 'UN')));
@@ -353,9 +362,9 @@ function estoque_params(array $d): array
         ':nome'     => trim((string) ($d['nome'] ?? '')),
         ':forn'     => ($f = trim((string) ($d['fornecedor'] ?? ''))) !== '' ? $f : null,
         ':preco'    => $num($d['preco'] ?? ''),
-        ':atual'    => $num($d['estoque_atual'] ?? '') ?? 0,
-        ':minimo'   => $num($d['estoque_minimo'] ?? ''),
-        ':ideal'    => $num($d['estoque_ideal'] ?? ''),
+        ':atual'    => $int($d['estoque_atual'] ?? '', 'Estoque atual') ?? 0,
+        ':minimo'   => $int($d['estoque_minimo'] ?? '', 'Estoque mínimo'),
+        ':ideal'    => $int($d['estoque_ideal'] ?? '', 'Estoque ideal'),
         ':barras'   => $barras !== '' ? $barras : null,
         ':compra'   => $compra !== '' ? $compra : null,
         ':unidade'  => $un,
@@ -388,6 +397,12 @@ function estoque_movimentar(PDO $pdo, int $itemId, string $tipo, float $qtd, str
     if (abs($qtd) > 100000) {
         throw new RuntimeException('Quantidade fora do esperado (' . rtrim(rtrim(number_format($qtd, 3, ',', '.'), '0'), ',') . '). Confira o valor — nada foi gravado.');
     }
+    // Saldo é sempre em UNIDADES INTEIRAS (o peso fica no conteúdo do item, não
+    // no saldo). Rejeita quebrado para não gerar saldos como 3,999.
+    if (abs($qtd - round($qtd)) > 0.0005) {
+        throw new RuntimeException('A quantidade precisa ser um número inteiro (o estoque conta unidades). Valor recebido: ' . rtrim(rtrim(number_format($qtd, 3, ',', '.'), '0'), ',') . '.');
+    }
+    $qtd = round($qtd);
     $temResp = estoque_mov_tem_responsavel($pdo);
     $pdo->beginTransaction();
     try {
