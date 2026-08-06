@@ -95,16 +95,6 @@ if ($acao === 'cmv_registrar_todos') {
     }
 }
 
-// ---- Configuração do negócio (precificação) ----
-if ($acao === 'config_salvar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    try {
-        ficha_config_salvar($pdo, $_POST);
-        ficha_redirect('success', 'Configuração salva. Os preços foram recalculados.', 'ficha_config.php');
-    } catch (\Throwable $e) {
-        ficha_redirect('danger', 'Falha ao salvar: ' . $e->getMessage(), 'ficha_config.php');
-    }
-}
-
 // ---- Categorias: criar / excluir ----
 if ($acao === 'cat_salvar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $tipo = (string) ($_POST['tipo'] ?? '');

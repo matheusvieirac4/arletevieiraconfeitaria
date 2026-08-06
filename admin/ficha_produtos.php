@@ -15,6 +15,11 @@ if (!ficha_pronto($pdo)) {
 
 $reais = fn($n) => $n === null ? '—' : 'R$ ' . number_format((float) $n, 2, ',', '.');
 // Semáforo de CMV: verde <=35%, amarelo <=45%, vermelho acima. Ajuste conforme a meta.
+$cmvBadge = function (?float $cmv): string {
+    if ($cmv === null) { return '<span class="badge bg-light text-muted border">sem preço</span>'; }
+    $cls = $cmv <= 35 ? 'bg-success' : ($cmv <= 45 ? 'bg-warning text-dark' : 'bg-danger');
+    return '<span class="badge ' . $cls . '">' . number_format($cmv, 1, ',', '.') . '%</span>';
+};
 // Badge da margem de contribuição: quanto maior, melhor (verde ≥30, amarelo ≥15).
 $margemBadge = function (?float $m): string {
     if ($m === null) { return '<span class="badge bg-light text-muted border">—</span>'; }
@@ -36,7 +41,6 @@ require __DIR__ . '/_header.php';
             <a href="ficha_produto.php" class="btn btn-success btn-sm">+ Novo produto</a>
             <a href="ficha_receitas.php" class="btn btn-outline-primary btn-sm">Receitas</a>
             <a href="ficha_categorias.php?tipo=produto" class="btn btn-outline-secondary btn-sm">Categorias</a>
-            <a href="ficha_config.php" class="btn btn-outline-secondary btn-sm">⚙️ Precificação</a>
             <button type="button" id="btn-pdf" class="btn btn-outline-dark btn-sm" disabled>📄 Baixar PDF dos selecionados</button>
         </div>
 
@@ -64,25 +68,27 @@ require __DIR__ . '/_header.php';
                             <th>Produto</th>
                             <th>Categoria</th>
                             <th class="text-end">Custo</th>
-                            <th class="text-end">Preço Direta</th>
+                            <th class="text-end">Preço venda</th>
+                            <th class="text-center">CMV</th>
                             <th class="text-center">Margem contrib.</th>
                             <th class="text-end">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                     <?php if (!$produtos): ?>
-                        <tr><td colspan="7" class="text-muted text-center py-4">Nenhum produto cadastrado.</td></tr>
+                        <tr><td colspan="8" class="text-muted text-center py-4">Nenhum produto cadastrado.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($produtos as $p):
-                        $c = ficha_precificar($pdo, (int) $p['id']);
+                        $c = ficha_produto_custo($pdo, (int) $p['id']);
                     ?>
                         <tr>
                             <td><input type="checkbox" class="form-check-input check-item" value="<?= (int) $p['id'] ?>"></td>
                             <td><a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="text-decoration-none fw-semibold"><?= htmlspecialchars($p['nome']) ?></a></td>
                             <td class="text-muted"><?= htmlspecialchars($p['categoria'] ?? '—') ?></td>
                             <td class="text-end"><?= $reais($c['custo_total']) ?></td>
-                            <td class="text-end fw-semibold"><?= $reais($c['preco_direta']) ?></td>
-                            <td class="text-center"><?= $margemBadge($c['margem_direta_pct']) ?></td>
+                            <td class="text-end fw-semibold"><?= $reais($c['preco_venda']) ?></td>
+                            <td class="text-center"><?= $cmvBadge($c['cmv_pct']) ?></td>
+                            <td class="text-center"><?= $margemBadge($c['margem_pct']) ?></td>
                             <td class="text-end text-nowrap">
                                 <a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="btn btn-outline-primary btn-sm">Abrir</a>
                             </td>
@@ -92,7 +98,7 @@ require __DIR__ . '/_header.php';
                 </table>
             </div>
         </div>
-        <p class="text-muted small mt-2"><?= count($produtos) ?> produto(s)<?= ($busca || $cat) ? ' (filtrado)' : '' ?>. Margem de contribuição (direta): <span class="badge bg-success">≥30%</span> <span class="badge bg-warning text-dark">≥15%</span> <span class="badge bg-danger">&lt;15%</span></p>
+        <p class="text-muted small mt-2"><?= count($produtos) ?> produto(s)<?= ($busca || $cat) ? ' (filtrado)' : '' ?>. CMV: <span class="badge bg-success">≤35%</span> <span class="badge bg-warning text-dark">≤45%</span> <span class="badge bg-danger">&gt;45%</span></p>
 <script>
 // Seleção múltipla → abre o PDF com os produtos escolhidos (um por folha).
 (function () {
