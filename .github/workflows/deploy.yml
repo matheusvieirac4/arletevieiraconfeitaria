@@ -21,6 +21,10 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           port: 21
+          # HostGator (hospedagem compartilhada) usa um certificado TLS generico
+          # que nao bate com o dominio; no modo estrito a Action rejeita e falha.
+          # "loose" aceita a conexao criptografada mesmo com esse certificado.
+          security: loose
           server-dir: ./
           log-level: verbose      # mostra o passo exato onde falha (conexão/login/upload)
           timeout: 60000          # 60s por operação FTP
