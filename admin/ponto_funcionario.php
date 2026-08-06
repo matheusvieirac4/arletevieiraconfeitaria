@@ -24,6 +24,7 @@ $mesLabel = ['', 'Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','
 $resumo = ponto_resumo_mes($pdo, $pessoa, $ano, $mes);
 $t = $resumo['totais'];
 $temMeta = !empty($pessoa['tem_meta']);
+$jornadaFixa = !empty($pessoa['jornada_fixa']);
 $mediaDia = $t['dias_trabalhados'] > 0 ? (int) round($t['trabalhado_min'] / $t['dias_trabalhados']) : 0;
 
 $flash = $_SESSION['estoque_flash'] ?? null;
@@ -121,8 +122,9 @@ require __DIR__ . '/_header.php';
                                     </td>
                                     <td class="text-end"><?= $dia['trabalhado_min'] > 0 ? ponto_hm($dia['trabalhado_min']) : '' ?></td>
                                     <td class="text-end text-muted"><?= $dia['esperado_min'] > 0 ? ponto_hm($dia['esperado_min']) : '' ?></td>
-                                    <td class="text-end <?= $dia['fechado'] && $dia['saldo_min'] < 0 && $dia['esperado_min'] > 0 ? 'text-danger' : ($dia['fechado'] && $dia['extra_min'] > 0 ? 'text-success' : '') ?>">
-                                        <?php if ($temMeta && $dia['fechado'] && $dia['esperado_min'] > 0 && ($dia['batidas'] || $dia['falta_dia'])): echo ($dia['saldo_min'] >= 0 ? '+' : '') . ponto_hm($dia['saldo_min']); elseif ($dia['ehHoje']): ?><span class="badge bg-primary">hoje</span><?php endif; ?>
+                                    <?php $bancoDia = $dia['extra_min'] - $dia['falta_min']; // já com tolerância aplicada ?>
+                                    <td class="text-end <?= $dia['fechado'] && $bancoDia < 0 && $dia['esperado_min'] > 0 ? 'text-danger' : ($dia['fechado'] && $bancoDia > 0 ? 'text-success' : '') ?>">
+                                        <?php if ($temMeta && $dia['fechado'] && $dia['esperado_min'] > 0 && ($dia['batidas'] || $dia['falta_dia'])): echo $bancoDia != 0 ? (($bancoDia > 0 ? '+' : '') . ponto_hm($bancoDia)) : '—'; elseif ($dia['ehHoje']): ?><span class="badge bg-primary">hoje</span><?php endif; ?>
                                     </td>
                                     <td class="text-end">
                                         <button type="button" class="btn btn-link btn-sm p-0 js-add-batida"
@@ -155,20 +157,15 @@ require __DIR__ . '/_header.php';
                                 <input class="form-check-input" type="checkbox" name="tem_meta" value="1" id="tem_meta" <?= $temMeta ? 'checked' : '' ?>>
                                 <label class="form-check-label" for="tem_meta">Calcular extras/faltas (tem meta)</label>
                             </div>
-                            <label class="form-label">Horas esperadas por dia</label>
-                            <div class="row g-2 mb-3">
-                                <?php
-                                $dd = [['h_seg','Seg'],['h_ter','Ter'],['h_qua','Qua'],['h_qui','Qui'],['h_sex','Sex'],['h_sab','Sáb'],['h_dom','Dom']];
-                                foreach ($dd as $c): ?>
-                                    <div class="col-4">
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text" style="width:46px"><?= $c[1] ?></span>
-                                            <input type="text" name="<?= $c[0] ?>" class="form-control text-end" inputmode="decimal"
-                                                   value="<?= rtrim(rtrim(number_format((float) $pessoa[$c[0]], 2, ',', ''), '0'), ',') ?>">
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
+                            <div class="mb-3">
+                                <label class="form-label">Modo de cálculo</label>
+                                <select name="jornada_fixa" id="jornada-modo" class="form-select">
+                                    <option value="0" <?= !$jornadaFixa ? 'selected' : '' ?>>Tolerância de saldo do dia (padrão)</option>
+                                    <option value="1" <?= $jornadaFixa ? 'selected' : '' ?>>Definir jornada de trabalho (norma 5/10 min)</option>
+                                </select>
                             </div>
+
+                            <!-- Intervalo (vale para os dois modos) -->
                             <div class="row g-2 mb-3">
                                 <div class="col-6">
                                     <label class="form-label small">Desconto almoço (min)</label>
@@ -178,14 +175,74 @@ require __DIR__ . '/_header.php';
                                     <label class="form-label small">Só descontar se passar de (h)</label>
                                     <input type="text" name="intervalo_limite_h" class="form-control form-control-sm" inputmode="decimal" value="<?= rtrim(rtrim(number_format((float) $pessoa['intervalo_limite_h'], 2, ',', ''), '0'), ',') ?>">
                                 </div>
-                                <div class="col-6">
-                                    <label class="form-label small">Tolerância (min/dia)</label>
-                                    <input type="number" name="tolerancia_min" class="form-control form-control-sm" value="<?= (int) $pessoa['tolerancia_min'] ?>" min="0">
+                            </div>
+
+                            <!-- MODO PADRÃO: horas por dia + tolerância sobre o saldo -->
+                            <div data-modo="livre">
+                                <label class="form-label">Horas esperadas por dia</label>
+                                <div class="row g-2 mb-3">
+                                    <?php
+                                    $dd = [['h_seg','Seg'],['h_ter','Ter'],['h_qua','Qua'],['h_qui','Qui'],['h_sex','Sex'],['h_sab','Sáb'],['h_dom','Dom']];
+                                    foreach ($dd as $c): ?>
+                                        <div class="col-4">
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text" style="width:46px"><?= $c[1] ?></span>
+                                                <input type="text" name="<?= $c[0] ?>" class="form-control text-end" inputmode="decimal"
+                                                       value="<?= rtrim(rtrim(number_format((float) $pessoa[$c[0]], 2, ',', ''), '0'), ',') ?>">
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <label class="form-label small">Tolerância (min/dia)</label>
+                                        <input type="number" name="tolerancia_min" class="form-control form-control-sm" value="<?= (int) $pessoa['tolerancia_min'] ?>" min="0">
+                                    </div>
                                 </div>
                             </div>
-                            <button class="btn btn-primary w-100">Salvar jornada</button>
+
+                            <!-- MODO NORMA: horários previstos + tolerância por marcação -->
+                            <div data-modo="fixa">
+                                <label class="form-label">Horários previstos (entrada / saída)</label>
+                                <div class="row g-2 mb-3">
+                                    <?php
+                                    $dw = [['seg','Seg'],['ter','Ter'],['qua','Qua'],['qui','Qui'],['sex','Sex'],['sab','Sáb'],['dom','Dom']];
+                                    foreach ($dw as $c): ?>
+                                        <div class="col-12">
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text" style="width:46px"><?= $c[1] ?></span>
+                                                <input type="time" name="e_<?= $c[0] ?>" class="form-control" value="<?= htmlspecialchars((string) ($pessoa['e_' . $c[0]] ?? '')) ?>">
+                                                <span class="input-group-text">→</span>
+                                                <input type="time" name="s_<?= $c[0] ?>" class="form-control" value="<?= htmlspecialchars((string) ($pessoa['s_' . $c[0]] ?? '')) ?>">
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <label class="form-label small">Tolerância por marcação (min)</label>
+                                        <input type="number" name="tolerancia_marcacao_min" class="form-control form-control-sm" value="<?= (int) ($pessoa['tolerancia_marcacao_min'] ?? 5) ?>" min="0">
+                                    </div>
+                                </div>
+                                <p class="text-muted small mb-0">As <strong>horas esperadas</strong> são calculadas dos horários previstos (saída − entrada − almoço). Dias sem horário viram folga (esperado 0).</p>
+                            </div>
+
+                            <button class="btn btn-primary w-100 mt-2">Salvar jornada</button>
                         </form>
                         <p class="text-muted small mt-2 mb-0">O desconto do almoço só é aplicado quando a pessoa bate <strong>só entrada e saída</strong> no dia. Se bater para o almoço (2 pares), o intervalo já sai do somatório.</p>
+                        <script>
+                        (function () {
+                            var sel = document.getElementById('jornada-modo');
+                            if (!sel) { return; }
+                            function apply() {
+                                var fixa = sel.value === '1';
+                                document.querySelectorAll('[data-modo="livre"]').forEach(function (el) { el.style.display = fixa ? 'none' : ''; });
+                                document.querySelectorAll('[data-modo="fixa"]').forEach(function (el) { el.style.display = fixa ? '' : 'none'; });
+                            }
+                            sel.addEventListener('change', apply);
+                            apply();
+                        })();
+                        </script>
                     </div>
                 </div>
             </div>

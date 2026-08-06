@@ -47,6 +47,15 @@ try {
             intervalo_desconto_min INT NOT NULL DEFAULT 60,
             intervalo_limite_h     DECIMAL(4,2) NOT NULL DEFAULT 6,
             tolerancia_min         INT NOT NULL DEFAULT 10,
+            jornada_fixa           TINYINT(1) NOT NULL DEFAULT 0,
+            tolerancia_marcacao_min INT NOT NULL DEFAULT 5,
+            e_dom TIME NULL, s_dom TIME NULL,
+            e_seg TIME NULL, s_seg TIME NULL,
+            e_ter TIME NULL, s_ter TIME NULL,
+            e_qua TIME NULL, s_qua TIME NULL,
+            e_qui TIME NULL, s_qui TIME NULL,
+            e_sex TIME NULL, s_sex TIME NULL,
+            e_sab TIME NULL, s_sab TIME NULL,
             atualizado_em          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             CONSTRAINT fk_jornada_colab FOREIGN KEY (colaborador_id)
                 REFERENCES estoque_colaboradores(id) ON DELETE CASCADE
@@ -83,6 +92,23 @@ try {
         }
     } catch (\Throwable $e) {
         $log[] = 'ERRO ao migrar tipo: ' . $e->getMessage();
+    }
+
+    // Migração: colunas da jornada fixa (horários previstos p/ tolerância por
+    // marcação — Art. 58 §1º CLT). Idempotente: só adiciona o que falta.
+    try {
+        $existing = array_column($pdo->query("SHOW COLUMNS FROM ponto_jornada")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+        $add = [];
+        if (!in_array('jornada_fixa', $existing, true)) { $add[] = "ADD COLUMN jornada_fixa TINYINT(1) NOT NULL DEFAULT 0"; }
+        if (!in_array('tolerancia_marcacao_min', $existing, true)) { $add[] = "ADD COLUMN tolerancia_marcacao_min INT NOT NULL DEFAULT 5"; }
+        foreach (['dom','seg','ter','qua','qui','sex','sab'] as $d) {
+            if (!in_array("e_$d", $existing, true)) { $add[] = "ADD COLUMN e_$d TIME NULL"; }
+            if (!in_array("s_$d", $existing, true)) { $add[] = "ADD COLUMN s_$d TIME NULL"; }
+        }
+        if ($add) { $pdo->exec("ALTER TABLE ponto_jornada " . implode(', ', $add)); $log[] = 'OK  colunas de jornada fixa adicionadas'; }
+        else      { $log[] = '..  colunas de jornada fixa já existem'; }
+    } catch (\Throwable $e) {
+        $log[] = 'ERRO ao migrar jornada fixa: ' . $e->getMessage();
     }
 
     $log[] = '';

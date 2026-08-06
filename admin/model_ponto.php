@@ -48,8 +48,17 @@ function ponto_jornada_default(): array
         'intervalo_desconto_min' => 60,
         'intervalo_limite_h'     => 6.0,
         'tolerancia_min'         => 10,
+        'jornada_fixa'           => 0,
+        'tolerancia_marcacao_min' => 5,
+        'e_dom' => null, 's_dom' => null, 'e_seg' => null, 's_seg' => null,
+        'e_ter' => null, 's_ter' => null, 'e_qua' => null, 's_qua' => null,
+        'e_qui' => null, 's_qui' => null, 'e_sex' => null, 's_sex' => null,
+        'e_sab' => null, 's_sab' => null,
     ];
 }
+
+/** Sufixo de coluna por dia da semana (0=dom..6=sáb). */
+const PONTO_DIAS_SUF = ['dom','seg','ter','qua','qui','sex','sab'];
 
 /** Pessoas do ponto = colaboradores + jornada (LEFT JOIN; defaults se faltar). */
 function ponto_pessoas(PDO $pdo, bool $soAtivos = true): array
@@ -57,7 +66,10 @@ function ponto_pessoas(PDO $pdo, bool $soAtivos = true): array
     $sql = "SELECT c.id, c.nome, c.ativo,
                    j.tipo, j.tem_meta,
                    j.h_dom, j.h_seg, j.h_ter, j.h_qua, j.h_qui, j.h_sex, j.h_sab,
-                   j.intervalo_desconto_min, j.intervalo_limite_h, j.tolerancia_min
+                   j.intervalo_desconto_min, j.intervalo_limite_h, j.tolerancia_min,
+                   j.jornada_fixa, j.tolerancia_marcacao_min,
+                   j.e_dom, j.s_dom, j.e_seg, j.s_seg, j.e_ter, j.s_ter, j.e_qua, j.s_qua,
+                   j.e_qui, j.s_qui, j.e_sex, j.s_sex, j.e_sab, j.s_sab
             FROM estoque_colaboradores c
             LEFT JOIN ponto_jornada j ON j.colaborador_id = c.id";
     if ($soAtivos) { $sql .= " WHERE c.ativo = 1"; }
@@ -71,7 +83,13 @@ function ponto_pessoas(PDO $pdo, bool $soAtivos = true): array
         $r['id']       = (int) $r['id'];
         $r['tem_meta'] = (int) $r['tem_meta'];
         foreach (['h_dom','h_seg','h_ter','h_qua','h_qui','h_sex','h_sab','intervalo_limite_h'] as $k) { $r[$k] = (float) $r[$k]; }
-        foreach (['intervalo_desconto_min','tolerancia_min'] as $k) { $r[$k] = (int) $r[$k]; }
+        foreach (['intervalo_desconto_min','tolerancia_min','jornada_fixa','tolerancia_marcacao_min'] as $k) { $r[$k] = (int) $r[$k]; }
+        // Horários previstos: normaliza TIME 'HH:MM:SS' -> 'HH:MM' (ou null).
+        foreach (PONTO_DIAS_SUF as $suf) {
+            foreach (['e_', 's_'] as $p) {
+                $r[$p . $suf] = !empty($r[$p . $suf]) ? substr((string) $r[$p . $suf], 0, 5) : null;
+            }
+        }
     }
     unset($r);
     return $rows;
@@ -92,28 +110,73 @@ function ponto_jornada_salvar(PDO $pdo, int $colaboradorId, array $d): void
     if ($colaboradorId <= 0) { throw new InvalidArgumentException('Pessoa inválida.'); }
     $tipo = in_array($d['tipo'] ?? '', ['socio', 'freelancer', 'colaborador'], true) ? $d['tipo'] : 'freelancer';
     $temMeta = !empty($d['tem_meta']) ? 1 : 0;
+    $fixa    = !empty($d['jornada_fixa']) ? 1 : 0;
+    $descMin = max(0, (int) ($d['intervalo_desconto_min'] ?? 60));
     $hora = function ($v) { $v = (float) str_replace(',', '.', (string) $v); return max(0, min(24, $v)); };
+    $limH  = $hora($d['intervalo_limite_h'] ?? 6);
+
+    // Normaliza os horários previstos (HH:MM). Vazio/ inválido -> NULL.
+    $time = function ($v) {
+        $v = trim((string) $v);
+        return preg_match('/^\d{1,2}:\d{2}$/', $v) ? sprintf('%02d:%02d:00', ...array_map('intval', explode(':', $v))) : null;
+    };
+    $horarios = [];
+    foreach (PONTO_DIAS_SUF as $suf) {
+        $horarios['e_' . $suf] = $time($d['e_' . $suf] ?? '');
+        $horarios['s_' . $suf] = $time($d['s_' . $suf] ?? '');
+    }
+
+    // Horas esperadas por dia: no modo fixo, derivam dos horários previstos
+    // (saída − entrada − intervalo, quando passa do limite); senão, do input manual.
+    $horas = [];
+    foreach (PONTO_DIAS_SUF as $suf) {
+        if ($fixa) {
+            $e = $horarios['e_' . $suf]; $s = $horarios['s_' . $suf];
+            if ($e && $s) {
+                $mins = (strtotime($s) - strtotime($e)) / 60;
+                if ($mins < 0) { $mins += 24 * 60; } // saída no dia seguinte
+                if ($descMin > 0 && $mins > $limH * 60) { $mins -= $descMin; }
+                $horas[$suf] = max(0.0, round($mins / 60, 2));
+            } else {
+                $horas[$suf] = 0.0;
+            }
+        } else {
+            $horas[$suf] = $hora($d['h_' . $suf] ?? 0);
+        }
+    }
+
     $params = [
         ':id'   => $colaboradorId,
         ':tipo' => $tipo,
         ':meta' => $temMeta,
-        ':dom'  => $hora($d['h_dom'] ?? 0), ':seg' => $hora($d['h_seg'] ?? 0),
-        ':ter'  => $hora($d['h_ter'] ?? 0), ':qua' => $hora($d['h_qua'] ?? 0),
-        ':qui'  => $hora($d['h_qui'] ?? 0), ':sex' => $hora($d['h_sex'] ?? 0),
-        ':sab'  => $hora($d['h_sab'] ?? 0),
-        ':desc' => max(0, (int) ($d['intervalo_desconto_min'] ?? 60)),
-        ':lim'  => $hora($d['intervalo_limite_h'] ?? 6),
+        ':fixa' => $fixa,
+        ':tolm' => max(0, (int) ($d['tolerancia_marcacao_min'] ?? 5)),
+        ':dom'  => $horas['dom'], ':seg' => $horas['seg'], ':ter' => $horas['ter'],
+        ':qua'  => $horas['qua'], ':qui' => $horas['qui'], ':sex' => $horas['sex'],
+        ':sab'  => $horas['sab'],
+        ':desc' => $descMin,
+        ':lim'  => $limH,
         ':tol'  => max(0, (int) ($d['tolerancia_min'] ?? 10)),
-    ];
+    ] + $horarios;
     $pdo->prepare("
         INSERT INTO ponto_jornada
             (colaborador_id, tipo, tem_meta, h_dom, h_seg, h_ter, h_qua, h_qui, h_sex, h_sab,
-             intervalo_desconto_min, intervalo_limite_h, tolerancia_min)
-        VALUES (:id, :tipo, :meta, :dom, :seg, :ter, :qua, :qui, :sex, :sab, :desc, :lim, :tol)
+             intervalo_desconto_min, intervalo_limite_h, tolerancia_min,
+             jornada_fixa, tolerancia_marcacao_min,
+             e_dom, s_dom, e_seg, s_seg, e_ter, s_ter, e_qua, s_qua,
+             e_qui, s_qui, e_sex, s_sex, e_sab, s_sab)
+        VALUES (:id, :tipo, :meta, :dom, :seg, :ter, :qua, :qui, :sex, :sab, :desc, :lim, :tol,
+             :fixa, :tolm,
+             :e_dom, :s_dom, :e_seg, :s_seg, :e_ter, :s_ter, :e_qua, :s_qua,
+             :e_qui, :s_qui, :e_sex, :s_sex, :e_sab, :s_sab)
         ON DUPLICATE KEY UPDATE
             tipo=:tipo, tem_meta=:meta, h_dom=:dom, h_seg=:seg, h_ter=:ter, h_qua=:qua,
             h_qui=:qui, h_sex=:sex, h_sab=:sab, intervalo_desconto_min=:desc,
-            intervalo_limite_h=:lim, tolerancia_min=:tol
+            intervalo_limite_h=:lim, tolerancia_min=:tol,
+            jornada_fixa=:fixa, tolerancia_marcacao_min=:tolm,
+            e_dom=:e_dom, s_dom=:s_dom, e_seg=:e_seg, s_seg=:s_seg, e_ter=:e_ter, s_ter=:s_ter,
+            e_qua=:e_qua, s_qua=:s_qua, e_qui=:e_qui, s_qui=:s_qui, e_sex=:e_sex, s_sex=:s_sex,
+            e_sab=:e_sab, s_sab=:s_sab
     ")->execute($params);
 }
 
@@ -332,13 +395,47 @@ function ponto_calc_dia(array $batidas, array $jornada, int $w, ?array $especial
         $trabMin -= $intervalo;
     }
 
+    // Modo "jornada fixa": tolerância POR MARCAÇÃO (Art. 58 §1º CLT). Compara a
+    // 1ª entrada e a última saída com os horários previstos; se a diferença está
+    // dentro da tolerância, "encaixa" no previsto (zera a migalha). Fora dela,
+    // mantém o horário real — conta o período inteiro (Súmula 366 TST).
+    $fixaAplicada = false;
+    if (!empty($jornada['jornada_fixa']) && $especial === null && !$aberto && $pares >= 1) {
+        $suf     = PONTO_DIAS_SUF[$w] ?? 'seg';
+        $entPrev = $jornada['e_' . $suf] ?? null;
+        $saiPrev = $jornada['s_' . $suf] ?? null;
+        if ($entPrev && $saiPrev) {
+            $tolSeg  = max(0, (int) ($jornada['tolerancia_marcacao_min'] ?? 5)) * 60;
+            $dia0    = substr($batidas[0]['momento'], 0, 10);
+            $prevEnt = strtotime($dia0 . ' ' . $entPrev);
+            $prevSai = strtotime($dia0 . ' ' . $saiPrev);
+            $realEnt = null; $realSai = null;
+            foreach ($batidas as $b) {
+                if ($b['tipo'] === 'entrada' && $realEnt === null) { $realEnt = strtotime($b['momento']); }
+                if ($b['tipo'] === 'saida') { $realSai = strtotime($b['momento']); }
+            }
+            // Entrada dentro da tolerância -> encaixa no previsto (remove a migalha).
+            if ($realEnt !== null && abs($realEnt - $prevEnt) <= $tolSeg) {
+                $trabMin -= (int) round(($prevEnt - $realEnt) / 60);
+            }
+            // Saída dentro da tolerância -> encaixa no previsto.
+            if ($realSai !== null && abs($realSai - $prevSai) <= $tolSeg) {
+                $trabMin -= (int) round(($realSai - $prevSai) / 60);
+            }
+            $trabMin = max(0, $trabMin);
+            $fixaAplicada = true;
+        }
+    }
+
     if ($especial !== null) {
         // Feriado / folga: esperado 0. Se trabalhou, tudo vira banco de horas
         // (extra); se não trabalhou, dia neutro (sem falta).
         $espMin = 0; $extra = $trabMin; $falta = 0; $saldo = $trabMin;
     } else {
         $espMin = ponto_esperado_min($jornada, $w);
-        $tol    = (int) ($jornada['tolerancia_min'] ?? 10);
+        // No modo fixo a tolerância já foi aplicada por marcação: qualquer
+        // diferença restante conta. Senão, tolerância sobre o saldo líquido do dia.
+        $tol    = $fixaAplicada ? 0 : (int) ($jornada['tolerancia_min'] ?? 10);
         $saldo  = $trabMin - $espMin;
         $extra  = 0; $falta = 0;
         if ($espMin > 0) {
@@ -416,7 +513,10 @@ function ponto_resumo_mes(PDO $pdo, array $pessoa, int $ano, int $mes): array
             'ehHoje' => $ehHoje, 'fechado' => $fechado, 'falta_dia' => $faltouDia,
         ] + $c;
     }
-    $tot['saldo_min'] = $tot['trabalhado_min'] - $tot['esperado_min'];
+    // Banco de horas = só o que passou pela tolerância dia a dia (extra − falta).
+    // NÃO usar trabalhado−esperado cru aqui: isso reintroduziria as "migalhas"
+    // de poucos minutos que a tolerância (Art. 58 §1º CLT) já zerou por dia.
+    $tot['saldo_min'] = $tot['extra_min'] - $tot['falta_min'];
     return ['totais' => $tot, 'dias' => $dias, 'pessoa' => $pessoa];
 }
 
