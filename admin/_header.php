@@ -50,6 +50,28 @@ $navItems = [
                     </a>
                 </li>
 <?php endforeach; ?>
+<?php
+// Ficha Técnica: submenu colapsável (receitas + produtos + CMV).
+$fichaItens = [
+    'ficha_receitas' => ['ficha_receitas.php', 'Receitas'],
+    'ficha_produtos' => ['ficha_produtos.php', 'Produtos'],
+    'ficha_cmv'      => ['ficha_cmv.php',      'CMV (histórico)'],
+];
+$fichaAtivo = array_key_exists($active, $fichaItens);
+?>
+                <li class="sidebar-item<?= $fichaAtivo ? ' active' : '' ?>">
+                    <a class="sidebar-link<?= $fichaAtivo ? '' : ' collapsed' ?>" data-bs-target="#ficha-menu" data-bs-toggle="collapse" aria-expanded="<?= $fichaAtivo ? 'true' : 'false' ?>">
+                        <i class="align-middle" data-feather="clipboard"></i>
+                        <span class="align-middle">Ficha Técnica</span>
+                    </a>
+                    <ul id="ficha-menu" class="sidebar-dropdown list-unstyled collapse<?= $fichaAtivo ? ' show' : '' ?>" data-bs-parent="#sidebar">
+<?php foreach ($fichaItens as $fk => $fi): ?>
+                        <li class="sidebar-item<?= $active === $fk ? ' active' : '' ?>">
+                            <a class="sidebar-link" href="<?= $fi[0] ?>"><?= htmlspecialchars($fi[1]) ?></a>
+                        </li>
+<?php endforeach; ?>
+                    </ul>
+                </li>
                 <li class="sidebar-item">
                     <a class="sidebar-link" href="logout.php">
                         <i class="align-middle" data-feather="log-out"></i>
