@@ -6,6 +6,9 @@ require_once __DIR__ . '/_auth.php';
 require_once 'model_ficha.php';
 
 $tipo = ($_GET['tipo'] ?? 'receita') === 'produto' ? 'produto' : 'receita';
+// Modo: 'producao' (cozinha — sem valores em R$) ou 'custo' (gestão). Padrão: produção.
+$modo = ($_GET['modo'] ?? 'producao') === 'custo' ? 'custo' : 'producao';
+$mostrarCusto = $modo === 'custo';
 
 // Coleta os ids pedidos (id único ou lista ids=1,2,3).
 $ids = [];
@@ -60,9 +63,18 @@ $esc = fn($s) => htmlspecialchars((string) $s);
 </style>
 </head>
 <body>
+<?php
+// Mantém tipo + ids ao alternar o modo.
+$qsIds = isset($_GET['ids']) ? '&ids=' . urlencode((string) $_GET['ids']) : (isset($_GET['id']) ? '&id=' . (int) $_GET['id'] : '');
+$linkOutroModo = 'ficha_pdf.php?tipo=' . $tipo . $qsIds . '&modo=' . ($mostrarCusto ? 'producao' : 'custo');
+?>
 <div class="barra no-print">
     <button onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    <a class="sec" href="<?= $esc($linkOutroModo) ?>"><?= $mostrarCusto ? '👩‍🍳 Ver versão de produção (sem valores)' : '💰 Ver versão com custos' ?></a>
     <a class="sec" href="<?= $tipo === 'produto' ? 'ficha_produtos.php' : 'ficha_receitas.php' ?>">Voltar</a>
+</div>
+<div class="no-print" style="max-width:720px;margin:0 auto 12px;color:#666;font-size:12px;">
+    Modo: <strong><?= $mostrarCusto ? 'Gestão (com custos)' : 'Produção (cozinha)' ?></strong>
 </div>
 
 <?php if (!$ids): ?>
@@ -86,21 +98,23 @@ $esc = fn($s) => htmlspecialchars((string) $s);
             <div class="box"><div class="rot">% Evaporação</div><div class="val"><?= rtrim(rtrim(number_format((float) $rec['percentual_evaporacao'], 2, ',', '.'), '0'), ',') ?>%</div></div>
             <div class="box"><div class="rot">Peso total</div><div class="val"><?= $fmtNum($c['peso_total']) ?> <?= $esc($un) ?></div></div>
             <div class="box"><div class="rot">Peso final</div><div class="val"><?= $fmtNum($c['peso_final']) ?> <?= $esc($un) ?></div></div>
+            <?php if ($mostrarCusto): ?>
             <div class="box"><div class="rot">Custo total</div><div class="val"><?= $reais($c['custo_total']) ?></div></div>
             <div class="box"><div class="rot">Custo / <?= $esc($un) ?></div><div class="val"><?= $reais4($c['custo_por_g']) ?></div></div>
+            <?php endif; ?>
         </div>
         <table>
-            <thead><tr><th>Ingrediente</th><th class="num">Quantidade</th><th class="num">Custo</th></tr></thead>
+            <thead><tr><th>Ingrediente</th><th class="num">Quantidade</th><?php if ($mostrarCusto): ?><th class="num">Custo</th><?php endif; ?></tr></thead>
             <tbody>
             <?php foreach ($c['linhas'] as $l): ?>
                 <tr>
                     <td><?= $esc($l['item_nome']) ?></td>
                     <td class="num"><?= $fmtNum($l['quantidade']) ?> <?= $esc($l['rotulo_base'] ?? '') ?></td>
-                    <td class="num"><?= $l['sem_preco'] ? '(sem preço)' : $reais($l['custo']) ?></td>
+                    <?php if ($mostrarCusto): ?><td class="num"><?= $l['sem_preco'] ? '(sem preço)' : $reais($l['custo']) ?></td><?php endif; ?>
                 </tr>
             <?php endforeach; ?>
             </tbody>
-            <tfoot><tr><td>Total</td><td></td><td class="num"><?= $reais($c['custo_total']) ?></td></tr></tfoot>
+            <?php if ($mostrarCusto): ?><tfoot><tr><td>Total</td><td></td><td class="num"><?= $reais($c['custo_total']) ?></td></tr></tfoot><?php endif; ?>
         </table>
         <?php if (!empty($rec['preparo'])): ?>
             <div class="sec">Modo de preparo</div>
@@ -125,23 +139,26 @@ $esc = fn($s) => htmlspecialchars((string) $s);
             </div>
             <div class="marca">ARLETE VIEIRA<br>CONFEITARIA</div>
         </div>
+        <?php if ($mostrarCusto): ?>
         <div class="resumo">
             <div class="box"><div class="rot">Custo total</div><div class="val"><?= $reais($c['custo_total']) ?></div></div>
             <div class="box"><div class="rot">Preço de venda</div><div class="val"><?= $reais($c['preco_venda']) ?></div></div>
             <div class="box"><div class="rot">Margem</div><div class="val"><?= $reais($c['margem']) ?></div></div>
             <div class="box"><div class="rot">CMV</div><div class="val"><?php if ($cmv === null): ?>—<?php else: ?><span class="cmv <?= $cmvCls ?>"><?= number_format($cmv, 1, ',', '.') ?>%</span><?php endif; ?></div></div>
         </div>
+        <?php endif; ?>
         <?php
-        $bloco = function (string $titulo, array $linhas) use ($fmtNum, $reais, $esc) {
+        $bloco = function (string $titulo, array $linhas) use ($fmtNum, $reais, $esc, $mostrarCusto) {
             echo '<div class="sec">' . $esc($titulo) . '</div>';
-            echo '<table><thead><tr><th>Item</th><th class="num">Quantidade</th><th class="num">Custo</th></tr></thead><tbody>';
+            echo '<table><thead><tr><th>Item</th><th class="num">Quantidade</th>' . ($mostrarCusto ? '<th class="num">Custo</th>' : '') . '</tr></thead><tbody>';
             $sub = 0;
-            if (!$linhas) { echo '<tr><td colspan="3" style="color:#999">—</td></tr>'; }
+            if (!$linhas) { echo '<tr><td colspan="' . ($mostrarCusto ? 3 : 2) . '" style="color:#999">—</td></tr>'; }
             foreach ($linhas as $l) {
                 if (!$l['sem_preco']) { $sub += (float) $l['custo']; }
-                echo '<tr><td>' . $esc($l['nome']) . '</td><td class="num">' . $fmtNum($l['quantidade']) . ' ' . $esc($l['rotulo'] ?? '') . '</td><td class="num">' . ($l['sem_preco'] ? '(sem preço)' : $reais($l['custo'])) . '</td></tr>';
+                echo '<tr><td>' . $esc($l['nome']) . '</td><td class="num">' . $fmtNum($l['quantidade']) . ' ' . $esc($l['rotulo'] ?? '') . '</td>'
+                   . ($mostrarCusto ? '<td class="num">' . ($l['sem_preco'] ? '(sem preço)' : $reais($l['custo'])) . '</td>' : '') . '</tr>';
             }
-            echo '</tbody><tfoot><tr><td>Subtotal</td><td></td><td class="num">' . $reais($sub) . '</td></tr></tfoot></table>';
+            echo '</tbody>' . ($mostrarCusto ? '<tfoot><tr><td>Subtotal</td><td></td><td class="num">' . $reais($sub) . '</td></tr></tfoot>' : '') . '</table>';
         };
         $bloco('Ingredientes (embalagens e itens diretos)', $c['linhas']['ingrediente']);
         $bloco('Recheios (receitas)', $c['linhas']['recheio']);

@@ -128,7 +128,8 @@ require __DIR__ . '/_header.php';
             <div class="d-flex flex-wrap gap-2">
                 <button class="btn btn-primary">Salvar produto</button>
                 <?php if ($id > 0): ?>
-                    <a href="ficha_pdf.php?tipo=produto&id=<?= $id ?>" target="_blank" class="btn btn-outline-secondary">📄 Baixar PDF</a>
+                    <a href="ficha_pdf.php?tipo=produto&id=<?= $id ?>&modo=producao" target="_blank" class="btn btn-outline-secondary">📄 PDF de produção</a>
+                    <a href="ficha_pdf.php?tipo=produto&id=<?= $id ?>&modo=custo" target="_blank" class="btn btn-outline-secondary">💰 PDF com custos</a>
                     <a href="controller_ficha.php?acao=cmv_registrar&id=<?= $id ?>" class="btn btn-outline-dark js-confirm" data-msg="Congelar o custo/CMV atual no histórico?">Registrar CMV agora</a>
                     <a href="controller_ficha.php?acao=produto_excluir&id=<?= $id ?>" class="btn btn-outline-danger js-confirm" data-msg="Remover este produto?">Excluir</a>
                 <?php endif; ?>

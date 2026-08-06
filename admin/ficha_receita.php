@@ -114,7 +114,8 @@ require __DIR__ . '/_header.php';
             <div class="d-flex flex-wrap gap-2">
                 <button class="btn btn-primary">Salvar receita</button>
                 <?php if ($id > 0): ?>
-                    <a href="ficha_pdf.php?tipo=receita&id=<?= $id ?>" target="_blank" class="btn btn-outline-secondary">📄 Baixar PDF</a>
+                    <a href="ficha_pdf.php?tipo=receita&id=<?= $id ?>&modo=producao" target="_blank" class="btn btn-outline-secondary">📄 PDF de produção</a>
+                    <a href="ficha_pdf.php?tipo=receita&id=<?= $id ?>&modo=custo" target="_blank" class="btn btn-outline-secondary">💰 PDF com custos</a>
                     <a href="controller_ficha.php?acao=receita_snapshot&id=<?= $id ?>" class="btn btn-outline-dark js-confirm" data-msg="Congelar o custo atual desta receita no histórico?">Registrar custo agora</a>
                     <a href="controller_ficha.php?acao=receita_excluir&id=<?= $id ?>" class="btn btn-outline-danger js-confirm" data-msg="Remover esta receita?">Excluir</a>
                 <?php endif; ?>
