@@ -71,7 +71,7 @@ function ficha_receita_buscar(PDO $pdo, int $id): ?array
 function ficha_receita_itens(PDO $pdo, int $receitaId): array
 {
     $stmt = $pdo->prepare("
-        SELECT ri.*, i.nome AS item_nome, i.preco AS item_preco,
+        SELECT ri.*, i.nome AS item_nome, i.preco,
                i.unidade_medida, i.conteudo
         FROM ficha_receita_itens ri
         JOIN estoque_itens i ON i.id = ri.item_id
