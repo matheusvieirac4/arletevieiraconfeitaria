@@ -510,3 +510,28 @@ function ficha_categoria_excluir(PDO $pdo, int $id): void
 {
     $pdo->prepare("UPDATE ficha_categorias SET ativo = 0 WHERE id = :id")->execute([':id' => $id]);
 }
+
+/**
+ * Renomeia uma categoria e propaga o novo nome para as fichas que já a usam,
+ * para elas não ficarem com o texto antigo.
+ */
+function ficha_categoria_renomear(PDO $pdo, int $id, string $novo): void
+{
+    $novo = trim($novo);
+    if ($id <= 0 || $novo === '') { return; }
+
+    $st = $pdo->prepare("SELECT tipo, nome FROM ficha_categorias WHERE id = :id");
+    $st->execute([':id' => $id]);
+    $cat = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$cat) { return; }
+
+    $antigo = $cat['nome'];
+    if ($antigo === $novo) { return; }
+
+    $pdo->prepare("UPDATE ficha_categorias SET nome = :n WHERE id = :id")
+        ->execute([':n' => $novo, ':id' => $id]);
+
+    $tabela = $cat['tipo'] === 'receita' ? 'ficha_receitas' : 'ficha_produtos';
+    $pdo->prepare("UPDATE $tabela SET categoria = :n WHERE categoria = :o")
+        ->execute([':n' => $novo, ':o' => $antigo]);
+}

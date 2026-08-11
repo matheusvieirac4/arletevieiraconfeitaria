@@ -54,8 +54,15 @@ require __DIR__ . '/_header.php';
                             <?php endif; ?>
                             <?php foreach ($cats as $c): ?>
                                 <tr>
-                                    <td><?= htmlspecialchars($c['nome']) ?></td>
+                                    <td>
+                                        <form method="post" action="controller_ficha.php?acao=cat_renomear" class="d-flex gap-2" id="cat-form-<?= (int) $c['id'] ?>">
+                                            <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
+                                            <input type="hidden" name="tipo" value="<?= $tipo ?>">
+                                            <input type="text" name="nome" class="form-control form-control-sm" value="<?= htmlspecialchars($c['nome'], ENT_QUOTES) ?>" required>
+                                        </form>
+                                    </td>
                                     <td class="text-end">
+                                        <button type="submit" form="cat-form-<?= (int) $c['id'] ?>" class="btn btn-outline-primary btn-sm">Salvar</button>
                                         <a href="controller_ficha.php?acao=cat_excluir&id=<?= (int) $c['id'] ?>&tipo=<?= $tipo ?>" class="btn btn-outline-danger btn-sm js-confirm" data-msg="Remover a categoria &quot;<?= htmlspecialchars($c['nome'], ENT_QUOTES) ?>&quot;? As fichas que já a usam mantêm o texto.">Excluir</a>
                                     </td>
                                 </tr>

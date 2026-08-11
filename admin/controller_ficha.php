@@ -109,6 +109,20 @@ if ($acao === 'cat_salvar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+if ($acao === 'cat_renomear' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $id = (int) ($_POST['id'] ?? 0);
+    $tipo = (string) ($_POST['tipo'] ?? '');
+    $nome = trim((string) ($_POST['nome'] ?? ''));
+    $volta = 'ficha_categorias.php?tipo=' . ($tipo === 'produto' ? 'produto' : 'receita');
+    if ($nome === '') { ficha_redirect('danger', 'Informe o nome da categoria.', $volta); }
+    try {
+        ficha_categoria_renomear($pdo, $id, $nome);
+        ficha_redirect('success', 'Categoria atualizada.', $volta);
+    } catch (\Throwable $e) {
+        ficha_redirect('danger', 'Falha: ' . $e->getMessage(), $volta);
+    }
+}
+
 if ($acao === 'cat_excluir') {
     $id = (int) ($_GET['id'] ?? 0);
     $tipo = (string) ($_GET['tipo'] ?? 'receita');
