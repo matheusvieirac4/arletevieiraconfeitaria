@@ -179,6 +179,97 @@ if (($acao === 'texto' || $acao === 'cupom') && $_SERVER['REQUEST_METHOD'] === '
     exit;
 }
 
+// -------- Fila de fotos: adicionar uma foto à caixa de entrada (sem IA) --------
+// Chamado pela tela de captura (financeiro_foto.php) via fetch. Só guarda a
+// imagem na fila e responde JSON — rápido, pra fotografar várias em sequência.
+if ($acao === 'fila_add' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    if (!isset($_FILES['foto']) || $_FILES['foto']['error'] !== UPLOAD_ERR_OK) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'erro' => 'Foto inválida.']);
+        exit;
+    }
+    $bytes = (string) file_get_contents($_FILES['foto']['tmp_name']);
+    $mime  = mime_content_type($_FILES['foto']['tmp_name']) ?: 'image/jpeg';
+    if (strpos($mime, 'image/') !== 0) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'erro' => 'O arquivo não é uma imagem.']);
+        exit;
+    }
+    $id = financeiro_fila_adicionar($bytes, $mime);
+    if ($id === '') {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'erro' => 'Não consegui gravar. Verifique a permissão da pasta admin/data/.']);
+        exit;
+    }
+    echo json_encode(['ok' => true, 'id' => $id, 'total' => count(financeiro_fila_listar())]);
+    exit;
+}
+
+// -------- Fila de fotos: servir a imagem (miniatura/preview) da caixa de entrada --------
+// A pasta admin/data é "nega tudo"; esta rota (autenticada) devolve a imagem.
+if ($acao === 'fila_foto') {
+    $id  = (string) ($_GET['id'] ?? '');
+    $arq = $id !== '' ? financeiro_fila_arquivo($id) : null;
+    if (!$arq) { http_response_code(404); exit; }
+    $mime = financeiro_fila_item($id)['mime'] ?? 'image/jpeg';
+    header('Content-Type: ' . $mime);
+    header('Cache-Control: private, max-age=300');
+    readfile($arq);
+    exit;
+}
+
+// -------- Fila de fotos: revisar (roda a IA sob demanda) --------
+if ($acao === 'fila_revisar') {
+    if (!financeiro_ia_configurada()) {
+        financeiro_redirect('danger', 'A IA (Gemini) não está configurada. Adicione gemini_api_key em config_financeiro.php.');
+    }
+    $id  = (string) ($_GET['id'] ?? '');
+    $arq = $id !== '' ? financeiro_fila_arquivo($id) : null;
+    if (!$arq) {
+        financeiro_redirect('danger', 'Foto não encontrada na fila (pode já ter sido tratada).');
+    }
+    try {
+        @set_time_limit(300);   // leitura por IA pode demorar (+retentativas)
+        $api = financeiro_api();
+        $ctx = financeiro_contexto_cadastros($api);
+        $ia  = financeiro_gemini();
+        $mime = financeiro_fila_item($id)['mime'] ?? 'image/jpeg';
+        [$mime, $b64] = GeminiClient::imagemParaBase64($arq, $mime);
+        $lanc = $ia->extrairImagem($b64, $mime, $ctx, '');
+    } catch (\Throwable $e) {
+        financeiro_redirect('danger', 'Falha na leitura pela IA: ' . $e->getMessage());
+    }
+
+    $cnpjForn = $lanc['supplier_cnpj'] ?? '';
+    unset($lanc['supplier_cnpj']);
+
+    // Monta a nota no formato da revisão; guarda fila_id p/ remover ao importar.
+    $_SESSION['financeiro_revisao'] = [
+        'chave'             => '',
+        'numero'            => '',
+        'serie'             => '',
+        'emissao'           => $lanc['competence_date'] ?? '',
+        'natureza_operacao' => 'Foto da fila (IA)',
+        'fornecedor'        => ['nome' => $lanc['supplier'] ?? '', 'cnpj' => $cnpjForn],
+        'valor_total'       => $lanc['value'] ?? '',
+        'parcelas'          => [],
+        'itens'             => [],
+        'avisos'            => ['Extraído por IA — confira todos os campos antes de enviar.'],
+        'lancamento'        => $lanc,
+        'fila_id'           => $id,
+    ];
+    header('Location: financeiro.php');
+    exit;
+}
+
+// -------- Fila de fotos: descartar uma foto --------
+if ($acao === 'fila_descartar') {
+    $id = (string) ($_GET['id'] ?? '');
+    if ($id !== '') { financeiro_fila_remover($id); }
+    financeiro_redirect('success', 'Foto descartada da fila.');
+}
+
 // -------- Fila SEFAZ: revisar uma nota recebida --------
 if ($acao === 'pendente_revisar') {
     $ch = isset($_GET['chave']) ? preg_replace('/\D/', '', (string) $_GET['chave']) : '';
@@ -190,6 +281,24 @@ if ($acao === 'pendente_revisar') {
     $_SESSION['financeiro_revisao'] = $nota;
     header('Location: financeiro.php');
     exit;
+}
+
+// -------- Manifestar (Ciência da Operação) e baixar o XML completo de uma nota --------
+if ($acao === 'manifestar_xml' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $ch = isset($_POST['chave']) ? preg_replace('/\D/', '', (string) $_POST['chave']) : '';
+    if ($ch === '' || strlen($ch) !== 44) {
+        financeiro_redirect('danger', 'Chave de acesso inválida para manifestar.');
+    }
+    if (!financeiro_sefaz_configurado()) {
+        financeiro_redirect('danger', 'Certificado do SEFAZ não configurado — não dá para manifestar.');
+    }
+    try {
+        @set_time_limit(120);
+        $r = financeiro_sefaz_manifestar_e_baixar($ch);
+    } catch (\Throwable $e) {
+        financeiro_redirect('danger', 'Falha ao manifestar: ' . $e->getMessage());
+    }
+    financeiro_redirect($r['ok'] ? ($r['xml_baixado'] ? 'success' : 'warning') : 'danger', $r['msg']);
 }
 
 // -------- Fila SEFAZ: descartar uma nota recebida --------
@@ -306,6 +415,10 @@ if ($acao === 'importar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // Se veio da fila de recebidas do SEFAZ, tira de lá.
     if (!empty($nota['chave'])) {
         financeiro_pendente_remover($nota['chave']);
+    }
+    // Se veio da fila de fotos, tira a foto de lá também.
+    if (!empty($nota['fila_id'])) {
+        financeiro_fila_remover((string) $nota['fila_id']);
     }
     unset($_SESSION['financeiro_revisao']);
     financeiro_redirect('success', 'Lançamento enviado com sucesso ao Cardápio Web! Confira em Contas a pagar.');

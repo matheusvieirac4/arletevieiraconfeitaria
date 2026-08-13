@@ -44,7 +44,25 @@ document.addEventListener('click', function (e) {
     if (!el) { return; }
     e.preventDefault();
     document.getElementById('confirm-msg').textContent = el.dataset.msg || 'Tem certeza?';
-    document.getElementById('confirm-ok').href = el.getAttribute('href') || '#';
+    const ok = document.getElementById('confirm-ok');
+    ok.href = el.getAttribute('href') || '#';
+    ok.onclick = null;                       // link normal segue o href
+    document.getElementById('confirm-trigger').click();
+}, true);
+
+// Mesma confirmação, mas para <form class="js-confirm-form" data-msg="...">.
+document.addEventListener('submit', function (e) {
+    const form = e.target.closest('.js-confirm-form');
+    if (!form || form.dataset.confirmado === '1') { return; }
+    e.preventDefault();
+    document.getElementById('confirm-msg').textContent = form.dataset.msg || 'Tem certeza?';
+    const ok = document.getElementById('confirm-ok');
+    ok.href = '#';
+    ok.onclick = function (ev) {
+        ev.preventDefault();
+        form.dataset.confirmado = '1';
+        form.submit();
+    };
     document.getElementById('confirm-trigger').click();
 }, true);
 </script>

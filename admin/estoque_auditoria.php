@@ -99,12 +99,61 @@ require __DIR__ . '/_header.php';
             <?php endif; ?>
         </form>
 
+        <div id="aud-nao-salvas" class="alert alert-warning py-2 px-3 mt-2" style="display:none;"></div>
+
         <script>
-        // Teclado de texto (tem Enter): só números "grudam", e Enter pula pro próximo item.
+        // Contagens ficam guardadas no navegador (localStorage) por item, então trocar de
+        // fornecedor no filtro ou recarregar NÃO apaga o que você já digitou. Você pode
+        // contar fornecedor por fornecedor e salvar tudo de uma vez no fim.
         (function () {
+            const KEY = 'aud_contagens';                 // { "<itemId>": "<valor>" }
+            const form = document.getElementById('form-auditoria');
             const inputs = Array.prototype.slice.call(document.querySelectorAll('.aud-input'));
+
+            function nomeItemId(inp) {
+                const m = /contagem\[(\d+)\]/.exec(inp.getAttribute('name') || '');
+                return m ? m[1] : null;
+            }
+            function ler() {
+                try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; }
+                catch (e) { return {}; }
+            }
+            function gravar(store) { localStorage.setItem(KEY, JSON.stringify(store)); }
+
+            // Restaura o que já foi digitado nos itens visíveis.
+            const store = ler();
+            inputs.forEach(function (inp) {
+                const id = nomeItemId(inp);
+                if (id && store[id] != null && store[id] !== '') { inp.value = store[id]; }
+            });
+
+            // Aviso de quantas contagens estão guardadas mas ainda não salvas.
+            function atualizarAviso() {
+                const s = ler();
+                const n = Object.keys(s).filter(k => (s[k] + '').trim() !== '').length;
+                const box = document.getElementById('aud-nao-salvas');
+                if (!box) { return; }
+                if (n > 0) {
+                    box.style.display = 'block';
+                    box.innerHTML = '📝 Você tem <strong>' + n + '</strong> contagem(ns) guardada(s) e ainda não salva(s) '
+                        + '(inclui outros fornecedores). Clique em <strong>Salvar contagem</strong> para gravar tudo.';
+                } else {
+                    box.style.display = 'none';
+                }
+            }
+            atualizarAviso();
+
+            // Teclado de texto (tem Enter): só números "grudam", e Enter pula pro próximo item.
             inputs.forEach(function (inp, i) {
-                inp.addEventListener('input', function () { inp.value = inp.value.replace(/[^0-9.,-]/g, ''); });
+                inp.addEventListener('input', function () {
+                    inp.value = inp.value.replace(/[^0-9.,-]/g, '');
+                    const id = nomeItemId(inp);
+                    if (!id) { return; }
+                    const s = ler();
+                    if (inp.value.trim() === '') { delete s[id]; } else { s[id] = inp.value; }
+                    gravar(s);
+                    atualizarAviso();
+                });
                 inp.addEventListener('keydown', function (e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
@@ -113,6 +162,25 @@ require __DIR__ . '/_header.php';
                         else { inp.blur(); }
                     }
                 });
+            });
+
+            // Ao salvar: injeta campos ocultos para as contagens guardadas de itens que
+            // NÃO estão na tela agora (outros fornecedores), pra gravar tudo de uma vez.
+            form.addEventListener('submit', function () {
+                const s = ler();
+                const idsNaTela = {};
+                inputs.forEach(function (inp) { const id = nomeItemId(inp); if (id) { idsNaTela[id] = true; } });
+                Object.keys(s).forEach(function (id) {
+                    if (idsNaTela[id] || (s[id] + '').trim() === '') { return; }
+                    const h = document.createElement('input');
+                    h.type = 'hidden';
+                    h.name = 'contagem[' + id + ']';
+                    h.value = s[id];
+                    form.appendChild(h);
+                });
+                // Marca que uma gravação foi disparada; a limpeza acontece na tela de
+                // sucesso (estoque.php). Se der erro e voltar pra cá, os dados continuam.
+                sessionStorage.setItem('aud_salvando', '1');
             });
         })();
         </script>

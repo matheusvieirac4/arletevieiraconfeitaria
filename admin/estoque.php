@@ -256,4 +256,11 @@ require __DIR__ . '/_header.php';
     });
 })();
 </script>
+<?php if ($flash && ($flash['tipo'] ?? '') === 'success' && strpos($flash['msg'] ?? '', 'Auditoria salva') === 0): ?>
+<script>
+    // A auditoria foi salva com sucesso: limpa as contagens guardadas no navegador.
+    try { localStorage.removeItem('aud_contagens'); } catch (e) {}
+    sessionStorage.removeItem('aud_salvando');
+</script>
+<?php endif; ?>
 <?php require __DIR__ . '/_footer.php'; ?>

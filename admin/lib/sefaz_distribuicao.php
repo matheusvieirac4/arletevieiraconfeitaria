@@ -87,6 +87,38 @@ class SefazDistribuicao
         return $out;
     }
 
+    /**
+     * Consulta a distribuição por uma chave de acesso específica (consChNFe).
+     * Depois de manifestar a nota, o SEFAZ passa a devolver o procNFe completo.
+     * Devolve o mesmo formato de consultarPorNSU (com 'docs').
+     */
+    public function consultarPorChave(string $chave): array
+    {
+        $chave = preg_replace('/\D/', '', $chave);
+        if (strlen($chave) !== 44) {
+            throw new SefazException('Chave de acesso inválida (esperado 44 dígitos).');
+        }
+        $dist = "<consChNFe><chNFe>$chave</chNFe></consChNFe>";
+        $resp = $this->enviar($dist);
+
+        $out = [
+            'cStat'   => (int) self::tag($resp, 'cStat'),
+            'xMotivo' => self::tag($resp, 'xMotivo'),
+            'ultNSU'  => self::tag($resp, 'ultNSU'),
+            'maxNSU'  => self::tag($resp, 'maxNSU'),
+            'docs'    => [],
+        ];
+        if (preg_match_all('/<docZip\s+NSU="(\d+)"\s+schema="([^"]+)"\s*>(.*?)<\/docZip>/s', $resp, $mm, PREG_SET_ORDER)) {
+            foreach ($mm as $d) {
+                $bin = base64_decode($d[3]);
+                $xml = @gzdecode($bin);
+                if ($xml === false) { $xml = @gzinflate($bin); }
+                $out['docs'][] = ['nsu' => $d[1], 'schema' => $d[2], 'xml' => (string) $xml];
+            }
+        }
+        return $out;
+    }
+
     // ------------------------------------------------------------ internos ---
 
     private function enviar(string $conteudoDist): string

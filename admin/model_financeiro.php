@@ -4,6 +4,7 @@ require_once __DIR__ . '/lib/gemini_client.php';
 require_once __DIR__ . '/lib/nfe_parser.php';
 require_once __DIR__ . '/lib/nfe_chave.php';
 require_once __DIR__ . '/lib/sefaz_distribuicao.php';
+require_once __DIR__ . '/lib/sefaz_manifestacao.php';
 
 // ---------------------------------------------------------------- Config ---
 
@@ -800,6 +801,74 @@ function financeiro_pendente_remover(string $chave): void
     }
 }
 
+// ============================================================================
+// Fila de fotos (caixa de entrada): fotos de cupom/nota tiradas no corre para
+// serem lidas pela IA e revisadas depois, no PC. NÃO passam pela IA na hora —
+// só quando você clica em "Revisar". Assim dá pra ir fotografando várias e
+// validar tudo junto depois. Guardadas em admin/data/fila_fotos (protegido).
+// ============================================================================
+function financeiro_fila_dir(): string
+{
+    financeiro_data_dir();                       // garante admin/data + .htaccess (nega tudo)
+    $dir = __DIR__ . '/data/fila_fotos';
+    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    return $dir;
+}
+
+function financeiro_fila_index_path(): string { return financeiro_fila_dir() . '/index.json'; }
+
+/** Lista a fila: [ id => ['arquivo'=>..,'mime'=>..,'recebido_em'=>..] ], mais antigas primeiro. */
+function financeiro_fila_listar(): array
+{
+    $p = financeiro_fila_index_path();
+    if (!is_file($p)) { return []; }
+    $d = json_decode((string) file_get_contents($p), true);
+    if (!is_array($d)) { return []; }
+    uasort($d, fn($a, $b) => strcmp($a['recebido_em'] ?? '', $b['recebido_em'] ?? ''));
+    return $d;
+}
+
+/** Grava a foto na fila e devolve o id gerado (ou '' em falha). */
+function financeiro_fila_adicionar(string $bytes, string $mime): string
+{
+    $dir = financeiro_fila_dir();
+    $ext = $mime === 'image/png' ? 'png' : ($mime === 'image/webp' ? 'webp' : 'jpg');
+    $id  = date('Ymd_His') . '_' . substr(bin2hex(random_bytes(4)), 0, 8);
+    $arq = $id . '.' . $ext;
+    if (@file_put_contents($dir . '/' . $arq, $bytes, LOCK_EX) === false) { return ''; }
+    $reg = financeiro_fila_listar();
+    $reg[$id] = ['arquivo' => $arq, 'mime' => $mime, 'recebido_em' => date('c')];
+    if (@file_put_contents(financeiro_fila_index_path(), json_encode($reg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX) === false) {
+        @unlink($dir . '/' . $arq);
+        return '';
+    }
+    return $id;
+}
+
+function financeiro_fila_item(string $id): ?array
+{
+    $reg = financeiro_fila_listar();
+    return $reg[$id] ?? null;
+}
+
+/** Caminho absoluto do arquivo de uma foto da fila (ou null se não existir). */
+function financeiro_fila_arquivo(string $id): ?string
+{
+    $it = financeiro_fila_item($id);
+    if (!$it) { return null; }
+    $p = financeiro_fila_dir() . '/' . basename((string) $it['arquivo']);
+    return is_file($p) ? $p : null;
+}
+
+function financeiro_fila_remover(string $id): void
+{
+    $reg = financeiro_fila_listar();
+    if (!isset($reg[$id])) { return; }
+    @unlink(financeiro_fila_dir() . '/' . basename((string) $reg[$id]['arquivo']));
+    unset($reg[$id]);
+    @file_put_contents(financeiro_fila_index_path(), json_encode($reg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+}
+
 /** Converte um documento da distribuição (resNFe ou procNFe) numa nota de revisão. */
 function financeiro_sefaz_doc_para_nota(array $doc): ?array
 {
@@ -928,6 +997,67 @@ function financeiro_sefaz_puxar(int $maxPaginas = 10): array
     } while ($temMais && $pag < $maxPaginas);
 
     return ['novas' => $novas, 'cStat' => $cStat, 'xMotivo' => $xMotivo, 'ultNSU' => $ult, 'maxNSU' => $maxNSU, 'paginas' => $pag];
+}
+
+/**
+ * Manifesta "Ciência da Operação" (210210) para uma chave e, em seguida, tenta
+ * baixar o XML completo (procNFe) por chave, guardando-o para importar no estoque.
+ *
+ * @return array{ok:bool,cStat:int,xMotivo:string,xml_baixado:bool,msg:string}
+ */
+function financeiro_sefaz_manifestar_e_baixar(string $chave): array
+{
+    $chave = preg_replace('/\D/', '', $chave);
+    if (strlen($chave) !== 44) {
+        return ['ok' => false, 'cStat' => 0, 'xMotivo' => '', 'xml_baixado' => false, 'msg' => 'Chave de acesso inválida.'];
+    }
+    $sc = financeiro_sefaz_config();
+    if (!$sc) {
+        throw new SefazException('Certificado do SEFAZ não configurado (cert_path).');
+    }
+    $pfx = file_get_contents($sc['path']);
+
+    // 1) Manifesta ciência da operação.
+    $manif = new SefazManifestacao($pfx, $sc['pass'], $sc['cnpj']);
+    $r = $manif->cienciaOperacao($chave);
+    // 135/136 = evento registrado/vinculado; 573 = duplicidade (já manifestada antes).
+    $manifestOk = in_array($r['cStat'], [135, 136, 573], true);
+    if (!$manifestOk) {
+        return [
+            'ok' => false, 'cStat' => $r['cStat'], 'xMotivo' => $r['xMotivo'],
+            'xml_baixado' => false,
+            'msg' => "SEFAZ recusou a manifestação: {$r['cStat']} — {$r['xMotivo']}",
+        ];
+    }
+
+    // 2) Baixa o XML completo por chave (agora liberado). Pode não vir na hora —
+    //    nesse caso o puxador por NSU trará nas próximas rodadas.
+    $baixado = false;
+    try {
+        $sefaz = new SefazDistribuicao($pfx, $sc['pass'], $sc['cnpj']);
+        financeiro_sefaz_marcar_execucao();   // conta para a janela de 1h do SEFAZ
+        $d = $sefaz->consultarPorChave($chave);
+        foreach ($d['docs'] as $doc) {
+            if (strpos($doc['schema'] ?? '', 'procNFe') !== 0) { continue; }
+            $nota = financeiro_sefaz_doc_para_nota($doc);
+            if (!$nota || empty($nota['itens'])) { continue; }
+            if (financeiro_nfe_guardar($chave, $doc['xml'], $nota)) { $baixado = true; }
+        }
+    } catch (\Throwable $e) {
+        return [
+            'ok' => true, 'cStat' => $r['cStat'], 'xMotivo' => $r['xMotivo'],
+            'xml_baixado' => false,
+            'msg' => 'Nota manifestada, mas falhou ao baixar o XML: ' . $e->getMessage()
+                   . ' Tente "Buscar agora" em alguns instantes.',
+        ];
+    }
+
+    $ja = $r['cStat'] === 573 ? 'já estava manifestada' : 'manifestada com sucesso';
+    $msg = $baixado
+        ? "Nota $ja e XML completo baixado. Veja em Notas do SEFAZ para importar os itens."
+        : "Nota $ja, mas o XML completo ainda não estava disponível. Use \"Buscar agora\" em alguns instantes.";
+
+    return ['ok' => true, 'cStat' => $r['cStat'], 'xMotivo' => $r['xMotivo'], 'xml_baixado' => $baixado, 'msg' => $msg];
 }
 
 // ------------------------------- Registro de notas processadas (dedup) ---

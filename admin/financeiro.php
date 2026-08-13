@@ -22,6 +22,8 @@ $revisao = $_SESSION['financeiro_revisao'] ?? null;
 // Fila de notas recebidas automaticamente do SEFAZ.
 $sefazOn     = financeiro_sefaz_configurado();
 $pendentes   = financeiro_pendentes_listar();
+// Caixa de entrada de fotos tiradas no corre (financeiro_foto.php), pra ler depois.
+$fila        = financeiro_fila_listar();
 $sefazEspera = financeiro_sefaz_espera_restante();      // segundos até liberar
 $sefazUltima = financeiro_sefaz_ultima_execucao();      // timestamp da última busca
 
@@ -206,6 +208,40 @@ $datalist = function (string $id, array $opts): string {
             </div>
 
         <?php elseif (!$revisao): ?>
+            <!-- Caixa de entrada: fotos tiradas no corre, pra ler pela IA e revisar aqui -->
+            <div class="card mb-4" style="max-width: 820px;">
+                <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                    <span>Caixa de entrada (fotos) <?php if ($fila): ?><span class="badge bg-danger"><?= count($fila) ?></span><?php endif; ?></span>
+                    <a href="financeiro_foto.php" class="btn btn-primary btn-sm">📷 Tirar foto pra fila</a>
+                </div>
+                <div class="card-body">
+                    <?php if (!$fila): ?>
+                        <p class="text-muted mb-0">
+                            Nenhuma foto na fila. Use <strong>Tirar foto pra fila</strong> no celular pra fotografar
+                            cupons/notas no corre — elas ficam aqui e você lê com a IA depois, uma a uma.
+                            <br><small>Dica: crie um atalho na tela inicial do iPhone apontando pra <code>financeiro_foto.php</code> pra abrir a câmera direto.</small>
+                        </p>
+                    <?php else: ?>
+                        <div class="d-flex flex-wrap gap-3">
+                            <?php foreach ($fila as $fid => $ft): ?>
+                                <div class="border rounded p-2 text-center" style="width:150px;">
+                                    <a href="controller_financeiro.php?acao=fila_foto&id=<?= urlencode($fid) ?>" target="_blank" rel="noopener">
+                                        <img src="controller_financeiro.php?acao=fila_foto&id=<?= urlencode($fid) ?>" alt="Foto da fila"
+                                             style="width:100%;height:110px;object-fit:cover;border-radius:6px;background:#f2f3f5;">
+                                    </a>
+                                    <div class="small text-muted mt-1"><?= htmlspecialchars(date('d/m H:i', strtotime((string) ($ft['recebido_em'] ?? '')))) ?></div>
+                                    <div class="d-grid gap-1 mt-2">
+                                        <a class="btn btn-primary btn-sm" href="controller_financeiro.php?acao=fila_revisar&id=<?= urlencode($fid) ?>">Revisar</a>
+                                        <a class="btn btn-outline-danger btn-sm js-confirm" href="controller_financeiro.php?acao=fila_descartar&id=<?= urlencode($fid) ?>" data-msg="Descartar esta foto da fila?">Descartar</a>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <p class="text-muted small mb-0 mt-3">A IA só roda quando você clica em <strong>Revisar</strong>. Confira os campos antes de enviar.</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <?php if ($sefazOn || $pendentes): ?>
             <!-- Fila de NF-e recebidas automaticamente do SEFAZ -->
             <div class="card mb-4" style="max-width: 820px;">
@@ -235,6 +271,14 @@ $datalist = function (string $id, array $opts): string {
                                     <td><?= htmlspecialchars($nt['emissao']) ?></td>
                                     <td class="text-end text-nowrap">
                                         <a class="btn btn-primary btn-sm" href="controller_financeiro.php?acao=pendente_revisar&chave=<?= urlencode($ch) ?>">Revisar</a>
+                                        <?php if (financeiro_nfe_xml($ch) !== null): ?>
+                                            <span class="badge bg-success" title="XML completo já baixado — importe os itens em Notas do SEFAZ">XML ✓</span>
+                                        <?php elseif ($sefazOn): ?>
+                                            <form method="post" action="controller_financeiro.php?acao=manifestar_xml" class="d-inline js-confirm-form" data-msg="Manifestar Ciência da Operação nesta nota para baixar o XML completo (com itens)? Isso registra no SEFAZ que você tomou conhecimento da nota.">
+                                                <input type="hidden" name="chave" value="<?= htmlspecialchars($ch) ?>">
+                                                <button class="btn btn-outline-primary btn-sm" type="submit">Baixar XML</button>
+                                            </form>
+                                        <?php endif; ?>
                                         <a class="btn btn-outline-danger btn-sm js-confirm" href="controller_financeiro.php?acao=pendente_descartar&chave=<?= urlencode($ch) ?>" data-msg="Descartar esta nota recebida?">Descartar</a>
                                     </td>
                                 </tr>
