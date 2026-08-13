@@ -101,6 +101,7 @@ $naFila = count(financeiro_fila_listar());
         mostrarToast('<span class="spinner"></span>Enviando…', false);
         canvas.toBlob(function (blob) {
             const fd = new FormData();
+            fd.append('ajax', '1');
             fd.append('foto', new File([blob], 'fila.jpg', { type: 'image/jpeg' }));
             fetch('controller_financeiro.php?acao=fila_add', { method: 'POST', body: fd })
                 .then(r => r.json())

@@ -828,18 +828,30 @@ function financeiro_fila_listar(): array
     return $d;
 }
 
-/** Grava a foto na fila e devolve o id gerado (ou '' em falha). */
-function financeiro_fila_adicionar(string $bytes, string $mime): string
+/**
+ * Adiciona um item à fila e devolve o id gerado (ou '' em falha).
+ * $tipo: 'imagem' | 'pdf' | 'xml' | 'texto'.
+ * Para arquivos, passe $bytes + $mime; para texto, deixe $bytes null e ponha o
+ * conteúdo em $meta['texto']. $meta pode trazer 'instrucao' e 'origem_nome'.
+ */
+function financeiro_fila_add(string $tipo, array $meta = [], ?string $bytes = null, string $mime = ''): string
 {
     $dir = financeiro_fila_dir();
-    $ext = $mime === 'image/png' ? 'png' : ($mime === 'image/webp' ? 'webp' : 'jpg');
     $id  = date('Ymd_His') . '_' . substr(bin2hex(random_bytes(4)), 0, 8);
-    $arq = $id . '.' . $ext;
-    if (@file_put_contents($dir . '/' . $arq, $bytes, LOCK_EX) === false) { return ''; }
+    $item = ['tipo' => $tipo, 'recebido_em' => date('c')] + $meta;
+    if ($bytes !== null) {
+        $ext = $tipo === 'xml' ? 'xml'
+             : ($tipo === 'pdf' ? 'pdf'
+             : ($mime === 'image/png' ? 'png' : ($mime === 'image/webp' ? 'webp' : 'jpg')));
+        $arq = $id . '.' . $ext;
+        if (@file_put_contents($dir . '/' . $arq, $bytes, LOCK_EX) === false) { return ''; }
+        $item['arquivo'] = $arq;
+        $item['mime']    = $mime;
+    }
     $reg = financeiro_fila_listar();
-    $reg[$id] = ['arquivo' => $arq, 'mime' => $mime, 'recebido_em' => date('c')];
+    $reg[$id] = $item;
     if (@file_put_contents(financeiro_fila_index_path(), json_encode($reg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX) === false) {
-        @unlink($dir . '/' . $arq);
+        if (!empty($item['arquivo'])) { @unlink($dir . '/' . $item['arquivo']); }
         return '';
     }
     return $id;

@@ -211,33 +211,55 @@ $datalist = function (string $id, array $opts): string {
             <!-- Caixa de entrada: fotos tiradas no corre, pra ler pela IA e revisar aqui -->
             <div class="card mb-4" style="max-width: 820px;">
                 <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
-                    <span>Caixa de entrada (fotos) <?php if ($fila): ?><span class="badge bg-danger"><?= count($fila) ?></span><?php endif; ?></span>
+                    <span>Caixa de entrada <?php if ($fila): ?><span class="badge bg-danger"><?= count($fila) ?></span><?php endif; ?></span>
                     <a href="financeiro_foto.php" class="btn btn-primary btn-sm">📷 Tirar foto pra fila</a>
                 </div>
                 <div class="card-body">
                     <?php if (!$fila): ?>
                         <p class="text-muted mb-0">
-                            Nenhuma foto na fila. Use <strong>Tirar foto pra fila</strong> no celular pra fotografar
-                            cupons/notas no corre — elas ficam aqui e você lê com a IA depois, uma a uma.
+                            Fila vazia. Use <strong>Enviar p/ caixa de entrada</strong> no compositor abaixo (PDF, XML,
+                            texto, foto/print) ou <strong>Tirar foto pra fila</strong> no celular — os itens ficam aqui e
+                            você revisa com calma depois, um a um.
                             <br><small>Dica: crie um atalho na tela inicial do iPhone apontando pra <code>financeiro_foto.php</code> pra abrir a câmera direto.</small>
                         </p>
                     <?php else: ?>
                         <div class="d-flex flex-wrap gap-3">
                             <?php foreach ($fila as $fid => $ft): ?>
+                                <?php
+                                    $ftipo = $ft['tipo'] ?? 'imagem';
+                                    $icone = ['xml' => '📄 XML', 'pdf' => '📕 PDF', 'texto' => '📝 Texto'][$ftipo] ?? '🖼️ Imagem';
+                                    $fsrc  = 'controller_financeiro.php?acao=fila_foto&id=' . urlencode($fid);
+                                ?>
                                 <div class="border rounded p-2 text-center" style="width:150px;">
-                                    <a href="controller_financeiro.php?acao=fila_foto&id=<?= urlencode($fid) ?>" target="_blank" rel="noopener">
-                                        <img src="controller_financeiro.php?acao=fila_foto&id=<?= urlencode($fid) ?>" alt="Foto da fila"
-                                             style="width:100%;height:110px;object-fit:cover;border-radius:6px;background:#f2f3f5;">
-                                    </a>
-                                    <div class="small text-muted mt-1"><?= htmlspecialchars(date('d/m H:i', strtotime((string) ($ft['recebido_em'] ?? '')))) ?></div>
+                                    <?php if ($ftipo === 'imagem'): ?>
+                                        <a href="<?= $fsrc ?>" target="_blank" rel="noopener">
+                                            <img src="<?= $fsrc ?>" alt="Imagem da fila"
+                                                 style="width:100%;height:110px;object-fit:cover;border-radius:6px;background:#f2f3f5;">
+                                        </a>
+                                    <?php elseif ($ftipo === 'texto'): ?>
+                                        <div class="d-flex align-items-center text-start small text-muted p-2"
+                                             style="height:110px;overflow:hidden;border-radius:6px;background:#f2f3f5;">
+                                            <span><?= htmlspecialchars(mb_strimwidth((string) ($ft['texto'] ?? ''), 0, 90, '…')) ?></span>
+                                        </div>
+                                    <?php else: ?>
+                                        <a href="<?= $fsrc ?>" target="_blank" rel="noopener"
+                                           class="d-flex align-items-center justify-content-center fw-semibold text-decoration-none"
+                                           style="height:110px;border-radius:6px;background:#f2f3f5;font-size:1.1rem;"><?= $icone ?></a>
+                                    <?php endif; ?>
+                                    <div class="small text-muted mt-1">
+                                        <?= htmlspecialchars(date('d/m H:i', strtotime((string) ($ft['recebido_em'] ?? '')))) ?>
+                                        <?php if (!empty($ft['instrucao'])): ?>
+                                            <span class="d-block text-truncate" title="<?= htmlspecialchars($ft['instrucao'], ENT_QUOTES) ?>">✏️ <?= htmlspecialchars($ft['instrucao']) ?></span>
+                                        <?php endif; ?>
+                                    </div>
                                     <div class="d-grid gap-1 mt-2">
                                         <a class="btn btn-primary btn-sm" href="controller_financeiro.php?acao=fila_revisar&id=<?= urlencode($fid) ?>">Revisar</a>
-                                        <a class="btn btn-outline-danger btn-sm js-confirm" href="controller_financeiro.php?acao=fila_descartar&id=<?= urlencode($fid) ?>" data-msg="Descartar esta foto da fila?">Descartar</a>
+                                        <a class="btn btn-outline-danger btn-sm js-confirm" href="controller_financeiro.php?acao=fila_descartar&id=<?= urlencode($fid) ?>" data-msg="Descartar este item da fila?">Descartar</a>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
-                        <p class="text-muted small mb-0 mt-3">A IA só roda quando você clica em <strong>Revisar</strong>. Confira os campos antes de enviar.</p>
+                        <p class="text-muted small mb-0 mt-3">A IA só roda quando você clica em <strong>Revisar</strong> (XML é lido sem IA). Confira os campos antes de enviar.</p>
                     <?php endif; ?>
                 </div>
             </div>
@@ -342,7 +364,8 @@ $datalist = function (string $id, array $opts): string {
                                 <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false">+ Anexar</button>
                                 <ul class="dropdown-menu">
                                     <li><a class="dropdown-item" href="#" id="cp-add-xml">📄 Anexar XML da nota</a></li>
-                                    <li><a class="dropdown-item" href="#" id="cp-add-foto">🖼️ Anexar foto (QR ou cupom)</a></li>
+                                    <li><a class="dropdown-item" href="#" id="cp-add-pdf">📕 Anexar PDF</a></li>
+                                    <li><a class="dropdown-item" href="#" id="cp-add-foto">🖼️ Anexar foto ou print</a></li>
                                     <li><a class="dropdown-item" href="#" id="cp-add-cam" data-bs-toggle="modal" data-bs-target="#modalCamera">📷 Escanear QR com a câmera</a></li>
                                 </ul>
                             </div>
@@ -350,13 +373,21 @@ $datalist = function (string $id, array $opts): string {
                                 <i class="align-middle" data-feather="camera"></i>
                             </button>
                         </div>
-                        <button id="cp-enviar" class="btn btn-primary" type="button">Enviar</button>
+                        <div class="d-flex gap-2">
+                            <button id="cp-fila" class="btn btn-outline-primary" type="button" title="Guardar pra revisar depois, sem ler agora">Enviar p/ caixa de entrada</button>
+                            <button id="cp-enviar" class="btn btn-primary" type="button">Analisar agora</button>
+                        </div>
                     </div>
-                    <p class="text-muted small mb-0 mt-2">Nada é lançado sem sua confirmação — o próximo passo é sempre a tela de revisão.</p>
+                    <p class="text-muted small mb-0 mt-2"><strong>Analisar agora</strong> lê na hora e abre a revisão. <strong>Enviar p/ caixa de entrada</strong> só guarda (PDF, XML, texto, foto/print) pra você revisar depois. Nada é lançado sem sua confirmação.</p>
 
                     <!-- inputs e forms ocultos -->
                     <input type="file" id="cp-file-xml" accept=".xml,text/xml,application/xml" class="d-none">
+                    <input type="file" id="cp-file-pdf" accept=".pdf,application/pdf" class="d-none">
                     <input type="file" id="cp-file-foto" accept="image/*" class="d-none">
+                    <form id="cp-form-fila" method="post" action="controller_financeiro.php?acao=fila_add" enctype="multipart/form-data" class="d-none">
+                        <input type="file" name="arquivo" id="cp-fila-arquivo">
+                        <input type="hidden" name="instrucao" id="cp-fila-instrucao">
+                    </form>
                     <form id="cp-form-xml" method="post" action="controller_financeiro.php?acao=upload" enctype="multipart/form-data" class="d-none">
                         <input type="file" name="xml" id="cp-xml-submit">
                     </form>
@@ -402,8 +433,16 @@ $datalist = function (string $id, array $opts): string {
                         + '<button type="button" class="btn-close" onclick="this.parentNode.remove()"></button></div>';
                 }
                 const fileXml = document.getElementById('cp-file-xml');
+                const filePdf = document.getElementById('cp-file-pdf');
                 const fileFoto = document.getElementById('cp-file-foto');
-                let anexoXml = null, anexoFoto = null;
+                let anexoXml = null, anexoPdf = null, anexoFoto = null;
+
+                // Só um anexo por vez: escolher um limpa os outros.
+                function limparAnexos() {
+                    anexoXml = anexoPdf = anexoFoto = null;
+                    fileXml.value = ''; filePdf.value = ''; fileFoto.value = '';
+                    if (typeof camInput !== 'undefined' && camInput) { camInput.value = ''; }
+                }
 
                 function renderChips() {
                     chips.innerHTML = '';
@@ -415,13 +454,16 @@ $datalist = function (string $id, array $opts): string {
                         chips.appendChild(s);
                     };
                     if (anexoXml) add('📄 ' + anexoXml.name, () => { anexoXml = null; fileXml.value = ''; });
+                    if (anexoPdf) add('📕 ' + anexoPdf.name, () => { anexoPdf = null; filePdf.value = ''; });
                     if (anexoFoto) add('🖼️ ' + anexoFoto.name, () => { anexoFoto = null; fileFoto.value = ''; camInput.value = ''; });
                 }
 
                 document.getElementById('cp-add-xml').onclick = (e) => { e.preventDefault(); fileXml.click(); };
+                document.getElementById('cp-add-pdf').onclick = (e) => { e.preventDefault(); filePdf.click(); };
                 document.getElementById('cp-add-foto').onclick = (e) => { e.preventDefault(); fileFoto.click(); };
-                fileXml.onchange = () => { anexoXml = fileXml.files[0] || null; anexoFoto = null; fileFoto.value=''; renderChips(); };
-                fileFoto.onchange = () => { anexoFoto = fileFoto.files[0] || null; anexoXml = null; fileXml.value=''; renderChips(); };
+                fileXml.onchange = () => { const f = fileXml.files[0] || null; limparAnexos(); anexoXml = f; renderChips(); };
+                filePdf.onchange = () => { const f = filePdf.files[0] || null; limparAnexos(); anexoPdf = f; renderChips(); };
+                fileFoto.onchange = () => { const f = fileFoto.files[0] || null; limparAnexos(); anexoFoto = f; renderChips(); };
 
                 // Lê o QR de um File (imagem) via jsQR; devolve o texto ou null.
                 function lerQrDaImagem(file) {
@@ -506,21 +548,41 @@ $datalist = function (string $id, array $opts): string {
                 camInput.onchange = () => {
                     const f = camInput.files[0];
                     if (!f) { return; }
-                    anexoFoto = f; anexoXml = null; fileXml.value = '';
+                    limparAnexos(); anexoFoto = f;
                     renderChips();
-                    showMsg('Foto anexada. Se quiser, escreva uma instrução (ex.: “vale para Matheus”) e toque em Enviar.', 'info');
+                    showMsg('Foto anexada. Se quiser, escreva uma instrução (ex.: “vale para Matheus”) e toque em Analisar agora.', 'info');
                     txt.focus();
                 };
 
                 btnEnviar.onclick = async () => {
                     if (anexoXml) { travar(); enviarXml(anexoXml); return; }
+                    if (anexoPdf) {
+                        if (IA_ON) { travar('Lendo PDF…'); enviarCupom(anexoPdf, txt.value.trim()); return; }
+                        showMsg('A leitura de PDF precisa da IA (Gemini) configurada.', 'warning');
+                        return;
+                    }
                     if (anexoFoto) { processarFoto(anexoFoto, txt.value.trim()); return; }
                     if (txt.value.trim()) {
                         if (IA_ON) { travar('Lendo…'); enviarTexto(txt.value.trim()); return; }
                         showMsg('A leitura de texto precisa da IA (Gemini) configurada.', 'warning');
                         return;
                     }
-                    showMsg('Anexe um XML, uma foto (QR) ou escreva a compra no campo de texto.', 'info');
+                    showMsg('Anexe um XML, PDF ou foto, ou escreva a compra no campo de texto.', 'info');
+                };
+
+                // "Enviar p/ caixa de entrada": guarda o anexo/texto pra revisar depois.
+                document.getElementById('cp-fila').onclick = () => {
+                    const file = anexoXml || anexoPdf || anexoFoto;
+                    const instrucao = txt.value.trim();
+                    if (!file && !instrucao) {
+                        showMsg('Anexe um arquivo (XML, PDF, foto/print) ou escreva um texto para guardar.', 'info');
+                        return;
+                    }
+                    const arqInput = document.getElementById('cp-fila-arquivo');
+                    document.getElementById('cp-fila-instrucao').value = instrucao;
+                    if (file) { const dt = new DataTransfer(); dt.items.add(file); arqInput.files = dt.files; }
+                    travar('Guardando…');
+                    document.getElementById('cp-form-fila').submit();
                 };
 
                 // ----- Câmera ao vivo (QR) -----
