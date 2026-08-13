@@ -81,6 +81,7 @@ require __DIR__ . '/_header.php';
                             <td class="text-end"><?= $c['custo_por_g'] !== null ? 'R$ ' . number_format($c['custo_por_g'], 4, ',', '.') . '/' . htmlspecialchars($un) : '—' ?></td>
                             <td class="text-end text-nowrap">
                                 <a href="ficha_receita.php?id=<?= (int) $r['id'] ?>" class="btn btn-outline-primary btn-sm">Abrir</a>
+                                <a href="ficha_receita.php?duplicar=<?= (int) $r['id'] ?>" class="btn btn-outline-secondary btn-sm" title="Duplicar esta receita">Duplicar</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>

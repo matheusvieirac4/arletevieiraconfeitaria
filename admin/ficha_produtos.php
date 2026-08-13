@@ -91,6 +91,7 @@ require __DIR__ . '/_header.php';
                             <td class="text-center"><?= $margemBadge($c['margem_pct']) ?></td>
                             <td class="text-end text-nowrap">
                                 <a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="btn btn-outline-primary btn-sm">Abrir</a>
+                                <a href="ficha_produto.php?duplicar=<?= (int) $p['id'] ?>" class="btn btn-outline-secondary btn-sm" title="Duplicar este produto">Duplicar</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>

@@ -14,14 +14,23 @@ if (!ficha_pronto($pdo)) {
 }
 
 $id = (int) ($_GET['id'] ?? 0);
-$prod = $id > 0 ? ficha_produto_buscar($pdo, $id) : null;
-if ($id > 0 && !$prod) {
+// Duplicar: carrega outro produto em MODO CRIAÇÃO (id fica 0 → nasce um novo ao
+// salvar) com " (cópia)" no nome.
+$dupId = $id === 0 ? (int) ($_GET['duplicar'] ?? 0) : 0;
+$origemId = $id > 0 ? $id : $dupId;
+
+$prod = $origemId > 0 ? ficha_produto_buscar($pdo, $origemId) : null;
+if ($origemId > 0 && !$prod) {
     require __DIR__ . '/_header.php';
     echo '<div class="alert alert-warning">Produto não encontrado.</div>';
     require __DIR__ . '/_footer.php';
     exit;
 }
-$comps = $id > 0 ? ficha_produto_componentes($pdo, $id) : [];
+$comps = $origemId > 0 ? ficha_produto_componentes($pdo, $origemId) : [];
+if ($dupId > 0 && $prod) {
+    $prod['nome'] = trim((string) $prod['nome']) . ' (cópia)';
+}
+// Histórico é da origem só quando editando (na cópia ainda não existe).
 $historico = $id > 0 ? ficha_cmv_historico($pdo, $id, 20) : [];
 
 // Itens do estoque (para o bloco Ingredientes) com custo/base.
@@ -57,7 +66,7 @@ require __DIR__ . '/_header.php';
 ?>
         <div class="d-flex align-items-center gap-2 mb-3">
             <a href="ficha_produtos.php" class="btn btn-outline-secondary btn-sm">&larr; Produtos</a>
-            <h1 class="mb-0 fs-3"><?= $id > 0 ? htmlspecialchars($prod['nome']) : 'Novo produto' ?></h1>
+            <h1 class="mb-0 fs-3"><?= $id > 0 ? htmlspecialchars($prod['nome']) : ($dupId > 0 ? 'Duplicar produto' : 'Novo produto') ?></h1>
         </div>
 
         <form method="post" action="controller_ficha.php?acao=produto_salvar">

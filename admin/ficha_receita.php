@@ -14,14 +14,22 @@ if (!ficha_pronto($pdo)) {
 }
 
 $id = (int) ($_GET['id'] ?? 0);
-$rec = $id > 0 ? ficha_receita_buscar($pdo, $id) : null;
-if ($id > 0 && !$rec) {
+// Duplicar: carrega os dados de outra receita em MODO CRIAÇÃO (id fica 0, então
+// ao salvar nasce uma nova) com " (cópia)" no nome.
+$dupId = $id === 0 ? (int) ($_GET['duplicar'] ?? 0) : 0;
+$origemId = $id > 0 ? $id : $dupId;
+
+$rec = $origemId > 0 ? ficha_receita_buscar($pdo, $origemId) : null;
+if ($origemId > 0 && !$rec) {
     require __DIR__ . '/_header.php';
     echo '<div class="alert alert-warning">Receita não encontrada.</div>';
     require __DIR__ . '/_footer.php';
     exit;
 }
-$linhas = $id > 0 ? ficha_receita_itens($pdo, $id) : [];
+$linhas = $origemId > 0 ? ficha_receita_itens($pdo, $origemId) : [];
+if ($dupId > 0 && $rec) {
+    $rec['nome'] = trim((string) $rec['nome']) . ' (cópia)';
+}
 
 // Itens do estoque para o seletor + mapa de custo/base para o cálculo ao vivo.
 $itensEstoque = estoque_listar($pdo);
@@ -44,7 +52,7 @@ require __DIR__ . '/_header.php';
 ?>
         <div class="d-flex align-items-center gap-2 mb-3">
             <a href="ficha_receitas.php" class="btn btn-outline-secondary btn-sm">&larr; Receitas</a>
-            <h1 class="mb-0 fs-3"><?= $id > 0 ? htmlspecialchars($rec['nome']) : 'Nova receita' ?></h1>
+            <h1 class="mb-0 fs-3"><?= $id > 0 ? htmlspecialchars($rec['nome']) : ($dupId > 0 ? 'Duplicar receita' : 'Nova receita') ?></h1>
         </div>
 
         <form method="post" action="controller_ficha.php?acao=receita_salvar">
