@@ -48,6 +48,11 @@ $reais = fn($n) => $n === null ? '—' : 'R$ ' . number_format((float) $n, 2, ',
 
 $flash = $_SESSION['ficha_flash'] ?? null;
 unset($_SESSION['ficha_flash']);
+$extra_head = '<link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">';
+$extra_css = '
+        #editor-preparo { min-height: 160px; background:#fff; }
+        #editor-preparo .ql-editor { font-size: 1rem; line-height: 1.5; }
+';
 require __DIR__ . '/_header.php';
 ?>
         <div class="d-flex align-items-center gap-2 mb-3">
@@ -55,7 +60,7 @@ require __DIR__ . '/_header.php';
             <h1 class="mb-0 fs-3"><?= $id > 0 ? htmlspecialchars($rec['nome']) : ($dupId > 0 ? 'Duplicar receita' : 'Nova receita') ?></h1>
         </div>
 
-        <form method="post" action="controller_ficha.php?acao=receita_salvar">
+        <form method="post" action="controller_ficha.php?acao=receita_salvar" id="form-receita">
             <input type="hidden" name="id" value="<?= $id ?>">
             <div class="row g-3 mb-4">
                 <div class="col-12 col-md-5">
@@ -116,7 +121,8 @@ require __DIR__ . '/_header.php';
 
             <div class="mb-3">
                 <label class="form-label">Modo de preparo (opcional)</label>
-                <textarea name="preparo" class="form-control" rows="3"><?= htmlspecialchars($rec['preparo'] ?? '') ?></textarea>
+                <input type="hidden" name="preparo" id="preparo">
+                <div id="editor-preparo"><?= $rec['preparo'] ?? '' ?></div>
             </div>
 
             <div class="d-flex flex-wrap gap-2">
@@ -152,6 +158,28 @@ require __DIR__ . '/_header.php';
         </div>
         <?php endif; ?>
 
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+<script>
+// Editor rich text do modo de preparo: joga o HTML no campo escondido ao enviar.
+(function () {
+    const quillPrep = new Quill('#editor-preparo', {
+        theme: 'snow',
+        placeholder: 'Passo a passo do preparo…',
+        modules: {
+            toolbar: [
+                ['bold', 'italic', 'underline'],
+                [{ list: 'ordered' }, { list: 'bullet' }],
+                ['clean'],
+            ],
+        },
+    });
+    const form = document.getElementById('form-receita');
+    form.addEventListener('submit', function () {
+        const vazio = quillPrep.getText().trim() === '';
+        document.getElementById('preparo').value = vazio ? '' : quillPrep.root.innerHTML;
+    });
+})();
+</script>
 <script>
 const MAPA_CUSTO = <?= json_encode($mapaCusto, JSON_UNESCAPED_UNICODE) ?>;
 const ITENS = <?= json_encode(array_map(fn($it) => ['id' => (int) $it['id'], 'nome' => $it['nome']], $itensEstoque), JSON_UNESCAPED_UNICODE) ?>;

@@ -59,7 +59,10 @@ $compIngred = array_values(array_filter($comps, fn($c) => $c['bloco'] === 'ingre
 $compRech   = array_values(array_filter($comps, fn($c) => $c['bloco'] === 'recheio'));
 
 $categorias = ficha_categorias_nomes($pdo, 'produto');
+$taxas = ficha_precificacao_taxas();
 $reais = fn($n) => $n === null ? '—' : 'R$ ' . number_format((float) $n, 2, ',', '.');
+$rawFator = fn($v) => $v === null ? '' : rtrim(rtrim(number_format((float) $v, 3, ',', ''), '0'), ',');
+$rawReais = fn($v) => $v === null ? '' : number_format((float) $v, 2, ',', '');
 $flash = $_SESSION['ficha_flash'] ?? null;
 unset($_SESSION['ficha_flash']);
 require __DIR__ . '/_header.php';
@@ -85,13 +88,6 @@ require __DIR__ . '/_header.php';
                             <option value="<?= htmlspecialchars($cn, ENT_QUOTES) ?>" <?= $catAtual === $cn ? 'selected' : '' ?>><?= htmlspecialchars($cn) ?></option>
                         <?php endforeach; ?>
                     </select>
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label">Preço de venda</label>
-                    <div class="input-group">
-                        <span class="input-group-text">R$</span>
-                        <input type="text" name="preco_venda" id="f-preco" class="form-control text-end" inputmode="decimal" value="<?= $prod && $prod['preco_venda'] !== null ? number_format((float) $prod['preco_venda'], 2, ',', '') : '' ?>">
-                    </div>
                 </div>
             </div>
 
@@ -125,12 +121,68 @@ require __DIR__ . '/_header.php';
             $quadro('recheio', 'Recheios (receitas)', 'Receita');
             ?>
 
-            <div class="card mb-3 bg-light">
-                <div class="card-body d-flex flex-wrap gap-4 align-items-center">
-                    <div><span class="text-muted d-block small">Custo do prato</span><span class="fs-4 fw-bold" id="custo-total">R$ 0,00</span></div>
-                    <div><span class="text-muted d-block small">Preço de venda</span><span class="fs-4" id="preco-show">—</span></div>
-                    <div class="border-start ps-4"><span class="text-muted d-block small">Margem de contribuição</span><span class="fs-4 fw-bold" id="margem-show">—</span></div>
-                    <div><span class="text-muted d-block small">CMV</span><span class="fs-4 fw-bold" id="cmv-show">—</span></div>
+            <div class="card mb-3">
+                <div class="card-header"><strong>Precificação</strong></div>
+                <div class="card-body">
+                    <!-- 1) Custos -->
+                    <div class="row g-3 align-items-end mb-2">
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted small d-block">Custo do prato</span>
+                            <span class="fs-4 fw-bold" id="custo-total">R$ 0,00</span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1">Incentivo <span class="text-muted">(cupom/campanha/di-ci)</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="text" name="incentivo" id="f-incentivo" class="form-control text-end" inputmode="decimal" placeholder="0,00" value="<?= $rawReais($prod['incentivo'] ?? null) ?>">
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted small d-block">Custo do produto <span class="text-muted">(custo + incentivo)</span></span>
+                            <span class="fs-5 fw-bold" id="custo-produto">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <hr>
+                    <!-- 2) Markups (fatores) -->
+                    <div class="row g-3 align-items-end mb-2">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1">Markup Direta <span class="text-muted">(fator)</span></label>
+                            <div class="input-group">
+                                <input type="text" name="markup_direta" id="f-mkdir" class="form-control text-end" inputmode="decimal" placeholder="Ex.: 3" value="<?= $rawFator($prod['markup_direta'] ?? null) ?>">
+                                <span class="input-group-text">×</span>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1">Markup iFood <span class="text-muted">(fator)</span></label>
+                            <div class="input-group">
+                                <input type="text" name="markup_ifood" id="f-mkif" class="form-control text-end" inputmode="decimal" placeholder="Ex.: 3" value="<?= $rawFator($prod['markup_ifood'] ?? null) ?>">
+                                <span class="input-group-text">×</span>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6 small text-muted align-self-center">
+                            Preço Direta = custo × markup direta<br>
+                            Preço iFood = ((custo × markup iFood) + incentivo) × (1 − <?= number_format($taxas['comissao_ifood'] + $taxas['taxa_pagamento'] + $taxas['antecipacao'], 2, ',', '.') ?>%)
+                            <span class="text-muted">(iFood 12% + pgto 3,2% + antec. 1,99%)</span>
+                        </div>
+                    </div>
+                    <hr>
+                    <!-- 3) Preços e resultados -->
+                    <div class="row g-3">
+                        <div class="col-12 col-md-4">
+                            <span class="text-muted small d-block">Preço Perfeito <span class="text-muted">(CMV <?= number_format($taxas['cmv_alvo'], 0) ?>%)</span></span>
+                            <span class="fs-5" id="preco-perfeito">—</span>
+                        </div>
+                        <div class="col-6 col-md-4 border-start">
+                            <span class="text-muted small d-block">Preço final Direta</span>
+                            <span class="fs-4 fw-bold text-success" id="preco-direta">—</span>
+                            <div class="small text-muted">Margem <span id="margem-direta">—</span> · CMV <span id="cmv-direta">—</span></div>
+                        </div>
+                        <div class="col-6 col-md-4 border-start">
+                            <span class="text-muted small d-block">Preço final iFood</span>
+                            <span class="fs-4 fw-bold" id="preco-ifood">—</span>
+                            <div class="small text-muted">Margem <span id="margem-ifood">—</span> · CMV <span id="cmv-ifood">—</span></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -175,6 +227,7 @@ const ITENS = <?= json_encode(array_map(fn($it) => ['id' => (int) $it['id'], 'no
 const RECEITAS = <?= json_encode(array_map(fn($r) => ['id' => (int) $r['id'], 'nome' => $r['nome']], $receitas), JSON_UNESCAPED_UNICODE) ?>;
 const PRE_INGRED = <?= json_encode(array_map(fn($c) => ['ref' => (int) $c['ref_id'], 'qtd' => (float) $c['quantidade']], $compIngred), JSON_UNESCAPED_UNICODE) ?>;
 const PRE_RECH = <?= json_encode(array_map(fn($c) => ['ref' => (int) $c['ref_id'], 'qtd' => (float) $c['quantidade']], $compRech), JSON_UNESCAPED_UNICODE) ?>;
+const TAXAS = <?= json_encode($taxas, JSON_UNESCAPED_UNICODE) ?>;
 
 function numBR(v) {
     v = String(v || '').trim().replace(/[^\d.,-]/g, '');
@@ -237,29 +290,56 @@ function recalc() {
         tbody.parentElement.querySelector('.subtotal').textContent = fmtReais(sub);
     });
     document.getElementById('custo-total').textContent = fmtReais(custoTotal);
-    const preco = numBR(document.getElementById('f-preco').value);
-    const precoShow = document.getElementById('preco-show');
-    const margemShow = document.getElementById('margem-show');
-    const cmvShow = document.getElementById('cmv-show');
-    if (preco > 0) {
-        precoShow.textContent = fmtReais(preco);
-        // Margem de contribuição = preço − custo dos insumos.
-        const margemRs = preco - custoTotal;
+    precificar(custoTotal);
+}
+
+const pct1 = n => n.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%';
+const corCmv = c => c <= 35 ? 'text-success' : (c <= 45 ? 'text-warning' : 'text-danger');
+const corMargem = m => m < 0 ? 'text-danger' : (m >= 30 ? 'text-success' : (m >= 15 ? 'text-warning' : 'text-danger'));
+
+// Espelha ficha_precificar() do PHP. "Custo" (B) = custo do prato.
+function precificar(B) {
+    const incentivo = numBR(document.getElementById('f-incentivo').value);
+    const mkDir = numBR(document.getElementById('f-mkdir').value);
+    const mkIf  = numBR(document.getElementById('f-mkif').value);
+    const feesIfood = (TAXAS.comissao_ifood + TAXAS.taxa_pagamento + TAXAS.antecipacao) / 100;
+    const cmvAlvo = TAXAS.cmv_alvo / 100;
+
+    const custoProduto = B + incentivo;
+    document.getElementById('custo-produto').textContent = fmtReais(custoProduto);
+
+    const precoPerfeito = cmvAlvo > 0 ? B / cmvAlvo : null;
+    const precoDireta = mkDir > 0 ? B * mkDir : null;
+    const precoIfood = mkIf > 0 ? ((B * mkIf) + incentivo) * (1 - feesIfood) : null;
+
+    document.getElementById('preco-perfeito').textContent = precoPerfeito != null ? fmtReais(precoPerfeito) : '—';
+    mostraCanal('direta', precoDireta, custoProduto);
+    mostraCanal('ifood', precoIfood, custoProduto);
+}
+
+// Preenche preço + margem de contribuição + CMV de um canal (direta|ifood).
+function mostraCanal(canal, preco, custoProduto) {
+    const elP = document.getElementById('preco-' + canal);
+    const elM = document.getElementById('margem-' + canal);
+    const elC = document.getElementById('cmv-' + canal);
+    if (preco != null && preco > 0) {
+        elP.textContent = fmtReais(preco);
+        const margemRs = preco - custoProduto;
         const margemPct = margemRs / preco * 100;
-        margemShow.textContent = fmtReais(margemRs) + ' (' + margemPct.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%)';
-        margemShow.className = 'fs-4 fw-bold ' + (margemRs < 0 ? 'text-danger' : (margemPct >= 30 ? 'text-success' : (margemPct >= 15 ? 'text-warning' : 'text-danger')));
-        const cmv = custoTotal / preco * 100;
-        cmvShow.textContent = cmv.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%';
-        cmvShow.className = 'fs-4 fw-bold ' + (cmv <= 35 ? 'text-success' : (cmv <= 45 ? 'text-warning' : 'text-danger'));
+        elM.textContent = fmtReais(margemRs) + ' (' + pct1(margemPct) + ')';
+        elM.className = corMargem(margemPct);
+        const cmv = custoProduto / preco * 100;
+        elC.textContent = pct1(cmv);
+        elC.className = corCmv(cmv);
     } else {
-        precoShow.textContent = '—'; margemShow.textContent = '—'; cmvShow.textContent = '—';
-        margemShow.className = cmvShow.className = 'fs-4 fw-bold';
+        elP.textContent = '—'; elM.textContent = '—'; elC.textContent = '—';
+        elM.className = elC.className = '';
     }
 }
 
 document.querySelectorAll('.add-linha').forEach(btn =>
     btn.addEventListener('click', () => novaLinha(btn.dataset.bloco)));
-document.getElementById('f-preco').addEventListener('input', recalc);
+['f-incentivo', 'f-mkdir', 'f-mkif'].forEach(id => document.getElementById(id).addEventListener('input', recalc));
 
 PRE_INGRED.forEach(c => novaLinha('ingrediente', c.ref, String(c.qtd).replace('.', ',')));
 PRE_RECH.forEach(c => novaLinha('recheio', c.ref, String(c.qtd).replace('.', ',')));

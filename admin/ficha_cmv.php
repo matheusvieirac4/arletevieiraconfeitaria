@@ -51,17 +51,17 @@ require __DIR__ . '/_header.php';
                         <tr><td colspan="7" class="text-muted text-center py-4">Nenhum produto cadastrado.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($produtos as $p):
-                        $c = ficha_produto_custo($pdo, (int) $p['id']);
+                        $c = ficha_precificar($pdo, (int) $p['id']);
                         $hist = ficha_cmv_historico($pdo, (int) $p['id'], 1);
                         $ult = $hist[0] ?? null;
-                        $cmvAtual = $c['cmv_pct'];
+                        $cmvAtual = $c['cmv_direta_pct'];
                         $cmvUlt = $ult && $ult['cmv_pct'] !== null ? (float) $ult['cmv_pct'] : null;
                         $delta = ($cmvAtual !== null && $cmvUlt !== null) ? $cmvAtual - $cmvUlt : null;
                     ?>
                         <tr>
                             <td><a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="text-decoration-none fw-semibold"><?= htmlspecialchars($p['nome']) ?></a></td>
-                            <td class="text-end"><?= $reais($c['custo_total']) ?></td>
-                            <td class="text-end"><?= $reais($c['preco_venda']) ?></td>
+                            <td class="text-end"><?= $reais($c['custo_produto']) ?></td>
+                            <td class="text-end"><?= $reais($c['preco_direta']) ?></td>
                             <td class="text-center"><?= $cmvBadge($cmvAtual) ?></td>
                             <td class="text-center"><?= $cmvUlt !== null ? number_format($cmvUlt, 1, ',', '.') . '%' : '—' ?></td>
                             <td class="text-center">

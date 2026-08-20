@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/banco.php';
 require_once __DIR__ . '/model_estoque.php';   // estoque_preco_por_base, estoque_buscar
+require_once __DIR__ . '/../includes/blog_html.php';   // blog_sanitizar_html (modo de preparo rich text)
 
 // ============================================================================
 // Ficha técnica: receitas (bases/recheios/massas) e produtos (vendáveis).
@@ -92,7 +93,7 @@ function ficha_receita_salvar(PDO $pdo, int $id, array $d): int
     $un = strtoupper(trim((string) ($d['unidade_rendimento'] ?? 'G')));
     if (!isset(estoque_unidades_medida()[$un])) { $un = 'G'; }
     $cat = ($c = trim((string) ($d['categoria'] ?? ''))) !== '' ? $c : null;
-    $prep = ($p = trim((string) ($d['preparo'] ?? ''))) !== '' ? $p : null;
+    $prep = ($p = blog_sanitizar_html((string) ($d['preparo'] ?? ''))) !== '' ? $p : null;
     $params = [':nome' => $nome, ':cat' => $cat, ':evap' => $evap, ':un' => $un, ':prep' => $prep];
     if ($id > 0) {
         $params[':id'] = $id;
@@ -225,16 +226,18 @@ function ficha_produto_salvar(PDO $pdo, int $id, array $d): int
     $nome = trim((string) ($d['nome'] ?? ''));
     if ($nome === '') { throw new InvalidArgumentException('Informe o nome do produto.'); }
     $cat = ($c = trim((string) ($d['categoria'] ?? ''))) !== '' ? $c : null;
-    $preco = estoque_num_manual($d['preco_venda'] ?? '');
-    $params = [':nome' => $nome, ':cat' => $cat, ':preco' => $preco];
+    $mkDir = estoque_num_manual($d['markup_direta'] ?? '');   // fator (1,2 / 3…)
+    $mkIf  = estoque_num_manual($d['markup_ifood'] ?? '');
+    $inc   = estoque_num_manual($d['incentivo'] ?? '');       // R$
+    $params = [':nome' => $nome, ':cat' => $cat, ':md' => $mkDir, ':mi' => $mkIf, ':inc' => $inc];
     if ($id > 0) {
         $params[':id'] = $id;
-        $pdo->prepare("UPDATE ficha_produtos SET nome=:nome, categoria=:cat, preco_venda=:preco WHERE id=:id")
-            ->execute($params);
+        $pdo->prepare("UPDATE ficha_produtos SET nome=:nome, categoria=:cat,
+                       markup_direta=:md, markup_ifood=:mi, incentivo=:inc WHERE id=:id")->execute($params);
         return $id;
     }
-    $pdo->prepare("INSERT INTO ficha_produtos (nome, categoria, preco_venda) VALUES (:nome, :cat, :preco)")
-        ->execute($params);
+    $pdo->prepare("INSERT INTO ficha_produtos (nome, categoria, markup_direta, markup_ifood, incentivo)
+                   VALUES (:nome, :cat, :md, :mi, :inc)")->execute($params);
     return (int) $pdo->lastInsertId();
 }
 
@@ -330,18 +333,83 @@ function ficha_produto_custo(PDO $pdo, int $produtoId): array
         ];
     }
 
-    // CMV = custo dos insumos ÷ preço; margem de contribuição = preço − custo.
-    $cmv = ($preco !== null && $preco > 0) ? ($custoTotal / $preco) * 100 : null;
-    $margemRs  = $preco !== null ? $preco - $custoTotal : null;
-    $margemPct = ($preco !== null && $preco > 0) ? ($margemRs / $preco) * 100 : null;
-
     return [
         'custo_total' => $custoTotal,   // "custo do prato" (B) — só insumos/receitas
-        'preco_venda' => $preco,
-        'cmv_pct'     => $cmv,
-        'margem_rs'   => $margemRs,
-        'margem_pct'  => $margemPct,
         'linhas'      => $linhas,
+    ];
+}
+
+// ---------------------------------------------------------------------------
+// PRECIFICAÇÃO
+// ---------------------------------------------------------------------------
+
+/**
+ * Taxas globais do negócio (ajuste aqui se mudarem) e alvo de CMV do "preço
+ * perfeito". Ficam no código de propósito — poucas e raramente mudam.
+ */
+function ficha_precificacao_taxas(): array
+{
+    return [
+        'comissao_ifood' => 12.0,   // %
+        'taxa_pagamento' => 3.2,    // %
+        'antecipacao'    => 1.99,   // %
+        'cmv_alvo'       => 30.0,   // % — preço perfeito = custo ÷ (cmv_alvo/100)
+    ];
+}
+
+/**
+ * Precifica um produto. "Custo" nas fórmulas = custo do prato (B, insumos).
+ * O incentivo (cupons/campanhas/di-ci/hits) entra no custo do PRODUTO e no
+ * preço iFood, conforme as fórmulas definidas:
+ *   Custo do produto  = B + incentivo
+ *   Preço perfeito    = B ÷ (cmv_alvo)              (referência p/ CMV 30%)
+ *   Preço final Direta= B × markup_direta            (markup é FATOR: 1,2 / 3…)
+ *   Preço final iFood = ((B × markup_ifood) + incentivo) × (1 − taxas_ifood)
+ * CMV e margem de contribuição são medidos contra o CUSTO DO PRODUTO (com incentivo).
+ */
+function ficha_precificar(PDO $pdo, int $produtoId): array
+{
+    $prod  = ficha_produto_buscar($pdo, $produtoId);
+    $custo = ficha_produto_custo($pdo, $produtoId);
+    $t = ficha_precificacao_taxas();
+
+    $B         = (float) $custo['custo_total'];
+    $incentivo = $prod && $prod['incentivo']     !== null ? (float) $prod['incentivo']     : 0.0;
+    $mkDir     = $prod && $prod['markup_direta']  !== null ? (float) $prod['markup_direta']  : 0.0;
+    $mkIf      = $prod && $prod['markup_ifood']   !== null ? (float) $prod['markup_ifood']   : 0.0;
+
+    $custoProduto = $B + $incentivo;
+    $feesIfood = ($t['comissao_ifood'] + $t['taxa_pagamento'] + $t['antecipacao']) / 100;
+    $cmvAlvo   = $t['cmv_alvo'] / 100;
+
+    $precoPerfeito = $cmvAlvo > 0 ? $B / $cmvAlvo : null;
+    $precoDireta   = $mkDir > 0 ? $B * $mkDir : null;
+    $precoIfood    = $mkIf  > 0 ? (($B * $mkIf) + $incentivo) * (1 - $feesIfood) : null;
+
+    $cmvDiretaPct    = ($precoDireta && $precoDireta > 0) ? $custoProduto / $precoDireta * 100 : null;
+    $margemDiretaRs  = $precoDireta !== null ? $precoDireta - $custoProduto : null;
+    $margemDiretaPct = ($precoDireta && $precoDireta > 0) ? $margemDiretaRs / $precoDireta * 100 : null;
+    $cmvIfoodPct     = ($precoIfood && $precoIfood > 0) ? $custoProduto / $precoIfood * 100 : null;
+    $margemIfoodRs   = $precoIfood !== null ? $precoIfood - $custoProduto : null;
+    $margemIfoodPct  = ($precoIfood && $precoIfood > 0) ? $margemIfoodRs / $precoIfood * 100 : null;
+
+    return [
+        'custo_prato'       => $B,
+        'incentivo'         => $incentivo,
+        'custo_produto'     => $custoProduto,
+        'markup_direta'     => $mkDir,
+        'markup_ifood'      => $mkIf,
+        'fees_ifood_pct'    => $feesIfood * 100,
+        'preco_perfeito'    => $precoPerfeito,
+        'preco_direta'      => $precoDireta,
+        'preco_ifood'       => $precoIfood,
+        'cmv_direta_pct'    => $cmvDiretaPct,
+        'margem_direta_rs'  => $margemDiretaRs,
+        'margem_direta_pct' => $margemDiretaPct,
+        'cmv_ifood_pct'     => $cmvIfoodPct,
+        'margem_ifood_rs'   => $margemIfoodRs,
+        'margem_ifood_pct'  => $margemIfoodPct,
+        'linhas'            => $custo['linhas'],
     ];
 }
 
@@ -352,14 +420,14 @@ function ficha_produto_custo(PDO $pdo, int $produtoId): array
 /** Congela o custo/CMV atual de um PRODUTO no histórico. */
 function ficha_cmv_registrar(PDO $pdo, int $produtoId, string $responsavel = '', string $motivo = 'manual', string $obs = ''): void
 {
-    $c = ficha_produto_custo($pdo, $produtoId);
+    $c = ficha_precificar($pdo, $produtoId);
     $pdo->prepare("INSERT INTO ficha_cmv_snapshots (tipo, ref_id, custo, preco_venda, cmv_pct, motivo, responsavel, observacao)
                    VALUES ('produto', :p, :c, :v, :m, :mo, :r, :o)")
         ->execute([
             ':p' => $produtoId,
-            ':c' => round($c['custo_total'], 4),
-            ':v' => $c['preco_venda'] !== null ? round($c['preco_venda'], 2) : null,
-            ':m' => $c['cmv_pct'] !== null ? round($c['cmv_pct'], 2) : null,
+            ':c' => round($c['custo_produto'], 4),
+            ':v' => $c['preco_direta'] !== null ? round($c['preco_direta'], 2) : null,
+            ':m' => $c['cmv_direta_pct'] !== null ? round($c['cmv_direta_pct'], 2) : null,
             ':mo' => $motivo !== '' ? $motivo : null,
             ':r' => $responsavel !== '' ? $responsavel : null,
             ':o' => $obs !== '' ? mb_substr($obs, 0, 250) : null,

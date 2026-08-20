@@ -68,7 +68,7 @@ require __DIR__ . '/_header.php';
                             <th>Produto</th>
                             <th>Categoria</th>
                             <th class="text-end">Custo</th>
-                            <th class="text-end">Preço venda</th>
+                            <th class="text-end">Preço Direta</th>
                             <th class="text-center">CMV</th>
                             <th class="text-center">Margem contrib.</th>
                             <th class="text-end">Ações</th>
@@ -79,16 +79,16 @@ require __DIR__ . '/_header.php';
                         <tr><td colspan="8" class="text-muted text-center py-4">Nenhum produto cadastrado.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($produtos as $p):
-                        $c = ficha_produto_custo($pdo, (int) $p['id']);
+                        $c = ficha_precificar($pdo, (int) $p['id']);
                     ?>
                         <tr>
                             <td><input type="checkbox" class="form-check-input check-item" value="<?= (int) $p['id'] ?>"></td>
                             <td><a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="text-decoration-none fw-semibold"><?= htmlspecialchars($p['nome']) ?></a></td>
                             <td class="text-muted"><?= htmlspecialchars($p['categoria'] ?? '—') ?></td>
-                            <td class="text-end"><?= $reais($c['custo_total']) ?></td>
-                            <td class="text-end fw-semibold"><?= $reais($c['preco_venda']) ?></td>
-                            <td class="text-center"><?= $cmvBadge($c['cmv_pct']) ?></td>
-                            <td class="text-center"><?= $margemBadge($c['margem_pct']) ?></td>
+                            <td class="text-end"><?= $reais($c['custo_produto']) ?></td>
+                            <td class="text-end fw-semibold"><?= $reais($c['preco_direta']) ?></td>
+                            <td class="text-center"><?= $cmvBadge($c['cmv_direta_pct']) ?></td>
+                            <td class="text-center"><?= $margemBadge($c['margem_direta_pct']) ?></td>
                             <td class="text-end text-nowrap">
                                 <a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="btn btn-outline-primary btn-sm">Abrir</a>
                                 <a href="ficha_produto.php?duplicar=<?= (int) $p['id'] ?>" class="btn btn-outline-secondary btn-sm" title="Duplicar este produto">Duplicar</a>

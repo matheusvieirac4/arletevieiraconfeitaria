@@ -51,6 +51,9 @@ $esc = fn($s) => htmlspecialchars((string) $s);
     .cmv { display: inline-block; padding: 2px 10px; border-radius: 10px; color: #fff; font-weight: bold; }
     .cmv.ok { background: #2e7d5b; } .cmv.med { background: #b8860b; } .cmv.alto { background: #c0392b; }
     .vazio { text-align: center; color: #999; padding: 40px; }
+    .preparo { line-height: 1.5; }
+    .preparo p { margin: 4px 0; }
+    .preparo ul, .preparo ol { margin: 4px 0; padding-left: 22px; }
     .rodape { color: #999; font-size: 10px; text-align: right; margin-top: 6px; }
     @media print {
         body { padding: 0; }
@@ -118,7 +121,7 @@ $linkOutroModo = 'ficha_pdf.php?tipo=' . $tipo . $qsIds . '&modo=' . ($mostrarCu
         </table>
         <?php if (!empty($rec['preparo'])): ?>
             <div class="sec">Modo de preparo</div>
-            <p style="white-space:pre-wrap;margin:6px 2px;"><?= $esc($rec['preparo']) ?></p>
+            <div class="preparo" style="margin:6px 2px;"><?= blog_sanitizar_html((string) $rec['preparo']) ?></div>
         <?php endif; ?>
         <div class="rodape">Gerado em <?= date('d/m/Y H:i') ?><?= $mostrarCusto ? ' · custo com preços atuais do estoque' : '' ?></div>
     </div>
@@ -127,8 +130,8 @@ $linkOutroModo = 'ficha_pdf.php?tipo=' . $tipo . $qsIds . '&modo=' . ($mostrarCu
     <?php foreach ($ids as $pid):
         $prod = ficha_produto_buscar($pdo, $pid);
         if (!$prod) { continue; }
-        $c = ficha_produto_custo($pdo, $pid);
-        $cmv = $c['cmv_pct'];
+        $c = ficha_precificar($pdo, $pid);
+        $cmv = $c['cmv_direta_pct'];
         $cmvCls = $cmv === null ? '' : ($cmv <= 35 ? 'ok' : ($cmv <= 45 ? 'med' : 'alto'));
     ?>
     <div class="ficha">
@@ -141,9 +144,12 @@ $linkOutroModo = 'ficha_pdf.php?tipo=' . $tipo . $qsIds . '&modo=' . ($mostrarCu
         </div>
         <?php if ($mostrarCusto): ?>
         <div class="resumo">
-            <div class="box"><div class="rot">Custo do prato</div><div class="val"><?= $reais($c['custo_total']) ?></div></div>
-            <div class="box"><div class="rot">Preço de venda</div><div class="val"><?= $reais($c['preco_venda']) ?></div></div>
-            <div class="box"><div class="rot">Margem contrib.</div><div class="val"><?= $c['margem_pct'] !== null ? number_format($c['margem_pct'], 1, ',', '.') . '%' : '—' ?></div></div>
+            <div class="box"><div class="rot">Custo do prato</div><div class="val"><?= $reais($c['custo_prato']) ?></div></div>
+            <?php if ($c['incentivo'] > 0): ?><div class="box"><div class="rot">Incentivo</div><div class="val"><?= $reais($c['incentivo']) ?></div></div>
+            <div class="box"><div class="rot">Custo do produto</div><div class="val"><?= $reais($c['custo_produto']) ?></div></div><?php endif; ?>
+            <div class="box"><div class="rot">Preço Direta</div><div class="val"><?= $reais($c['preco_direta']) ?></div></div>
+            <?php if ($c['preco_ifood'] !== null): ?><div class="box"><div class="rot">Preço iFood</div><div class="val"><?= $reais($c['preco_ifood']) ?></div></div><?php endif; ?>
+            <div class="box"><div class="rot">Margem contrib. (Direta)</div><div class="val"><?= $c['margem_direta_pct'] !== null ? number_format($c['margem_direta_pct'], 1, ',', '.') . '%' : '—' ?></div></div>
             <div class="box"><div class="rot">CMV</div><div class="val"><?php if ($cmv === null): ?>—<?php else: ?><span class="cmv <?= $cmvCls ?>"><?= number_format($cmv, 1, ',', '.') ?>%</span><?php endif; ?></div></div>
         </div>
         <?php endif; ?>

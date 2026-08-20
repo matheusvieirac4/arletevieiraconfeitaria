@@ -189,6 +189,13 @@ try {
         } else {
             $log[] = '..  colunas de precificação já existem em ficha_produtos.';
         }
+        // Incentivo (cupons/campanhas/di-ci/hits): R$ somado ao custo do produto.
+        if (!$pdo->query("SHOW COLUMNS FROM ficha_produtos LIKE 'incentivo'")->fetch()) {
+            $pdo->exec("ALTER TABLE ficha_produtos ADD COLUMN incentivo DECIMAL(10,2) NULL AFTER markup_ifood");
+            $log[] = 'OK  coluna incentivo adicionada em ficha_produtos.';
+        } else {
+            $log[] = '..  coluna incentivo já existe em ficha_produtos.';
+        }
     } catch (\Throwable $e) {
         $log[] = 'ERRO ao migrar precificação: ' . $e->getMessage();
     }
