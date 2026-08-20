@@ -364,7 +364,7 @@ function ficha_precificacao_taxas(): array
  *   Custo do produto  = B + incentivo
  *   Preço perfeito    = B ÷ (cmv_alvo)              (referência p/ CMV 30%)
  *   Preço final Direta= B × markup_direta            (markup é FATOR: 1,2 / 3…)
- *   Preço final iFood = ((B × markup_ifood) + incentivo) × (1 − taxas_ifood)
+ *   Preço final iFood = ((B × markup_ifood) + incentivo) ÷ (1 − taxas_ifood)
  * CMV e margem de contribuição são medidos contra o CUSTO DO PRODUTO (com incentivo).
  */
 function ficha_precificar(PDO $pdo, int $produtoId): array
@@ -384,7 +384,7 @@ function ficha_precificar(PDO $pdo, int $produtoId): array
 
     $precoPerfeito = $cmvAlvo > 0 ? $B / $cmvAlvo : null;
     $precoDireta   = $mkDir > 0 ? $B * $mkDir : null;
-    $precoIfood    = $mkIf  > 0 ? (($B * $mkIf) + $incentivo) * (1 - $feesIfood) : null;
+    $precoIfood    = ($mkIf > 0 && $feesIfood < 1) ? (($B * $mkIf) + $incentivo) / (1 - $feesIfood) : null;
 
     $cmvDiretaPct    = ($precoDireta && $precoDireta > 0) ? $custoProduto / $precoDireta * 100 : null;
     $margemDiretaRs  = $precoDireta !== null ? $precoDireta - $custoProduto : null;

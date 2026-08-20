@@ -161,7 +161,7 @@ require __DIR__ . '/_header.php';
                         </div>
                         <div class="col-12 col-md-6 small text-muted align-self-center">
                             Preço Direta = custo × markup direta<br>
-                            Preço iFood = ((custo × markup iFood) + incentivo) × (1 − <?= number_format($taxas['comissao_ifood'] + $taxas['taxa_pagamento'] + $taxas['antecipacao'], 2, ',', '.') ?>%)
+                            Preço iFood = ((custo × markup iFood) + incentivo) ÷ (1 − <?= number_format($taxas['comissao_ifood'] + $taxas['taxa_pagamento'] + $taxas['antecipacao'], 2, ',', '.') ?>%)
                             <span class="text-muted">(iFood 12% + pgto 3,2% + antec. 1,99%)</span>
                         </div>
                     </div>
@@ -310,7 +310,7 @@ function precificar(B) {
 
     const precoPerfeito = cmvAlvo > 0 ? B / cmvAlvo : null;
     const precoDireta = mkDir > 0 ? B * mkDir : null;
-    const precoIfood = mkIf > 0 ? ((B * mkIf) + incentivo) * (1 - feesIfood) : null;
+    const precoIfood = (mkIf > 0 && feesIfood < 1) ? ((B * mkIf) + incentivo) / (1 - feesIfood) : null;
 
     document.getElementById('preco-perfeito').textContent = precoPerfeito != null ? fmtReais(precoPerfeito) : '—';
     mostraCanal('direta', precoDireta, custoProduto);
