@@ -85,6 +85,20 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     .kx-standby.show { display: flex; }
     .kx-standby .zzz { font-size: 3rem; opacity: .85; }
     .kx-standby .txt { margin-top: 12px; font-size: 1.05rem; letter-spacing: .02em; }
+
+    /* Alarme de despacho de entrega — acima de TUDO (inclusive stand-by z=60). */
+    .kx-alarme { position: fixed; inset: 0; z-index: 70; background: #e74c3c; color: #fff; display: none;
+                 flex-direction: column; align-items: center; justify-content: center; text-align: center;
+                 padding: 24px; animation: kxpisca 1s steps(1) infinite; }
+    .kx-alarme.show { display: flex; }
+    @keyframes kxpisca { 50% { background: #b83227; } }
+    .kx-alarme .selo { font-size: 1.3rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; opacity: .95; }
+    .kx-alarme .cli { font-size: clamp(2.4rem, 9vw, 5rem); font-weight: 900; line-height: 1.05; margin: 10px 0; }
+    .kx-alarme .sub { font-size: clamp(1.2rem, 4vw, 2rem); font-weight: 700; }
+    .kx-alarme .end { font-size: 1.15rem; opacity: .92; margin-top: 10px; }
+    .kx-alarme .parar { margin-top: 40px; font-size: 1.7rem; font-weight: 900; padding: 24px 44px; border-radius: 22px;
+                        border: 4px solid #fff; background: rgba(255,255,255,.14); color: #fff; }
+    .kx-alarme .fila { margin-top: 16px; font-size: 1rem; opacity: .85; min-height: 1.2em; }
 </style>
 </head>
 <body>
@@ -819,6 +833,149 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     carregarNomes();
     if (_debug) { const d = document.getElementById('dbg'); if (d) { d.style.display = 'block'; d.textContent = 'debug ligado…'; } }
     // A câmera NÃO liga aqui: só abre quando o colaborador entra com o PIN (voltarParaScan).
+})();
+</script>
+
+<!-- ===== Alarme de despacho de entregas (roda em 2º plano sobre o quiosque) ===== -->
+<div class="kx-alarme" id="ov-alarme">
+    <div class="selo">🚚 Despachar entrega</div>
+    <div class="cli" id="al-cli">—</div>
+    <div class="sub" id="al-sub">—</div>
+    <div class="end" id="al-end"></div>
+    <button type="button" class="parar" id="al-parar">✓ Já vi — parar alarme</button>
+    <div class="fila" id="al-fila"></div>
+</div>
+<script>
+// Fica varrendo os pedidos do Cardápio Web (via pedidos_api.php). Quando uma
+// entrega cruza um limiar (padrão 30 e 5 min antes do despacho), toma a tela
+// com alarme sonoro. Sem painel: o acompanhamento é feito no próprio CW.
+// Ativar teste com dados falsos: estoque_kiosk.php?entregas_mock=1
+(function () {
+    const params = new URLSearchParams(location.search);
+    const MOCK = params.has('entregas_mock');
+    const INTERVALO = Math.max(5, parseInt(params.get('entregas_intervalo') || '20', 10)) * 1000;
+    const API = 'pedidos_api.php?acao=alertas' + (MOCK ? '&mock=1' : '');
+
+    const el = id => document.getElementById(id);
+    const ov = el('ov-alarme');
+
+    let avisos = [30, 5];
+    let pedidos = [];
+    let audioCtx = null, alarmeTimer = null, ativoKey = null;
+    const fila = [];
+
+    // Reconhecidos (pedido:estágio) já vistos — persiste p/ não repetir; esquece após 12h.
+    const RKEY = 'despacho_reconhecidos';
+    let reconhecidos = (function () {
+        try {
+            const o = JSON.parse(localStorage.getItem(RKEY) || '{}');
+            const lim = Date.now() - 12 * 3600 * 1000, limpo = {};
+            for (const k in o) { if (o[k] > lim) limpo[k] = o[k]; }
+            localStorage.setItem(RKEY, JSON.stringify(limpo));
+            return limpo;
+        } catch (e) { return {}; }
+    })();
+    function marcar(key) {
+        reconhecidos[key] = Date.now();
+        try { localStorage.setItem(RKEY, JSON.stringify(reconhecidos)); } catch (e) {}
+    }
+
+    // Áudio destravado no 1º toque na tela (política de autoplay).
+    function destravarAudio() {
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioCtx.resume();
+        } catch (e) {}
+        document.removeEventListener('touchend', destravarAudio, true);
+        document.removeEventListener('click', destravarAudio, true);
+    }
+    document.addEventListener('touchend', destravarAudio, true);
+    document.addEventListener('click', destravarAudio, true);
+
+    // Um "pip" curto (uma nota). start/dur em segundos, relativos ao contexto.
+    function pip(freq, start, dur) {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = 'square'; o.frequency.setValueAtTime(freq, start);
+        g.gain.setValueAtTime(0.0001, start);
+        g.gain.exponentialRampToValueAtTime(0.5, start + 0.01);   // ataque rápido
+        g.gain.setValueAtTime(0.5, start + dur - 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, start + dur); // corte limpo
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(start); o.stop(start + dur + 0.02);
+    }
+
+    // Alarme estilo despertador: uma rajada de 4 bipes alternando grave/agudo.
+    // Chamado em loop (~1.1s) enquanto o overlay está aberto. Dura ~0.66s.
+    function beep() {
+        if (!audioCtx) return;
+        if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+        const t = audioCtx.currentTime + 0.02;
+        const dur = 0.09, gap = 0.075;
+        const tons = [1046, 784, 1046, 784];   // dó agudo / sol — "bi-bo bi-bo"
+        tons.forEach((f, i) => pip(f, t + i * (dur + gap), dur));
+    }
+
+    function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+    function estagioDe(restam) { let e = null; for (const l of avisos) { if (restam <= l) e = l; } return e; }
+
+    // A cada segundo: recalcula quem cruzou limiar e enfileira alarme.
+    function tick() {
+        const agora = Date.now();
+        for (const p of pedidos) {
+            const restam = Math.floor((new Date(p.despacho_em).getTime() - agora) / 60000);
+            const est = estagioDe(restam);
+            if (est === null) continue;
+            const key = p.id + ':' + est;
+            // No teste (mock) ignora os "reconhecidos" p/ sempre disparar.
+            if ((!MOCK && reconhecidos[key]) || ativoKey === key || fila.some(f => f.key === key)) continue;
+            fila.push({
+                key, cli: p.cliente,
+                sub: (est <= 5 ? 'Sai em ' + Math.max(restam, 0) + ' min' : 'Faltam ' + restam + ' min')
+                     + (p.resumo ? ' · ' + p.resumo : ''),
+                end: p.endereco || ''
+            });
+        }
+        processarFila();
+    }
+
+    function processarFila() {
+        if (ativoKey !== null || fila.length === 0) return;
+        const a = fila.shift();
+        ativoKey = a.key;
+        el('al-cli').textContent = a.cli;
+        el('al-sub').textContent = a.sub;
+        el('al-end').textContent = a.end ? '📍 ' + a.end : '';
+        el('al-fila').textContent = fila.length ? ('+' + fila.length + ' outro(s) alerta(s) em espera') : '';
+        ov.classList.add('show');
+        if (window.__wakeSegurar) { window.__wakeSegurar(); }   // segura a tela acesa
+        beep();
+        clearInterval(alarmeTimer);
+        alarmeTimer = setInterval(beep, 1100);
+    }
+
+    function parar() {
+        if (ativoKey !== null) marcar(ativoKey);
+        clearInterval(alarmeTimer); alarmeTimer = null;
+        ov.classList.remove('show');
+        ativoKey = null;
+        processarFila();   // mostra o próximo, se houver
+    }
+    el('al-parar').addEventListener('click', parar);
+    el('al-parar').addEventListener('touchend', function (e) { e.preventDefault(); parar(); }, { passive: false });
+
+    async function buscar() {
+        try {
+            const r = await fetch(API, { cache: 'no-store' });
+            const j = await r.json();
+            if (j.error) { return; }   // CW não configurado/mapeado ainda: fica quieto
+            pedidos = j.pedidos || [];
+            if (Array.isArray(j.config?.avisos_min) && j.config.avisos_min.length) avisos = j.config.avisos_min;
+        } catch (e) { /* sem conexão: tenta no próximo ciclo */ }
+    }
+
+    buscar();
+    setInterval(buscar, INTERVALO);
+    setInterval(tick, 1000);
 })();
 </script>
 </body>

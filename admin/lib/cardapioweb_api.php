@@ -23,6 +23,7 @@ class CardapioWebApi
 {
     private const API_BASE      = 'https://api.cardapioweb.com/api/v2';
     private const AUTH_URL      = 'https://dashboard.cardapioweb.com/api/v2/auth/token';
+    private const ORDERS_URL    = 'https://dashboard.cardapioweb.com/api/v1/company/orders';
     private const PORTAL_ORIGIN = 'https://portal.cardapioweb.com';
 
     private string $companyId;
@@ -141,6 +142,29 @@ class CardapioWebApi
     public function listarFormasPagamento(): array  { return $this->get('/financial/payment_methods'); }
     public function listarCentrosCusto(): array     { return $this->get('/financial/cost_centers'); }
     public function listarFornecedores(): array     { return $this->get('/financial/suppliers?per_page=1000'); }
+
+    /**
+     * Lista pedidos da loja (para os alertas de despacho de entregas).
+     * Endpoint mapeado por DevTools (2026-08-21): fica em OUTRO host/versão
+     * (dashboard.cardapioweb.com/api/v1) — por isso não usa apiRequest().
+     * Resposta: array de pedidos com order_type, status, scheduled_date,
+     * scheduled_period, client_name, estimated_time, etc.
+     *
+     * @param array $query filtros opcionais de querystring
+     */
+    public function listarPedidos(array $query = []): array
+    {
+        $url = self::ORDERS_URL . ($query ? ('?' . http_build_query($query)) : '');
+        $headers = [
+            'authorization: ' . $this->getAccessToken(),   // JWT cru, SEM "Bearer"
+            'companyid: ' . $this->companyId,
+            'accept: application/json, text/plain, */*',
+            'origin: ' . self::PORTAL_ORIGIN,
+            'referer: ' . self::PORTAL_ORIGIN . '/',
+        ];
+        [$status, $resp] = $this->curl('GET', $url, null, $headers);
+        return $this->decode($status, $resp, 'GET company/orders');
+    }
 
     /** Importa lançamentos no formato do CW. Envelope esperado: {"data":[...]}. */
     public function importarLancamentos(array $lancamentos): array
