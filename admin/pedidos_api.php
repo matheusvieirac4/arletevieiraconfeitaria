@@ -19,8 +19,10 @@ $acao = $_GET['acao'] ?? 'alertas';
 
 if ($acao === 'alertas') {
     $mock = !empty($_GET['mock']);
+    // ?janela=NNN (min) só p/ conferência manual — vê entregas mais adiante do dia.
+    $janela = isset($_GET['janela']) ? (int) $_GET['janela'] : null;
     try {
-        pedidos_api_out(pedidos_alertas($mock));
+        pedidos_api_out(pedidos_alertas($mock, null, $janela));
     } catch (\Throwable $e) {
         // Não derruba o quiosque: devolve erro legível para a tela exibir
         // discretamente (o alarme continua valendo p/ o que já carregou).

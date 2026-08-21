@@ -45,13 +45,18 @@ function pedidos_alertas_config(): array
 /**
  * Devolve as entregas a despachar já normalizadas e com o cálculo de tempo.
  * $agora = timestamp de referência (default: agora). $mock força dados falsos.
+ * $janelaOverride = quando informado, sobrepõe alertas_janela_min (útil só p/
+ * conferência: ver as entregas mais adiante do dia sem esperar o horário).
  *
  * @return array{agora:string, config:array, pedidos:array<int,array>}
  */
-function pedidos_alertas(bool $mock = false, ?int $agora = null): array
+function pedidos_alertas(bool $mock = false, ?int $agora = null, ?int $janelaOverride = null): array
 {
     $agora = $agora ?? time();
     $cfg   = pedidos_alertas_config();
+    if ($janelaOverride !== null && $janelaOverride > 0) {
+        $cfg['janela_min'] = $janelaOverride;
+    }
 
     $brutos = $mock ? pedidos_mock($agora) : pedidos_buscar_entregas_cw($cfg);
 
