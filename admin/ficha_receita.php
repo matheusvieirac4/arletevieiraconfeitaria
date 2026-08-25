@@ -206,10 +206,16 @@ function novaLinha(itemId = 0, qtd = '') {
         <td><select name="item_id[]" class="form-select form-select-sm sel-item">${optionsHtml(itemId)}</select></td>
         <td class="text-end"><input type="text" name="quantidade[]" class="form-control form-control-sm text-end inp-qtd" inputmode="decimal" value="${qtd}"></td>
         <td class="text-end custo-linha">—</td>
-        <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger del-linha">×</button></td>`;
+        <td class="text-end text-nowrap">
+            <button type="button" class="btn btn-sm btn-outline-secondary up-linha" title="Subir">↑</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary down-linha" title="Descer">↓</button>
+            <button type="button" class="btn btn-sm btn-outline-danger del-linha">×</button>
+        </td>`;
     document.getElementById('linhas').appendChild(tr);
     tr.querySelector('.sel-item').addEventListener('change', recalc);
     tr.querySelector('.inp-qtd').addEventListener('input', recalc);
+    tr.querySelector('.up-linha').addEventListener('click', () => { const p = tr.previousElementSibling; if (p) tr.parentNode.insertBefore(tr, p); recalc(); });
+    tr.querySelector('.down-linha').addEventListener('click', () => { const n = tr.nextElementSibling; if (n) tr.parentNode.insertBefore(n, tr); recalc(); });
     tr.querySelector('.del-linha').addEventListener('click', () => { tr.remove(); recalc(); });
     return tr;
 }
