@@ -32,6 +32,45 @@ $cat   = trim((string) ($_GET['categoria'] ?? ''));
 $produtos = ficha_produtos_listar($pdo, $busca, $cat);
 $categorias = ficha_categorias_nomes($pdo, 'produto');
 
+// Ordenação (as colunas de valor são calculadas, então ordenamos em PHP).
+$colsOrd = ['nome', 'categoria', 'custo', 'preco', 'cmv', 'margem'];
+$ordem = in_array($_GET['ordem'] ?? '', $colsOrd, true) ? $_GET['ordem'] : 'nome';
+$dir   = (strtolower($_GET['dir'] ?? '') === 'desc') ? 'desc' : 'asc';
+
+// Pré-calcula a precificação de cada produto e ordena.
+$rows = [];
+foreach ($produtos as $p) {
+    $rows[] = ['p' => $p, 'c' => ficha_precificar($pdo, (int) $p['id'])];
+}
+$valorOrd = function (array $row, string $col) {
+    $p = $row['p']; $c = $row['c'];
+    switch ($col) {
+        case 'categoria': return mb_strtolower((string) ($p['categoria'] ?? ''), 'UTF-8');
+        case 'custo':     return $c['custo_prato'];
+        case 'preco':     return $c['preco_direta'];
+        case 'cmv':       return $c['cmv_direta_pct'];
+        case 'margem':    return $c['margem_direta_pct'];
+        default:          return mb_strtolower((string) $p['nome'], 'UTF-8');
+    }
+};
+usort($rows, function ($a, $b) use ($valorOrd, $ordem, $dir) {
+    $va = $valorOrd($a, $ordem); $vb = $valorOrd($b, $ordem);
+    // Sem valor (null) vai sempre para o fim, independente da direção.
+    if ($va === null && $vb === null) { return 0; }
+    if ($va === null) { return 1; }
+    if ($vb === null) { return -1; }
+    $cmp = is_string($va) ? strnatcasecmp($va, $vb) : ($va <=> $vb);
+    return $dir === 'desc' ? -$cmp : $cmp;
+});
+
+// Link de ordenação de uma coluna (alterna direção, mostra a seta).
+$linkOrdem = function (string $col, string $rot) use ($ordem, $dir, $busca, $cat) {
+    $novaDir = ($ordem === $col && $dir === 'asc') ? 'desc' : 'asc';
+    $seta = $ordem === $col ? ($dir === 'asc' ? ' ▲' : ' ▼') : '';
+    $qs = http_build_query(array_filter(['busca' => $busca, 'categoria' => $cat, 'ordem' => $col, 'dir' => $novaDir]));
+    return '<a href="ficha_produtos.php?' . htmlspecialchars($qs) . '" class="text-decoration-none text-reset">' . htmlspecialchars($rot) . $seta . '</a>';
+};
+
 $flash = $_SESSION['ficha_flash'] ?? null;
 unset($_SESSION['ficha_flash']);
 require __DIR__ . '/_header.php';
@@ -45,6 +84,8 @@ require __DIR__ . '/_header.php';
         </div>
 
         <form method="get" class="row g-2 mb-3" style="max-width:760px;">
+            <input type="hidden" name="ordem" value="<?= htmlspecialchars($ordem) ?>">
+            <input type="hidden" name="dir" value="<?= htmlspecialchars($dir) ?>">
             <div class="col-12 col-md">
                 <input type="text" name="busca" class="form-control" placeholder="Buscar por nome" value="<?= htmlspecialchars($busca) ?>">
             </div>
@@ -65,22 +106,20 @@ require __DIR__ . '/_header.php';
                     <thead>
                         <tr>
                             <th style="width:34px"><input type="checkbox" id="check-all" class="form-check-input"></th>
-                            <th>Produto</th>
-                            <th>Categoria</th>
-                            <th class="text-end">Custo</th>
-                            <th class="text-end">Preço Direta</th>
-                            <th class="text-center">CMV</th>
-                            <th class="text-center">Margem contrib.</th>
+                            <th><?= $linkOrdem('nome', 'Produto') ?></th>
+                            <th><?= $linkOrdem('categoria', 'Categoria') ?></th>
+                            <th class="text-end"><?= $linkOrdem('custo', 'Custo') ?></th>
+                            <th class="text-end"><?= $linkOrdem('preco', 'Preço Direta') ?></th>
+                            <th class="text-center"><?= $linkOrdem('cmv', 'CMV') ?></th>
+                            <th class="text-center"><?= $linkOrdem('margem', 'Margem contrib.') ?></th>
                             <th class="text-end">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
-                    <?php if (!$produtos): ?>
+                    <?php if (!$rows): ?>
                         <tr><td colspan="8" class="text-muted text-center py-4">Nenhum produto cadastrado.</td></tr>
                     <?php endif; ?>
-                    <?php foreach ($produtos as $p):
-                        $c = ficha_precificar($pdo, (int) $p['id']);
-                    ?>
+                    <?php foreach ($rows as $row): $p = $row['p']; $c = $row['c']; ?>
                         <tr>
                             <td><input type="checkbox" class="form-check-input check-item" value="<?= (int) $p['id'] ?>"></td>
                             <td><a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="text-decoration-none fw-semibold"><?= htmlspecialchars($p['nome']) ?></a></td>
@@ -99,7 +138,7 @@ require __DIR__ . '/_header.php';
                 </table>
             </div>
         </div>
-        <p class="text-muted small mt-2"><?= count($produtos) ?> produto(s)<?= ($busca || $cat) ? ' (filtrado)' : '' ?>. CMV: <span class="badge bg-success">≤35%</span> <span class="badge bg-warning text-dark">≤45%</span> <span class="badge bg-danger">&gt;45%</span></p>
+        <p class="text-muted small mt-2"><?= count($rows) ?> produto(s)<?= ($busca || $cat) ? ' (filtrado)' : '' ?>. CMV: <span class="badge bg-success">≤35%</span> <span class="badge bg-warning text-dark">≤45%</span> <span class="badge bg-danger">&gt;45%</span></p>
 <script>
 // Seleção múltipla → abre o PDF com os produtos escolhidos (um por folha).
 (function () {
