@@ -173,14 +173,20 @@ require __DIR__ . '/_header.php';
                             <span class="fs-5" id="preco-perfeito">—</span>
                         </div>
                         <div class="col-6 col-md-4 border-start">
-                            <span class="text-muted small d-block">Preço final Direta</span>
-                            <span class="fs-4 fw-bold text-success" id="preco-direta">—</span>
-                            <div class="small text-muted">Margem <span id="margem-direta">—</span> · CMV <span id="cmv-direta">—</span></div>
+                            <label class="form-label small mb-1 d-block">Preço final Direta <span class="text-muted">(editável)</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="text" id="f-preco-direta" class="form-control fw-bold text-success" inputmode="decimal" placeholder="—">
+                            </div>
+                            <div class="small text-muted mt-1">Margem <span id="margem-direta">—</span> · CMV <span id="cmv-direta">—</span></div>
                         </div>
                         <div class="col-6 col-md-4 border-start">
-                            <span class="text-muted small d-block">Preço final iFood</span>
-                            <span class="fs-4 fw-bold" id="preco-ifood">—</span>
-                            <div class="small text-muted">Margem <span id="margem-ifood">—</span> · CMV <span id="cmv-ifood">—</span></div>
+                            <label class="form-label small mb-1 d-block">Preço final iFood <span class="text-muted">(editável)</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="text" id="f-preco-ifood" class="form-control fw-bold" inputmode="decimal" placeholder="—">
+                            </div>
+                            <div class="small text-muted mt-1">Margem <span id="margem-ifood">—</span> · CMV <span id="cmv-ifood">—</span></div>
                         </div>
                     </div>
                 </div>
@@ -228,6 +234,7 @@ const RECEITAS = <?= json_encode(array_map(fn($r) => ['id' => (int) $r['id'], 'n
 const PRE_INGRED = <?= json_encode(array_map(fn($c) => ['ref' => (int) $c['ref_id'], 'qtd' => (float) $c['quantidade']], $compIngred), JSON_UNESCAPED_UNICODE) ?>;
 const PRE_RECH = <?= json_encode(array_map(fn($c) => ['ref' => (int) $c['ref_id'], 'qtd' => (float) $c['quantidade']], $compRech), JSON_UNESCAPED_UNICODE) ?>;
 const TAXAS = <?= json_encode($taxas, JSON_UNESCAPED_UNICODE) ?>;
+let custoPrato = 0;   // custo do prato (B) — atualizado a cada recalc
 
 function numBR(v) {
     v = String(v || '').trim().replace(/[^\d.,-]/g, '');
@@ -296,56 +303,87 @@ function recalc() {
         tbody.parentElement.querySelector('.subtotal').textContent = fmtReais(sub);
     });
     document.getElementById('custo-total').textContent = fmtReais(custoTotal);
-    precificar(custoTotal);
+    custoPrato = custoTotal;
+    doMarkupParaPreco();
 }
 
 const pct1 = n => n.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%';
 const corCmv = c => c <= 35 ? 'text-success' : (c <= 45 ? 'text-warning' : 'text-danger');
 const corMargem = m => m < 0 ? 'text-danger' : (m >= 30 ? 'text-success' : (m >= 15 ? 'text-warning' : 'text-danger'));
+const fmtFator = n => (Math.round(n * 1000) / 1000).toLocaleString('pt-BR', {maximumFractionDigits: 3});
+const taxasIfood = () => (TAXAS.comissao_ifood + TAXAS.taxa_pagamento + TAXAS.antecipacao) / 100;
 
-// Espelha ficha_precificar() do PHP. "Custo" (B) = custo do prato.
-function precificar(B) {
+function setPrecoInput(canal, val) {
+    document.getElementById('f-preco-' + canal).value =
+        val != null ? val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '';
+}
+
+// Custo do produto (com incentivo) + preço perfeito — comum aos dois sentidos.
+function comuns() {
+    const B = custoPrato;
     const incentivo = numBR(document.getElementById('f-incentivo').value);
-    const mkDir = numBR(document.getElementById('f-mkdir').value);
-    const mkIf  = numBR(document.getElementById('f-mkif').value);
-    const feesIfood = (TAXAS.comissao_ifood + TAXAS.taxa_pagamento + TAXAS.antecipacao) / 100;
-    const cmvAlvo = TAXAS.cmv_alvo / 100;
-
     const custoProduto = B + incentivo;
     document.getElementById('custo-produto').textContent = fmtReais(custoProduto);
+    const cmvAlvo = TAXAS.cmv_alvo / 100;
+    document.getElementById('preco-perfeito').textContent = (cmvAlvo > 0 && B > 0) ? fmtReais(B / cmvAlvo) : '—';
+    return { B, incentivo, custoProduto };
+}
 
-    const precoPerfeito = cmvAlvo > 0 ? B / cmvAlvo : null;
+// markup -> preço (fonte: markup). Preenche os inputs de preço.
+function doMarkupParaPreco() {
+    const { B, incentivo, custoProduto } = comuns();
+    const fees = taxasIfood();
+    const mkDir = numBR(document.getElementById('f-mkdir').value);
+    const mkIf  = numBR(document.getElementById('f-mkif').value);
     const precoDireta = mkDir > 0 ? B * mkDir : null;
-    const precoIfood = (mkIf > 0 && feesIfood < 1) ? ((B * mkIf) + incentivo) / (1 - feesIfood) : null;
-
-    document.getElementById('preco-perfeito').textContent = precoPerfeito != null ? fmtReais(precoPerfeito) : '—';
+    const precoIfood  = (mkIf > 0 && fees < 1) ? ((B * mkIf) + incentivo) / (1 - fees) : null;
+    setPrecoInput('direta', precoDireta);
+    setPrecoInput('ifood', precoIfood);
     mostraCanal('direta', precoDireta, B);            // Direta sem incentivo
     mostraCanal('ifood', precoIfood, custoProduto);   // iFood com incentivo
 }
 
-// Preenche preço + margem de contribuição + CMV de um canal (direta|ifood).
-function mostraCanal(canal, preco, custoProduto) {
-    const elP = document.getElementById('preco-' + canal);
+// preço Direta editado -> markup direta (fator = preço ÷ custo).
+function doPrecoDireta() {
+    const { B } = comuns();
+    const preco = numBR(document.getElementById('f-preco-direta').value);
+    if (B > 0 && preco > 0) { document.getElementById('f-mkdir').value = fmtFator(preco / B); }
+    mostraCanal('direta', preco > 0 ? preco : null, B);
+}
+
+// preço iFood editado -> markup iFood (fator = (preço×(1−taxas) − incentivo) ÷ custo).
+function doPrecoIfood() {
+    const { B, incentivo, custoProduto } = comuns();
+    const fees = taxasIfood();
+    const preco = numBR(document.getElementById('f-preco-ifood').value);
+    if (B > 0 && preco > 0 && fees < 1) {
+        document.getElementById('f-mkif').value = fmtFator((preco * (1 - fees) - incentivo) / B);
+    }
+    mostraCanal('ifood', preco > 0 ? preco : null, custoProduto);
+}
+
+// Preenche margem de contribuição + CMV de um canal (direta|ifood).
+function mostraCanal(canal, preco, custoBase) {
     const elM = document.getElementById('margem-' + canal);
     const elC = document.getElementById('cmv-' + canal);
     if (preco != null && preco > 0) {
-        elP.textContent = fmtReais(preco);
-        const margemRs = preco - custoProduto;
+        const margemRs = preco - custoBase;
         const margemPct = margemRs / preco * 100;
         elM.textContent = fmtReais(margemRs) + ' (' + pct1(margemPct) + ')';
         elM.className = corMargem(margemPct);
-        const cmv = custoProduto / preco * 100;
+        const cmv = custoBase / preco * 100;
         elC.textContent = pct1(cmv);
         elC.className = corCmv(cmv);
     } else {
-        elP.textContent = '—'; elM.textContent = '—'; elC.textContent = '—';
-        elM.className = elC.className = '';
+        elM.textContent = '—'; elC.textContent = '—'; elM.className = elC.className = '';
     }
 }
 
 document.querySelectorAll('.add-linha').forEach(btn =>
     btn.addEventListener('click', () => novaLinha(btn.dataset.bloco)));
 ['f-incentivo', 'f-mkdir', 'f-mkif'].forEach(id => document.getElementById(id).addEventListener('input', recalc));
+document.getElementById('f-preco-direta').addEventListener('input', doPrecoDireta);
+document.getElementById('f-preco-ifood').addEventListener('input', doPrecoIfood);
 
 PRE_INGRED.forEach(c => novaLinha('ingrediente', c.ref, String(c.qtd).replace('.', ',')));
 PRE_RECH.forEach(c => novaLinha('recheio', c.ref, String(c.qtd).replace('.', ',')));
