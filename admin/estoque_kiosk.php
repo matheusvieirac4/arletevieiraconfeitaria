@@ -124,19 +124,24 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     var lock = null;
     async function segurar() {
         try {
+            if (lock) { return; }   // já está segurando: não duplica/vaza a trava
             if ('wakeLock' in navigator && document.visibilityState === 'visible') {
                 lock = await navigator.wakeLock.request('screen');
+                // Se o navegador soltar (troca de app etc.), zera p/ poder reaquirir.
+                lock.addEventListener('release', function () { lock = null; });
             }
         } catch (e) { /* sem suporte / negado: ignora */ }
     }
     async function soltar() {
         try { if (lock) { await lock.release(); lock = null; } } catch (e) {}
     }
+    // A tela fica ACESA enquanto o quiosque estiver aberto — inclusive no
+    // stand-by (que desliga só a câmera). É o que garante o alarme de entrega:
+    // uma página web não consegue acordar um aparelho com a tela apagada.
     document.addEventListener('visibilitychange', function () {
-        // Em stand-by não reaquire: deixa a tela apagar sozinha (economiza bateria/calor).
-        if (document.visibilityState === 'visible' && !window.__standby) { segurar(); }
+        if (document.visibilityState === 'visible') { segurar(); }
     });
-    document.addEventListener('touchend', function () { if (!window.__standby) { segurar(); } }, false);
+    document.addEventListener('touchend', function () { segurar(); }, false);
     // Expõe pro stand-by soltar/reaquirir a trava de tela.
     window.__wakeSegurar = segurar;
     window.__wakeSoltar = soltar;
@@ -805,7 +810,9 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
         emStandby = true; window.__standby = true;
         clearInatividade();
         pararCamera();
-        if (window.__wakeSoltar) { window.__wakeSoltar(); }   // deixa a tela apagar
+        // NÃO solta a trava de tela: a tela fica acesa (preta) p/ o alarme de
+        // entrega poder disparar. Só a câmera dorme (é ela que esquenta).
+        if (window.__wakeSegurar) { window.__wakeSegurar(); }
         mostrar(null);
         elStandby.classList.add('show');
     }
@@ -964,6 +971,7 @@ $kioskAdmin = !empty($_SESSION['admin_blog']);
     el('al-parar').addEventListener('touchend', function (e) { e.preventDefault(); parar(); }, { passive: false });
 
     async function buscar() {
+        if (window.__wakeSegurar) { window.__wakeSegurar(); }   // reforça a tela acesa
         try {
             const r = await fetch(API, { cache: 'no-store' });
             const j = await r.json();
