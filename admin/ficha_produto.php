@@ -319,8 +319,8 @@ function precificar(B) {
     const precoIfood = (mkIf > 0 && feesIfood < 1) ? ((B * mkIf) + incentivo) / (1 - feesIfood) : null;
 
     document.getElementById('preco-perfeito').textContent = precoPerfeito != null ? fmtReais(precoPerfeito) : '—';
-    mostraCanal('direta', precoDireta, custoProduto);
-    mostraCanal('ifood', precoIfood, custoProduto);
+    mostraCanal('direta', precoDireta, B);            // Direta sem incentivo
+    mostraCanal('ifood', precoIfood, custoProduto);   // iFood com incentivo
 }
 
 // Preenche preço + margem de contribuição + CMV de um canal (direta|ifood).

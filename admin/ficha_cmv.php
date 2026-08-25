@@ -60,7 +60,7 @@ require __DIR__ . '/_header.php';
                     ?>
                         <tr>
                             <td><a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="text-decoration-none fw-semibold"><?= htmlspecialchars($p['nome']) ?></a></td>
-                            <td class="text-end"><?= $reais($c['custo_produto']) ?></td>
+                            <td class="text-end"><?= $reais($c['custo_prato']) ?></td>
                             <td class="text-end"><?= $reais($c['preco_direta']) ?></td>
                             <td class="text-center"><?= $cmvBadge($cmvAtual) ?></td>
                             <td class="text-center"><?= $cmvUlt !== null ? number_format($cmvUlt, 1, ',', '.') . '%' : '—' ?></td>

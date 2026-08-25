@@ -365,7 +365,8 @@ function ficha_precificacao_taxas(): array
  *   Preço perfeito    = B ÷ (cmv_alvo)              (referência p/ CMV 30%)
  *   Preço final Direta= B × markup_direta            (markup é FATOR: 1,2 / 3…)
  *   Preço final iFood = ((B × markup_ifood) + incentivo) ÷ (1 − taxas_ifood)
- * CMV e margem de contribuição são medidos contra o CUSTO DO PRODUTO (com incentivo).
+ * CMV/margem da DIRETA são contra o custo do prato (B); as do iFOOD contra o
+ * custo do produto (B + incentivo), pois o incentivo é custo de iFood.
  */
 function ficha_precificar(PDO $pdo, int $produtoId): array
 {
@@ -386,8 +387,9 @@ function ficha_precificar(PDO $pdo, int $produtoId): array
     $precoDireta   = $mkDir > 0 ? $B * $mkDir : null;
     $precoIfood    = ($mkIf > 0 && $feesIfood < 1) ? (($B * $mkIf) + $incentivo) / (1 - $feesIfood) : null;
 
-    $cmvDiretaPct    = ($precoDireta && $precoDireta > 0) ? $custoProduto / $precoDireta * 100 : null;
-    $margemDiretaRs  = $precoDireta !== null ? $precoDireta - $custoProduto : null;
+    // Direta NÃO leva incentivo (incentivo é custo de iFood: cupom/campanha).
+    $cmvDiretaPct    = ($precoDireta && $precoDireta > 0) ? $B / $precoDireta * 100 : null;
+    $margemDiretaRs  = $precoDireta !== null ? $precoDireta - $B : null;
     $margemDiretaPct = ($precoDireta && $precoDireta > 0) ? $margemDiretaRs / $precoDireta * 100 : null;
     $cmvIfoodPct     = ($precoIfood && $precoIfood > 0) ? $custoProduto / $precoIfood * 100 : null;
     $margemIfoodRs   = $precoIfood !== null ? $precoIfood - $custoProduto : null;
@@ -425,7 +427,7 @@ function ficha_cmv_registrar(PDO $pdo, int $produtoId, string $responsavel = '',
                    VALUES ('produto', :p, :c, :v, :m, :mo, :r, :o)")
         ->execute([
             ':p' => $produtoId,
-            ':c' => round($c['custo_produto'], 4),
+            ':c' => round($c['custo_prato'], 4),
             ':v' => $c['preco_direta'] !== null ? round($c['preco_direta'], 2) : null,
             ':m' => $c['cmv_direta_pct'] !== null ? round($c['cmv_direta_pct'], 2) : null,
             ':mo' => $motivo !== '' ? $motivo : null,

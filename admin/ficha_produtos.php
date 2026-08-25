@@ -85,7 +85,7 @@ require __DIR__ . '/_header.php';
                             <td><input type="checkbox" class="form-check-input check-item" value="<?= (int) $p['id'] ?>"></td>
                             <td><a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="text-decoration-none fw-semibold"><?= htmlspecialchars($p['nome']) ?></a></td>
                             <td class="text-muted"><?= htmlspecialchars($p['categoria'] ?? '—') ?></td>
-                            <td class="text-end"><?= $reais($c['custo_produto']) ?></td>
+                            <td class="text-end"><?= $reais($c['custo_prato']) ?></td>
                             <td class="text-end fw-semibold"><?= $reais($c['preco_direta']) ?></td>
                             <td class="text-center"><?= $cmvBadge($c['cmv_direta_pct']) ?></td>
                             <td class="text-center"><?= $margemBadge($c['margem_direta_pct']) ?></td>
