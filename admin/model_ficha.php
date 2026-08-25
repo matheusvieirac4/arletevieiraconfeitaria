@@ -358,6 +358,34 @@ function ficha_precificacao_taxas(): array
 }
 
 /**
+ * Define o preço de um canal (direta|ifood) calculando o MARKUP de volta e
+ * gravando-o (o markup é a âncora salva). Usado na edição inline da listagem.
+ *   Direta: markup = preço ÷ custo
+ *   iFood : markup = (preço × (1 − taxas) − incentivo) ÷ custo
+ */
+function ficha_produto_set_preco(PDO $pdo, int $id, string $canal, float $preco): void
+{
+    if ($id <= 0 || $preco <= 0) { throw new InvalidArgumentException('Preço inválido.'); }
+    $B = (float) ficha_produto_custo($pdo, $id)['custo_total'];
+    if ($B <= 0) { throw new RuntimeException('Cadastre os ingredientes/recheios antes de definir o preço.'); }
+    $prod = ficha_produto_buscar($pdo, $id);
+    $incentivo = $prod && $prod['incentivo'] !== null ? (float) $prod['incentivo'] : 0.0;
+    $t = ficha_precificacao_taxas();
+    if ($canal === 'ifood') {
+        $fees = ($t['comissao_ifood'] + $t['taxa_pagamento'] + $t['antecipacao']) / 100;
+        if ($fees >= 1) { throw new RuntimeException('Taxas do iFood inválidas.'); }
+        $mk = ($preco * (1 - $fees) - $incentivo) / $B;
+        $col = 'markup_ifood';
+    } else {
+        $mk = $preco / $B;
+        $col = 'markup_direta';
+    }
+    if ($mk <= 0) { throw new RuntimeException('Esse preço resulta em markup inválido (menor que o custo).'); }
+    // $col vem de uma escolha binária controlada — seguro interpolar.
+    $pdo->prepare("UPDATE ficha_produtos SET $col = :m WHERE id = :id")->execute([':m' => round($mk, 3), ':id' => $id]);
+}
+
+/**
  * Precifica um produto. "Custo" nas fórmulas = custo do prato (B, insumos).
  * O incentivo (cupons/campanhas/di-ci/hits) entra no custo do PRODUTO e no
  * preço iFood, conforme as fórmulas definidas:

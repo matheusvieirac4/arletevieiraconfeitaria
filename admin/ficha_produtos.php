@@ -33,7 +33,7 @@ $produtos = ficha_produtos_listar($pdo, $busca, $cat);
 $categorias = ficha_categorias_nomes($pdo, 'produto');
 
 // Ordenação (as colunas de valor são calculadas, então ordenamos em PHP).
-$colsOrd = ['nome', 'categoria', 'custo', 'preco', 'cmv', 'margem'];
+$colsOrd = ['nome', 'categoria', 'custo', 'preco', 'preco_ifood', 'cmv', 'margem'];
 $ordem = in_array($_GET['ordem'] ?? '', $colsOrd, true) ? $_GET['ordem'] : 'nome';
 $dir   = (strtolower($_GET['dir'] ?? '') === 'desc') ? 'desc' : 'asc';
 
@@ -46,9 +46,10 @@ $valorOrd = function (array $row, string $col) {
     $p = $row['p']; $c = $row['c'];
     switch ($col) {
         case 'categoria': return mb_strtolower((string) ($p['categoria'] ?? ''), 'UTF-8');
-        case 'custo':     return $c['custo_prato'];
-        case 'preco':     return $c['preco_direta'];
-        case 'cmv':       return $c['cmv_direta_pct'];
+        case 'custo':       return $c['custo_prato'];
+        case 'preco':       return $c['preco_direta'];
+        case 'preco_ifood': return $c['preco_ifood'];
+        case 'cmv':         return $c['cmv_direta_pct'];
         case 'margem':    return $c['margem_direta_pct'];
         default:          return mb_strtolower((string) $p['nome'], 'UTF-8');
     }
@@ -110,6 +111,7 @@ require __DIR__ . '/_header.php';
                             <th><?= $linkOrdem('categoria', 'Categoria') ?></th>
                             <th class="text-end"><?= $linkOrdem('custo', 'Custo') ?></th>
                             <th class="text-end"><?= $linkOrdem('preco', 'Preço Direta') ?></th>
+                            <th class="text-end"><?= $linkOrdem('preco_ifood', 'Preço iFood') ?></th>
                             <th class="text-center"><?= $linkOrdem('cmv', 'CMV') ?></th>
                             <th class="text-center"><?= $linkOrdem('margem', 'Margem contrib.') ?></th>
                             <th class="text-end">Ações</th>
@@ -117,17 +119,22 @@ require __DIR__ . '/_header.php';
                     </thead>
                     <tbody>
                     <?php if (!$rows): ?>
-                        <tr><td colspan="8" class="text-muted text-center py-4">Nenhum produto cadastrado.</td></tr>
+                        <tr><td colspan="9" class="text-muted text-center py-4">Nenhum produto cadastrado.</td></tr>
                     <?php endif; ?>
-                    <?php foreach ($rows as $row): $p = $row['p']; $c = $row['c']; ?>
+                    <?php
+                    $rawPreco = fn($v) => $v === null ? '' : number_format((float) $v, 2, ',', '');
+                    foreach ($rows as $row): $p = $row['p']; $c = $row['c']; $pid = (int) $p['id']; ?>
                         <tr>
-                            <td><input type="checkbox" class="form-check-input check-item" value="<?= (int) $p['id'] ?>"></td>
-                            <td><a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="text-decoration-none fw-semibold"><?= htmlspecialchars($p['nome']) ?></a></td>
+                            <td><input type="checkbox" class="form-check-input check-item" value="<?= $pid ?>"></td>
+                            <td><a href="ficha_produto.php?id=<?= $pid ?>" class="text-decoration-none fw-semibold"><?= htmlspecialchars($p['nome']) ?></a></td>
                             <td class="text-muted"><?= htmlspecialchars($p['categoria'] ?? '—') ?></td>
                             <td class="text-end"><?= $reais($c['custo_prato']) ?></td>
-                            <td class="text-end fw-semibold"><?= $reais($c['preco_direta']) ?></td>
-                            <td class="text-center"><?= $cmvBadge($c['cmv_direta_pct']) ?></td>
-                            <td class="text-center"><?= $margemBadge($c['margem_direta_pct']) ?></td>
+                            <td class="text-end text-nowrap">R$&nbsp;<input type="text" class="inline-preco" style="width:76px" inputmode="decimal" placeholder="—"
+                                       data-id="<?= $pid ?>" data-canal="direta" value="<?= $rawPreco($c['preco_direta']) ?>"></td>
+                            <td class="text-end text-nowrap">R$&nbsp;<input type="text" class="inline-preco" style="width:76px" inputmode="decimal" placeholder="—"
+                                       data-id="<?= $pid ?>" data-canal="ifood" value="<?= $rawPreco($c['preco_ifood']) ?>"></td>
+                            <td class="text-center" data-cmv="<?= $pid ?>"><?= $cmvBadge($c['cmv_direta_pct']) ?></td>
+                            <td class="text-center" data-margem="<?= $pid ?>"><?= $margemBadge($c['margem_direta_pct']) ?></td>
                             <td class="text-end text-nowrap">
                                 <a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="btn btn-outline-primary btn-sm">Abrir</a>
                                 <a href="ficha_produto.php?duplicar=<?= (int) $p['id'] ?>" class="btn btn-outline-secondary btn-sm" title="Duplicar este produto">Duplicar</a>
@@ -154,6 +161,70 @@ require __DIR__ . '/_header.php';
     btn.addEventListener('click', () => {
         const ids = marcadas();
         if (ids.length) { window.open('ficha_pdf.php?tipo=produto&ids=' + ids.join(','), '_blank'); }
+    });
+})();
+</script>
+
+<style>
+    .inline-preco { border:1px solid transparent; background:transparent; text-align:right; border-radius:6px;
+                    padding:2px 6px; font:inherit; color:inherit; transition:background .2s, border-color .15s; }
+    .inline-preco:hover { border-color:#dde1e6; }
+    .inline-preco:focus { border-color:#2ec07a; background:#fff; outline:none; box-shadow:0 0 0 2px rgba(46,192,122,.15); }
+    .inline-preco.saved { background:#eafaf1; border-color:#c7ecd7; }
+    .inline-preco.err   { border-color:#dc3545; background:#fdeaea; }
+</style>
+<script>
+// Edição inline do preço (Direta/iFood): salva ao sair do campo ou no Enter.
+// O back-end calcula o markup de volta e devolve os valores recalculados.
+(function () {
+    const fmt = v => v == null ? '' : v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const pct = v => v.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%';
+    function cmvBadge(cmv) {
+        if (cmv == null) { return '<span class="badge bg-light text-muted border">sem preço</span>'; }
+        const cls = cmv <= 35 ? 'bg-success' : (cmv <= 45 ? 'bg-warning text-dark' : 'bg-danger');
+        return '<span class="badge ' + cls + '">' + pct(cmv) + '</span>';
+    }
+    function margemBadge(m) {
+        if (m == null) { return '<span class="badge bg-light text-muted border">—</span>'; }
+        const cls = m < 0 ? 'bg-danger' : (m >= 30 ? 'bg-success' : (m >= 15 ? 'bg-warning text-dark' : 'bg-danger'));
+        return '<span class="badge ' + cls + '">' + pct(m) + '</span>';
+    }
+    document.querySelectorAll('.inline-preco').forEach(function (inp) {
+        inp.dataset.orig = inp.value;
+        inp.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+            if (e.key === 'Escape') { inp.value = inp.dataset.orig; inp.blur(); }
+        });
+        inp.addEventListener('blur', function () {
+            if (inp.value === inp.dataset.orig) { return; }
+            const fd = new FormData();
+            fd.append('id', inp.dataset.id);
+            fd.append('canal', inp.dataset.canal);
+            fd.append('valor', inp.value);
+            inp.classList.remove('err');
+            fetch('ficha_editar_preco.php', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(function (d) {
+                    if (d.error) {
+                        inp.classList.add('err');
+                        inp.value = inp.dataset.orig;
+                        if (window.showToast) { showToast(d.error, 'danger'); }
+                        return;
+                    }
+                    const row = inp.closest('tr');
+                    row.querySelectorAll('.inline-preco').forEach(function (f) {
+                        f.value = f.dataset.canal === 'ifood' ? fmt(d.preco_ifood) : fmt(d.preco_direta);
+                        f.dataset.orig = f.value;
+                    });
+                    const cmvTd = document.querySelector('[data-cmv="' + inp.dataset.id + '"]');
+                    if (cmvTd) { cmvTd.innerHTML = cmvBadge(d.cmv); }
+                    const mTd = document.querySelector('[data-margem="' + inp.dataset.id + '"]');
+                    if (mTd) { mTd.innerHTML = margemBadge(d.margem); }
+                    inp.classList.add('saved');
+                    setTimeout(function () { inp.classList.remove('saved'); }, 1000);
+                })
+                .catch(function () { inp.classList.add('err'); inp.value = inp.dataset.orig; });
+        });
     });
 })();
 </script>
