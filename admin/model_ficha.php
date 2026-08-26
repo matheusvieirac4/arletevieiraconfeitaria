@@ -413,15 +413,20 @@ function ficha_precificar(PDO $pdo, int $produtoId): array
 
     $precoPerfeito = $cmvAlvo > 0 ? $B / $cmvAlvo : null;
     $precoDireta   = $mkDir > 0 ? $B * $mkDir : null;
-    $precoIfood    = ($mkIf > 0 && $feesIfood < 1) ? (($B * $mkIf) + $incentivo) / (1 - $feesIfood) : null;
 
-    // Direta NÃO leva incentivo (incentivo é custo de iFood: cupom/campanha).
+    // iFood: valor desejado (custo + margem) vem do markup; o incentivo é uma
+    // RESERVA que entra só no fim (no preço cobrado, já grossado pelas taxas).
+    $p0Ifood    = $mkIf > 0 ? $B * $mkIf : null;                 // valor desejado (P0)
+    $precoIfood = ($p0Ifood !== null && $feesIfood < 1) ? ($p0Ifood + $incentivo) / (1 - $feesIfood) : null;
+
+    // CMV/margem medidos sobre o VALOR DESEJADO (P0), não sobre o preço cobrado:
+    // as taxas e o incentivo são repasses que se anulam (a sobra volta a ser P0−B).
     $cmvDiretaPct    = ($precoDireta && $precoDireta > 0) ? $B / $precoDireta * 100 : null;
     $margemDiretaRs  = $precoDireta !== null ? $precoDireta - $B : null;
     $margemDiretaPct = ($precoDireta && $precoDireta > 0) ? $margemDiretaRs / $precoDireta * 100 : null;
-    $cmvIfoodPct     = ($precoIfood && $precoIfood > 0) ? $custoProduto / $precoIfood * 100 : null;
-    $margemIfoodRs   = $precoIfood !== null ? $precoIfood - $custoProduto : null;
-    $margemIfoodPct  = ($precoIfood && $precoIfood > 0) ? $margemIfoodRs / $precoIfood * 100 : null;
+    $cmvIfoodPct     = ($p0Ifood && $p0Ifood > 0) ? $B / $p0Ifood * 100 : null;
+    $margemIfoodRs   = $p0Ifood !== null ? $p0Ifood - $B : null;
+    $margemIfoodPct  = ($p0Ifood && $p0Ifood > 0) ? $margemIfoodRs / $p0Ifood * 100 : null;
 
     return [
         'custo_prato'       => $B,

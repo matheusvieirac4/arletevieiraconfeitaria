@@ -138,7 +138,7 @@ require __DIR__ . '/_header.php';
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
-                            <span class="text-muted small d-block">Custo do produto <span class="text-muted">(custo + incentivo)</span></span>
+                            <span class="text-muted small d-block">Custo + incentivo <span class="text-muted">(reserva iFood; não entra no CMV)</span></span>
                             <span class="fs-5 fw-bold" id="custo-produto">R$ 0,00</span>
                         </div>
                     </div>
@@ -336,11 +336,12 @@ function doMarkupParaPreco() {
     const mkDir = numBR(document.getElementById('f-mkdir').value);
     const mkIf  = numBR(document.getElementById('f-mkif').value);
     const precoDireta = mkDir > 0 ? B * mkDir : null;
-    const precoIfood  = (mkIf > 0 && fees < 1) ? ((B * mkIf) + incentivo) / (1 - fees) : null;
+    const p0Ifood     = mkIf > 0 ? B * mkIf : null;                       // valor desejado
+    const precoIfood  = (p0Ifood != null && fees < 1) ? (p0Ifood + incentivo) / (1 - fees) : null;  // preço cobrado
     setPrecoInput('direta', precoDireta);
     setPrecoInput('ifood', precoIfood);
-    mostraCanal('direta', precoDireta, B);            // Direta sem incentivo
-    mostraCanal('ifood', precoIfood, custoProduto);   // iFood com incentivo
+    mostraCanal('direta', precoDireta, B);   // CMV/margem sobre o valor desejado
+    mostraCanal('ifood', p0Ifood, B);        // idem — incentivo é reserva, não custo
 }
 
 // preço Direta editado -> markup direta (fator = preço ÷ custo).
@@ -353,13 +354,15 @@ function doPrecoDireta() {
 
 // preço iFood editado -> markup iFood (fator = (preço×(1−taxas) − incentivo) ÷ custo).
 function doPrecoIfood() {
-    const { B, incentivo, custoProduto } = comuns();
+    const { B, incentivo } = comuns();
     const fees = taxasIfood();
     const preco = numBR(document.getElementById('f-preco-ifood').value);
-    if (B > 0 && preco > 0 && fees < 1) {
-        document.getElementById('f-mkif').value = fmtFator((preco * (1 - fees) - incentivo) / B);
+    // Do preço cobrado, remove taxas e incentivo p/ voltar ao valor desejado (P0 = B×markup).
+    const p0 = (preco > 0 && fees < 1) ? (preco * (1 - fees) - incentivo) : null;
+    if (B > 0 && p0 != null && p0 > 0) {
+        document.getElementById('f-mkif').value = fmtFator(p0 / B);
     }
-    mostraCanal('ifood', preco > 0 ? preco : null, custoProduto);
+    mostraCanal('ifood', (p0 != null && p0 > 0) ? p0 : null, B);
 }
 
 // Preenche margem de contribuição + CMV de um canal (direta|ifood).
