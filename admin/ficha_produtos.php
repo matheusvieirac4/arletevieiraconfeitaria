@@ -20,12 +20,6 @@ $cmvBadge = function (?float $cmv): string {
     $cls = $cmv <= 35 ? 'bg-success' : ($cmv <= 45 ? 'bg-warning text-dark' : 'bg-danger');
     return '<span class="badge ' . $cls . '">' . number_format($cmv, 1, ',', '.') . '%</span>';
 };
-// Badge da margem de contribuição: quanto maior, melhor (verde ≥30, amarelo ≥15).
-$margemBadge = function (?float $m): string {
-    if ($m === null) { return '<span class="badge bg-light text-muted border">—</span>'; }
-    $cls = $m < 0 ? 'bg-danger' : ($m >= 30 ? 'bg-success' : ($m >= 15 ? 'bg-warning text-dark' : 'bg-danger'));
-    return '<span class="badge ' . $cls . '">' . number_format($m, 1, ',', '.') . '%</span>';
-};
 
 $busca = trim((string) ($_GET['busca'] ?? ''));
 $cat   = trim((string) ($_GET['categoria'] ?? ''));
@@ -33,7 +27,7 @@ $produtos = ficha_produtos_listar($pdo, $busca, $cat);
 $categorias = ficha_categorias_nomes($pdo, 'produto');
 
 // Ordenação (as colunas de valor são calculadas, então ordenamos em PHP).
-$colsOrd = ['nome', 'categoria', 'custo', 'preco', 'preco_ifood', 'cmv', 'margem', 'cmv_ifood', 'margem_ifood'];
+$colsOrd = ['nome', 'categoria', 'custo', 'preco', 'preco_ifood', 'cmv', 'cmv_ifood'];
 $ordem = in_array($_GET['ordem'] ?? '', $colsOrd, true) ? $_GET['ordem'] : 'nome';
 $dir   = (strtolower($_GET['dir'] ?? '') === 'desc') ? 'desc' : 'asc';
 
@@ -50,9 +44,7 @@ $valorOrd = function (array $row, string $col) {
         case 'preco':       return $c['preco_direta'];
         case 'preco_ifood':  return $c['preco_ifood'];
         case 'cmv':          return $c['cmv_direta_pct'];
-        case 'margem':       return $c['margem_direta_pct'];
         case 'cmv_ifood':    return $c['cmv_ifood_pct'];
-        case 'margem_ifood': return $c['margem_ifood_pct'];
         default:             return mb_strtolower((string) $p['nome'], 'UTF-8');
     }
 };
@@ -115,15 +107,13 @@ require __DIR__ . '/_header.php';
                             <th class="text-end"><?= $linkOrdem('preco', 'Preço Direta') ?></th>
                             <th class="text-end"><?= $linkOrdem('preco_ifood', 'Preço iFood') ?></th>
                             <th class="text-center"><?= $linkOrdem('cmv', 'CMV Direta') ?></th>
-                            <th class="text-center"><?= $linkOrdem('margem', 'Margem Direta') ?></th>
                             <th class="text-center"><?= $linkOrdem('cmv_ifood', 'CMV iFood') ?></th>
-                            <th class="text-center"><?= $linkOrdem('margem_ifood', 'Margem iFood') ?></th>
                             <th class="text-end">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                     <?php if (!$rows): ?>
-                        <tr><td colspan="11" class="text-muted text-center py-4">Nenhum produto cadastrado.</td></tr>
+                        <tr><td colspan="9" class="text-muted text-center py-4">Nenhum produto cadastrado.</td></tr>
                     <?php endif; ?>
                     <?php
                     $rawPreco = fn($v) => $v === null ? '' : number_format((float) $v, 2, ',', '');
@@ -138,9 +128,7 @@ require __DIR__ . '/_header.php';
                             <td class="text-end text-nowrap">R$&nbsp;<input type="text" class="inline-preco" style="width:76px" inputmode="decimal" placeholder="—"
                                        data-id="<?= $pid ?>" data-canal="ifood" value="<?= $rawPreco($c['preco_ifood']) ?>"></td>
                             <td class="text-center" data-cmv-direta="<?= $pid ?>"><?= $cmvBadge($c['cmv_direta_pct']) ?></td>
-                            <td class="text-center" data-margem-direta="<?= $pid ?>"><?= $margemBadge($c['margem_direta_pct']) ?></td>
                             <td class="text-center" data-cmv-ifood="<?= $pid ?>"><?= $cmvBadge($c['cmv_ifood_pct']) ?></td>
-                            <td class="text-center" data-margem-ifood="<?= $pid ?>"><?= $margemBadge($c['margem_ifood_pct']) ?></td>
                             <td class="text-end text-nowrap">
                                 <a href="ficha_produto.php?id=<?= (int) $p['id'] ?>" class="btn btn-outline-primary btn-sm">Abrir</a>
                                 <a href="ficha_produto.php?duplicar=<?= (int) $p['id'] ?>" class="btn btn-outline-secondary btn-sm" title="Duplicar este produto">Duplicar</a>
@@ -190,11 +178,6 @@ require __DIR__ . '/_header.php';
         const cls = cmv <= 35 ? 'bg-success' : (cmv <= 45 ? 'bg-warning text-dark' : 'bg-danger');
         return '<span class="badge ' + cls + '">' + pct(cmv) + '</span>';
     }
-    function margemBadge(m) {
-        if (m == null) { return '<span class="badge bg-light text-muted border">—</span>'; }
-        const cls = m < 0 ? 'bg-danger' : (m >= 30 ? 'bg-success' : (m >= 15 ? 'bg-warning text-dark' : 'bg-danger'));
-        return '<span class="badge ' + cls + '">' + pct(m) + '</span>';
-    }
     document.querySelectorAll('.inline-preco').forEach(function (inp) {
         inp.dataset.orig = inp.value;
         inp.addEventListener('keydown', function (e) {
@@ -224,10 +207,8 @@ require __DIR__ . '/_header.php';
                     });
                     const id = inp.dataset.id;
                     const set = (attr, html) => { const el = document.querySelector('[' + attr + '="' + id + '"]'); if (el) { el.innerHTML = html; } };
-                    set('data-cmv-direta',    cmvBadge(d.cmv_direta));
-                    set('data-margem-direta', margemBadge(d.margem_direta));
-                    set('data-cmv-ifood',     cmvBadge(d.cmv_ifood));
-                    set('data-margem-ifood',  margemBadge(d.margem_ifood));
+                    set('data-cmv-direta', cmvBadge(d.cmv_direta));
+                    set('data-cmv-ifood',  cmvBadge(d.cmv_ifood));
                     inp.classList.add('saved');
                     setTimeout(function () { inp.classList.remove('saved'); }, 1000);
                 })
