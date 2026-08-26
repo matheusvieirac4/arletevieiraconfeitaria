@@ -20,11 +20,13 @@ try {
     ficha_produto_set_preco($pdo, $id, $canal, $valor);
     $c = ficha_precificar($pdo, $id);
     fep_out([
-        'ok'           => true,
-        'preco_direta' => $c['preco_direta'],
-        'preco_ifood'  => $c['preco_ifood'],
-        'cmv'          => $c['cmv_direta_pct'],
-        'margem'       => $c['margem_direta_pct'],
+        'ok'            => true,
+        'preco_direta'  => $c['preco_direta'],
+        'preco_ifood'   => $c['preco_ifood'],
+        'cmv_direta'    => $c['cmv_direta_pct'],
+        'margem_direta' => $c['margem_direta_pct'],
+        'cmv_ifood'     => $c['cmv_ifood_pct'],
+        'margem_ifood'  => $c['margem_ifood_pct'],
     ]);
 } catch (\Throwable $e) {
     http_response_code(400);
