@@ -23,6 +23,7 @@ $mesLabel = ['', 'Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','
 
 $resumo = ponto_resumo_mes($pdo, $pessoa, $ano, $mes);
 $t = $resumo['totais'];
+$pag = ponto_pagamento($resumo, $pessoa);
 $temMeta = !empty($pessoa['tem_meta']);
 $jornadaFixa = !empty($pessoa['jornada_fixa']);
 $mediaDia = $t['dias_trabalhados'] > 0 ? (int) round($t['trabalhado_min'] / $t['dias_trabalhados']) : 0;
@@ -140,6 +141,56 @@ require __DIR__ . '/_header.php';
 
             <!-- Configuração da jornada -->
             <div class="col-lg-4">
+                <!-- Folha: pagamento por fora do mês -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold">Pagamento do mês</span>
+                        <?php if ($pag['salario'] > 0): ?>
+                            <span class="badge bg-<?= $pag['fechado'] ? 'success' : 'warning text-dark' ?>">
+                                <?= $pag['fechado'] ? 'mês fechado' : 'parcial · mês em curso' ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="card-body">
+                        <?php if ($pag['salario'] <= 0): ?>
+                            <p class="text-muted small mb-0">Defina o <strong>salário base</strong> na jornada abaixo para o cálculo automático do pagamento.</p>
+                        <?php elseif (!$pag['tem_meta']): ?>
+                            <div class="d-flex justify-content-between">
+                                <span>Salário base</span><span class="fw-semibold"><?= ponto_moeda($pag['salario']) ?></span>
+                            </div>
+                            <p class="text-muted small mt-2 mb-0">Sem meta de horas: paga o salário fixo (sem extras/faltas).</p>
+                        <?php else: ?>
+                            <table class="table table-sm align-middle mb-2">
+                                <tbody>
+                                <tr>
+                                    <td>Salário base
+                                        <div class="text-muted small">jornada esperada: <?= ponto_hm($pag['esperado_mes_min']) ?> · valor-hora <?= ponto_moeda($pag['valor_hora']) ?></div>
+                                    </td>
+                                    <td class="text-end fw-semibold"><?= ponto_moeda($pag['salario']) ?></td>
+                                </tr>
+                                <tr class="<?= $pag['falta_min'] > 0 ? 'text-danger' : 'text-muted' ?>">
+                                    <td>Faltas <span class="small">(−<?= ponto_hm($pag['falta_min']) ?>)</span></td>
+                                    <td class="text-end"><?= $pag['desconto_faltas'] > 0 ? '− ' . ponto_moeda($pag['desconto_faltas']) : '—' ?></td>
+                                </tr>
+                                <tr class="<?= $pag['extra_min'] > 0 ? 'text-success' : 'text-muted' ?>">
+                                    <td>Horas extras <span class="small">(+<?= ponto_hm($pag['extra_min']) ?> · <?= rtrim(rtrim(number_format($pag['extra_pct'], 2, ',', ''), '0'), ',') ?>%)</span></td>
+                                    <td class="text-end"><?= $pag['valor_extras'] > 0 ? '+ ' . ponto_moeda($pag['valor_extras']) : '—' ?></td>
+                                </tr>
+                                </tbody>
+                                <tfoot>
+                                <tr class="border-top">
+                                    <th class="fs-6">Total a pagar</th>
+                                    <th class="text-end fs-5 text-primary"><?= ponto_moeda($pag['total']) ?></th>
+                                </tr>
+                                </tfoot>
+                            </table>
+                            <p class="text-muted small mb-0">
+                                Cálculo "por fora" (sem INSS/IRRF). Fecha automaticamente quando o mês termina — hoje mostra o acumulado até ontem.
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-header fw-semibold">Jornada de <?= htmlspecialchars($pessoa['nome']) ?></div>
                     <div class="card-body">
@@ -163,6 +214,28 @@ require __DIR__ . '/_header.php';
                                     <option value="0" <?= !$jornadaFixa ? 'selected' : '' ?>>Tolerância de saldo do dia (padrão)</option>
                                     <option value="1" <?= $jornadaFixa ? 'selected' : '' ?>>Definir jornada de trabalho (norma 5/10 min)</option>
                                 </select>
+                            </div>
+
+                            <!-- Folha: salário base + adicional de hora extra -->
+                            <div class="row g-2 mb-3">
+                                <div class="col-7">
+                                    <label class="form-label small">Salário base (mês)</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">R$</span>
+                                        <input type="text" name="salario" class="form-control text-end" inputmode="decimal"
+                                               value="<?= $pessoa['salario'] > 0 ? number_format((float) $pessoa['salario'], 2, ',', '.') : '' ?>"
+                                               placeholder="0,00">
+                                    </div>
+                                </div>
+                                <div class="col-5">
+                                    <label class="form-label small">Adicional extra</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" name="extra_pct" class="form-control text-end" inputmode="decimal"
+                                               value="<?= rtrim(rtrim(number_format((float) $pessoa['extra_pct'], 2, ',', ''), '0'), ',') ?>">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                                <div class="col-12"><span class="text-muted small">Pagamento "por fora": salário paga a jornada esperada; faltas descontam e extras somam a <?= rtrim(rtrim(number_format((float) $pessoa['extra_pct'], 2, ',', ''), '0'), ',') ?>%.</span></div>
                             </div>
 
                             <!-- Intervalo (vale para os dois modos) -->

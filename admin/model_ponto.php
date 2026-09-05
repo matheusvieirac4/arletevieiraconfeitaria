@@ -50,6 +50,8 @@ function ponto_jornada_default(): array
         'tolerancia_min'         => 10,
         'jornada_fixa'           => 0,
         'tolerancia_marcacao_min' => 5,
+        'salario'                => 0.0,
+        'extra_pct'              => 50.0,
         'e_dom' => null, 's_dom' => null, 'e_seg' => null, 's_seg' => null,
         'e_ter' => null, 's_ter' => null, 'e_qua' => null, 's_qua' => null,
         'e_qui' => null, 's_qui' => null, 'e_sex' => null, 's_sex' => null,
@@ -67,7 +69,7 @@ function ponto_pessoas(PDO $pdo, bool $soAtivos = true): array
                    j.tipo, j.tem_meta,
                    j.h_dom, j.h_seg, j.h_ter, j.h_qua, j.h_qui, j.h_sex, j.h_sab,
                    j.intervalo_desconto_min, j.intervalo_limite_h, j.tolerancia_min,
-                   j.jornada_fixa, j.tolerancia_marcacao_min,
+                   j.jornada_fixa, j.tolerancia_marcacao_min, j.salario, j.extra_pct,
                    j.e_dom, j.s_dom, j.e_seg, j.s_seg, j.e_ter, j.s_ter, j.e_qua, j.s_qua,
                    j.e_qui, j.s_qui, j.e_sex, j.s_sex, j.e_sab, j.s_sab
             FROM estoque_colaboradores c
@@ -82,7 +84,7 @@ function ponto_pessoas(PDO $pdo, bool $soAtivos = true): array
         }
         $r['id']       = (int) $r['id'];
         $r['tem_meta'] = (int) $r['tem_meta'];
-        foreach (['h_dom','h_seg','h_ter','h_qua','h_qui','h_sex','h_sab','intervalo_limite_h'] as $k) { $r[$k] = (float) $r[$k]; }
+        foreach (['h_dom','h_seg','h_ter','h_qua','h_qui','h_sex','h_sab','intervalo_limite_h','salario','extra_pct'] as $k) { $r[$k] = (float) $r[$k]; }
         foreach (['intervalo_desconto_min','tolerancia_min','jornada_fixa','tolerancia_marcacao_min'] as $k) { $r[$k] = (int) $r[$k]; }
         // Horários previstos: normaliza TIME 'HH:MM:SS' -> 'HH:MM' (ou null).
         foreach (PONTO_DIAS_SUF as $suf) {
@@ -114,6 +116,17 @@ function ponto_jornada_salvar(PDO $pdo, int $colaboradorId, array $d): void
     $descMin = max(0, (int) ($d['intervalo_desconto_min'] ?? 60));
     $hora = function ($v) { $v = (float) str_replace(',', '.', (string) $v); return max(0, min(24, $v)); };
     $limH  = $hora($d['intervalo_limite_h'] ?? 6);
+    // Folha "por fora": salário base do mês + adicional de hora extra (%).
+    // Aceita "2.167,00" (BR) ou "2167.00": remove separador de milhar e vírgula decimal.
+    $dinheiro = function ($v) {
+        $v = trim((string) $v);
+        if ($v === '') { return 0.0; }
+        $v = preg_replace('/[^\d,.]/', '', $v);
+        if (strpos($v, ',') !== false) { $v = str_replace('.', '', $v); $v = str_replace(',', '.', $v); }
+        return max(0.0, (float) $v);
+    };
+    $salario  = $dinheiro($d['salario'] ?? 0);
+    $extraPct = max(0.0, min(300.0, (float) str_replace(',', '.', (string) ($d['extra_pct'] ?? 50))));
 
     // Normaliza os horários previstos (HH:MM). Vazio/ inválido -> NULL.
     $time = function ($v) {
@@ -157,23 +170,25 @@ function ponto_jornada_salvar(PDO $pdo, int $colaboradorId, array $d): void
         ':desc' => $descMin,
         ':lim'  => $limH,
         ':tol'  => max(0, (int) ($d['tolerancia_min'] ?? 10)),
+        ':sal'  => $salario,
+        ':epct' => $extraPct,
     ] + $horarios;
     $pdo->prepare("
         INSERT INTO ponto_jornada
             (colaborador_id, tipo, tem_meta, h_dom, h_seg, h_ter, h_qua, h_qui, h_sex, h_sab,
              intervalo_desconto_min, intervalo_limite_h, tolerancia_min,
-             jornada_fixa, tolerancia_marcacao_min,
+             jornada_fixa, tolerancia_marcacao_min, salario, extra_pct,
              e_dom, s_dom, e_seg, s_seg, e_ter, s_ter, e_qua, s_qua,
              e_qui, s_qui, e_sex, s_sex, e_sab, s_sab)
         VALUES (:id, :tipo, :meta, :dom, :seg, :ter, :qua, :qui, :sex, :sab, :desc, :lim, :tol,
-             :fixa, :tolm,
+             :fixa, :tolm, :sal, :epct,
              :e_dom, :s_dom, :e_seg, :s_seg, :e_ter, :s_ter, :e_qua, :s_qua,
              :e_qui, :s_qui, :e_sex, :s_sex, :e_sab, :s_sab)
         ON DUPLICATE KEY UPDATE
             tipo=:tipo, tem_meta=:meta, h_dom=:dom, h_seg=:seg, h_ter=:ter, h_qua=:qua,
             h_qui=:qui, h_sex=:sex, h_sab=:sab, intervalo_desconto_min=:desc,
             intervalo_limite_h=:lim, tolerancia_min=:tol,
-            jornada_fixa=:fixa, tolerancia_marcacao_min=:tolm,
+            jornada_fixa=:fixa, tolerancia_marcacao_min=:tolm, salario=:sal, extra_pct=:epct,
             e_dom=:e_dom, s_dom=:s_dom, e_seg=:e_seg, s_seg=:s_seg, e_ter=:e_ter, s_ter=:s_ter,
             e_qua=:e_qua, s_qua=:s_qua, e_qui=:e_qui, s_qui=:s_qui, e_sex=:e_sex, s_sex=:s_sex,
             e_sab=:e_sab, s_sab=:s_sab
@@ -518,6 +533,66 @@ function ponto_resumo_mes(PDO $pdo, array $pessoa, int $ano, int $mes): array
     // de poucos minutos que a tolerância (Art. 58 §1º CLT) já zerou por dia.
     $tot['saldo_min'] = $tot['extra_min'] - $tot['falta_min'];
     return ['totais' => $tot, 'dias' => $dias, 'pessoa' => $pessoa];
+}
+
+/**
+ * Folha "por fora" do mês (sem encargos): o salário base paga a jornada
+ * ESPERADA do mês; faltas descontam pelo valor-hora e horas extras somam por
+ * cima com o adicional configurado (extra_pct, ex.: 50%).
+ *
+ *   valor-hora   = salário ÷ horas esperadas do mês inteiro
+ *   desconto     = valor-hora × horas de falta
+ *   extras       = valor-hora × (1 + extra_pct/100) × horas extras
+ *   total        = salário − desconto + extras
+ *
+ * O esperado usado é o do MÊS INTEIRO (todos os dias, feriados/folgas zerados),
+ * não só os dias já fechados — assim o valor-hora não infla no meio do mês.
+ * "fechado" indica se o mês já acabou (cálculo final) ou ainda está correndo.
+ */
+function ponto_pagamento(array $resumo, array $pessoa): array
+{
+    $t       = $resumo['totais'];
+    $salario = (float) ($pessoa['salario'] ?? 0);
+    $extraPct = (float) ($pessoa['extra_pct'] ?? 50);
+    $temMeta = !empty($pessoa['tem_meta']);
+
+    // Esperado do mês inteiro (min): soma do esperado de TODOS os dias do mês,
+    // já com feriados/folgas zerados (ponto_calc_dia devolve esperado 0 neles).
+    $espMesMin = 0;
+    foreach ($resumo['dias'] as $d) { $espMesMin += (int) $d['esperado_min']; }
+
+    $valorHora   = ($espMesMin > 0) ? $salario / ($espMesMin / 60) : 0.0;
+    $valorMin    = $valorHora / 60;
+
+    $faltaMin    = $temMeta ? (int) $t['falta_min'] : 0;
+    $extraMin    = $temMeta ? (int) $t['extra_min'] : 0;
+    $descFaltas  = $valorMin * $faltaMin;
+    $valorExtras = $valorMin * (1 + $extraPct / 100) * $extraMin;
+    $total       = $salario - $descFaltas + $valorExtras;
+
+    // Um mês já "fechado" = a competência é anterior ao mês corrente.
+    $primeiroDia = $resumo['dias'][0]['data'] ?? date('Y-m-d');
+    $fechado     = substr($primeiroDia, 0, 7) < date('Y-m');
+
+    return [
+        'salario'        => $salario,
+        'extra_pct'      => $extraPct,
+        'esperado_mes_min' => $espMesMin,
+        'valor_hora'     => $valorHora,
+        'falta_min'      => $faltaMin,
+        'extra_min'      => $extraMin,
+        'desconto_faltas' => $descFaltas,
+        'valor_extras'   => $valorExtras,
+        'total'          => $total,
+        'fechado'        => $fechado,
+        'tem_meta'       => $temMeta,
+    ];
+}
+
+/** Float -> "R$ 1.234,56". */
+function ponto_moeda(float $v): string
+{
+    return 'R$ ' . number_format($v, 2, ',', '.');
 }
 
 /** Resumo de todas as pessoas no mês (para o dashboard/listagem). */

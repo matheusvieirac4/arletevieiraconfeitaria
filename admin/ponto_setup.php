@@ -49,6 +49,8 @@ try {
             tolerancia_min         INT NOT NULL DEFAULT 10,
             jornada_fixa           TINYINT(1) NOT NULL DEFAULT 0,
             tolerancia_marcacao_min INT NOT NULL DEFAULT 5,
+            salario                DECIMAL(10,2) NOT NULL DEFAULT 0,
+            extra_pct              DECIMAL(5,2) NOT NULL DEFAULT 50,
             e_dom TIME NULL, s_dom TIME NULL,
             e_seg TIME NULL, s_seg TIME NULL,
             e_ter TIME NULL, s_ter TIME NULL,
@@ -109,6 +111,19 @@ try {
         else      { $log[] = '..  colunas de jornada fixa já existem'; }
     } catch (\Throwable $e) {
         $log[] = 'ERRO ao migrar jornada fixa: ' . $e->getMessage();
+    }
+
+    // Migração: folha "por fora" (salário base + adicional de hora extra). O salário
+    // paga a jornada esperada do mês; faltas descontam e extras somam por cima.
+    try {
+        $existing = array_column($pdo->query("SHOW COLUMNS FROM ponto_jornada")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+        $add = [];
+        if (!in_array('salario', $existing, true))   { $add[] = "ADD COLUMN salario DECIMAL(10,2) NOT NULL DEFAULT 0"; }
+        if (!in_array('extra_pct', $existing, true)) { $add[] = "ADD COLUMN extra_pct DECIMAL(5,2) NOT NULL DEFAULT 50"; }
+        if ($add) { $pdo->exec("ALTER TABLE ponto_jornada " . implode(', ', $add)); $log[] = 'OK  colunas de folha (salario/extra_pct) adicionadas'; }
+        else      { $log[] = '..  colunas de folha já existem'; }
+    } catch (\Throwable $e) {
+        $log[] = 'ERRO ao migrar folha: ' . $e->getMessage();
     }
 
     $log[] = '';
