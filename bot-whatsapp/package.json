@@ -8,6 +8,7 @@
     "start": "node bot.js",
     "test": "node mock/smoke-test.js",
     "test:e2e": "node mock/e2e-test.js",
+    "test:hours": "node mock/hours-test.js",
     "mock": "node mock/send-webhook.js"
   },
   "dependencies": {

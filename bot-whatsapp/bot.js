@@ -43,7 +43,7 @@ const TELEGRAM_TOKEN    = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT     = process.env.TELEGRAM_CHAT_ID || '';
 
 const STATE_FILE        = path.join(__dirname, 'data', 'state.json');
-const FLOW_FILE         = path.join(__dirname, 'flow.json');
+const FLOW_FILE         = process.env.FLOW_FILE || path.join(__dirname, 'flow.json');  // override p/ testes
 
 // ----------------------------------------------------------------------------
 // Conteudo editavel (flow.json)
