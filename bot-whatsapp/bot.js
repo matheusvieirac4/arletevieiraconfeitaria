@@ -92,6 +92,7 @@ const sentIds   = new Map();   // id -> timestamp (expira)
 const seenIds   = new Map();   // id -> timestamp (expira)
 const chatQueue = new Map();   // jid -> Promise (serializa mensagens do mesmo chat)
 let connState   = 'unknown';   // estado da conexao Evolution<->WhatsApp (vai no heartbeat)
+const metricas  = { desde: Date.now(), atendimentosIniciados: 0, handoffs: 0, foraDoHorario: 0 };  // contadores desde o boot
 
 // --- Persistencia dos estados que NAO podem ser perdidos num restart --------
 // HUMANO (voce respondeu) e PARADO (menu passou pra humano): se sumirem num
@@ -111,21 +112,27 @@ function loadState() {
     console.log(`[state] restauradas do disco: ${Object.keys(raw.humanos || {}).length} humana(s), ${Object.keys(raw.parados || {}).length} parada(s)`);
   } catch { /* primeiro boot: arquivo nao existe, tudo bem */ }
 }
+function escreverState() {
+  const humanos = {}, parados = {};
+  for (const [jid, c] of conversas) {
+    if (c.state === STATES.HUMANO && c.humanUntil) humanos[jid] = c.humanUntil;
+    else if (c.state === STATES.PARADO) parados[jid] = c.lastSeen;
+  }
+  try {
+    fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+    fs.writeFileSync(STATE_FILE, JSON.stringify({ humanos, parados }, null, 0));
+  } catch (e) { console.error('[state] falha ao salvar:', e.message); }
+}
 let saveTimer = null;
 function saveStateThrottled() {
   if (saveTimer) return;
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    const humanos = {}, parados = {};
-    for (const [jid, c] of conversas) {
-      if (c.state === STATES.HUMANO && c.humanUntil) humanos[jid] = c.humanUntil;
-      else if (c.state === STATES.PARADO) parados[jid] = c.lastSeen;
-    }
-    try {
-      fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-      fs.writeFileSync(STATE_FILE, JSON.stringify({ humanos, parados }, null, 0));
-    } catch (e) { console.error('[state] falha ao salvar:', e.message); }
-  }, 2000);
+  saveTimer = setTimeout(() => { saveTimer = null; escreverState(); }, 2000);
+}
+// Flush sincrono no desligamento: um PARADO/HUMANO gravado nos ultimos 2s (janela
+// do debounce) nao pode se perder num restart — seria justo o caso perigoso.
+function saveStateNow() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  escreverState();
 }
 
 // ----------------------------------------------------------------------------
@@ -315,10 +322,12 @@ async function executarDestino(jid, c, target) {
     if (dentroDoHorario()) {
       await reply(jid, node.texto);
       c.state = STATES.PARADO;             // bot cala; espera voce responder (fromMe)
+      metricas.handoffs++;
       saveStateThrottled();                // persiste: restart nao pode reengajar
     } else {
       await reply(jid, flow.mensagens.ausencia);
       c.state = STATES.ENCERRADO;          // pode mandar de novo e reabrir o menu
+      metricas.foraDoHorario++;
     }
   }
 }
@@ -360,6 +369,7 @@ async function processar(msg) {
   if (!c || expirou || c.state === STATES.ENCERRADO) {
     c = { state: STATES.ACTIVE, node: flow.start, lastSeen: Date.now(), timer: null };
     conversas.set(jid, c);
+    metricas.atendimentosIniciados++;
     if (flow.saudacao) await reply(jid, flow.saudacao.replace('{{nome}}', (msg.pushName || '').split(' ')[0] || 'tudo bem?'));
     await enviarMenu(jid, flow.start);
     armarTimeout(jid, 'encerramento');
@@ -479,6 +489,7 @@ app.get('/health', (_req, res) => res.json({
   conversas: conversas.size,
   uptimeSec: Math.round(process.uptime()),
   horarioAberto: dentroDoHorario(),
+  metricas,
 }));
 
 // Aceita /webhook E /webhook/<evento> — versoes novas do Evolution (v2.3+) anexam
@@ -549,6 +560,14 @@ async function sendHeartbeat() {
 // nao sobe o servidor nem os timers, so expoe as funcoes.
 // ----------------------------------------------------------------------------
 function boot() {
+  // Desligamento gracioso: flush do estado antes de sair (docker stop manda SIGTERM).
+  for (const sig of ['SIGTERM', 'SIGINT']) {
+    process.on(sig, () => {
+      console.log(`[shutdown] ${sig} recebido, salvando estado...`);
+      saveStateNow();
+      process.exit(0);
+    });
+  }
   loadState();
   const problemasFlow = validarFlow();
   if (problemasFlow.length) {
