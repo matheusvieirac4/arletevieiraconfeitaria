@@ -1,0 +1,8 @@
+# Protege os arquivos de estado e a config de acesso externo.
+# heartbeat.php e heartbeat-check.php continuam acessiveis; o resto, nao.
+<FilesMatch "\.(json)$">
+  Require all denied
+</FilesMatch>
+<Files "config.php">
+  Require all denied
+</Files>

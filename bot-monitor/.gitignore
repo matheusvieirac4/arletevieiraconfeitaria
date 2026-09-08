@@ -1,0 +1,3 @@
+# Arquivos de estado do heartbeat (criados em runtime no servidor)
+hb-last.json
+hb-alert.json

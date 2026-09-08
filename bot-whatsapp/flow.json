@@ -1,0 +1,68 @@
+{
+  "_comentario": "Reconstruido fielmente do fluxo real do ManyChat (WhatsApp Default Reply, share 2400602). Menu por numeros (o ManyChat usava lista nativa do WhatsApp; aqui e numerado, mais robusto no Baileys). Textos, links de PDF e horario sao os reais extraidos do ManyChat em 2026-09-08.",
+
+  "saudacao": "👋 Olá, {{nome}}!\nQue bom te ver por aqui 💛\nSou o atendimento da Arlete Vieira Confeitaria e vou te ajudar rapidinho 😊\n\nMe conta: o que você procura hoje?",
+  "start": "menu_principal",
+
+  "menus": {
+    "menu_principal": {
+      "body": "Por favor, selecione a opção desejada:",
+      "opcoes": [
+        { "label": "Nosso Cardápio 📓", "goto": "menu_cardapio" },
+        { "label": "Bolo Personalizado 🍰", "goto": "menu_bolo" },
+        { "label": "Combo promocional 🎉", "goto": "cat_combos" },
+        { "label": "Meu Pedido/Dúvidas 🚚", "goto": "atendente_pedido" },
+        { "label": "Atendimento Humano 👤", "goto": "atendente" },
+        { "label": "Grupo VIP 💎", "goto": "grupo_vip" }
+      ]
+    },
+    "menu_cardapio": {
+      "body": "Perfeito! 💕\nNosso cardápio é organizado por tipo de pedido 👇",
+      "opcoes": [
+        { "label": "Bolos, doces e salgados", "goto": "cat_festas" },
+        { "label": "Combos", "goto": "cat_combos" },
+        { "label": "Bento Cakes", "goto": "cat_bento" },
+        { "label": "Cupcakes", "goto": "cat_cupcakes" },
+        { "label": "Bem-Casados", "goto": "cat_bemcasados" },
+        { "label": "Bolos Caseiros", "goto": "cat_caseiros" },
+        { "label": "Voltar", "goto": "menu_principal" }
+      ]
+    },
+    "menu_bolo": {
+      "body": "Certo. Você prefere:",
+      "opcoes": [
+        { "label": "Falar com atendente", "goto": "atendente" },
+        { "label": "Passar informações", "desc": "Atendimento personalizado", "goto": "encomenda_info" }
+      ]
+    }
+  },
+
+  "nodes": {
+    "cat_festas":     { "tipo": "link", "texto": "Acesse o link e veja todas as opções disponíveis:", "url": "https://www.arletevieiraconfeitaria.com.br/cardapios/av_festas.pdf" },
+    "cat_combos":     { "tipo": "link", "texto": "Acesse o link e veja todas as opções disponíveis:", "url": "https://www.arletevieiraconfeitaria.com.br/cardapios/av_combos.pdf" },
+    "cat_bento":      { "tipo": "link", "texto": "Acesse o link e veja todas as opções disponíveis:", "url": "https://www.arletevieiraconfeitaria.com.br/cardapios/av_bentocake.pdf" },
+    "cat_cupcakes":   { "tipo": "link", "texto": "Acesse o link e veja todas as opções disponíveis:", "url": "https://www.arletevieiraconfeitaria.com.br/cardapios/av_cupcakes.pdf" },
+    "cat_bemcasados": { "tipo": "link", "texto": "Acesse o link e veja todas as opções disponíveis:", "url": "https://www.arletevieiraconfeitaria.com.br/cardapios/av_bemcasados.pdf" },
+    "cat_caseiros":   { "tipo": "link", "texto": "Acesse o link e veja todas as opções disponíveis:", "url": "https://www.arletevieiraconfeitaria.com.br/cardapios/av_caseiros.pdf" },
+
+    "atendente":        { "tipo": "atendente", "texto": "Seu atendimento já foi passado para um de nossos atendentes e em breve lhe responderemos." },
+    "atendente_pedido": { "tipo": "atendente", "texto": "O que você gostaria referente ao seu pedido?\n\nFique tranquilo, já direcionei você para nosso atendimento. Se for urgente ligue para nosso número comercial: (48) 2013-3000." },
+    "encomenda_info":   { "tipo": "atendente", "texto": "Perfeito! Pra adiantar seu atendimento personalizado, me conta:\n\n📅 Qual seria a data do seu evento?\n👥 Seria para quantas pessoas?\n\nAssim que responder, um de nossos atendentes assume daqui. 💛" },
+
+    "grupo_vip": { "tipo": "texto", "texto": "Entra no nosso grupo VIP e receba promoções em primeira mão! 💎\n\n👉 https://chat.whatsapp.com/BC8YCpquqGfJYLQV1JOqPk" }
+  },
+
+  "mensagens": {
+    "opcao_invalida": "Não entendi essa opção. 🤔 Escolha pelo *número*, por favor.",
+    "followup": "Conseguiu ver nossas opções? Estamos prontos para receber seu pedido! Se tiver alguma dúvida estamos à disposição. 💛",
+    "encerramento": "Sua conversa foi encerrada por falta de interação. Fique à vontade para iniciar um novo atendimento a qualquer momento.",
+    "ausencia": "Nosso atendimento pelo WhatsApp está temporariamente reduzido, funcionando das 13h às 18h, devido a uma situação pontual que já estamos resolvendo.\n\n⚠️ Isso não afeta as entregas dos pedidos, que continuam normalmente das 09h às 17h30.\n\nAssim que abrirmos o atendimento, vamos te responder o mais rápido possível! Como a procura tem sido grande, pedimos um pouquinho de paciência 💛\n\nSe você tiver um pedido urgente ligue em nosso fixo comercial: (48) 2013-3000.\n\nEnquanto isso, você já pode conferir mais informações nos menus anteriores."
+  },
+
+  "horario": {
+    "_obs": "Horario REDUZIDO TEMPORARIO do ManyChat. Normal pode ser outro — confirmar com o dono.",
+    "inicio": "13:00",
+    "fim": "18:00",
+    "dias": [1, 2, 3, 4, 5, 6]
+  }
+}

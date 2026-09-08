@@ -33,6 +33,8 @@ jobs:
             **/.git*
             **/.git*/**
             **/.github/**
+            bot-whatsapp/**
+            bot-monitor/hb-*.json
             includes/banco.php
             admin/config_financeiro.php
             admin/data/**

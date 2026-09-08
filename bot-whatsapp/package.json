@@ -1,0 +1,14 @@
+{
+  "name": "doceria-bot",
+  "version": "1.0.0",
+  "description": "Bot de primeiro atendimento WhatsApp (Evolution API) — Arlete Vieira Confeitaria",
+  "main": "bot.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node bot.js",
+    "mock": "node mock/send-webhook.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
