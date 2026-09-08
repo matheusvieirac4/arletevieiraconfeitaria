@@ -48,6 +48,18 @@ const ok = (cond, nome) => { orig((cond ? '  OK  ' : ' FALHA') + ' ' + nome); if
   await sleep(5000);
   ok(enviados.some(s => s.includes('Perfeito')), '"1" puro -> vai pro cardapio');
 
+  // C) 2 erros curtos seguidos -> transbordo pra humano (nao repete menu pra sempre)
+  await bot.processar(msg('c@s.whatsapp.net', 'oi', 'C1'));
+  await sleep(6000);
+  enviados.length = 0;
+  await bot.processar(msg('c@s.whatsapp.net', 'xyz', 'C2'));
+  await sleep(4000);
+  ok(enviados.some(s => s.includes('Não entendi')), '1o erro -> "nao entendi" + menu');
+  enviados.length = 0;
+  await bot.processar(msg('c@s.whatsapp.net', 'abc', 'C3'));
+  await sleep(4000);
+  ok(enviados.some(s => s.includes('passo pra um')) || enviados.some(s => s.includes('já foi passado')), '2o erro -> transbordo pro humano');
+
   console.log = orig;
   try { fs.unlinkSync(fixture); } catch {}
   orig(falhas ? `\n${falhas} teste(s) falharam.` : '\nReconhecimento de recado OK. ✅');

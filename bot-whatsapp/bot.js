@@ -519,6 +519,7 @@ async function processar(msg) {
 
   // Toque numa lista nativa: o rowId ja carrega o destino.
   if (rowId && (flow.menus[rowId] || flow.nodes[rowId])) {
+    c.erros = 0;
     await executarDestino(jid, c, rowId);
     return;
   }
@@ -526,6 +527,7 @@ async function processar(msg) {
   // Atalho por palavra-chave (funciona em qualquer sub-estado ativo).
   const alvoAtalho = matchAtalho(text);
   if (alvoAtalho) {
+    c.erros = 0;
     await executarDestino(jid, c, alvoAtalho);
     return;
   }
@@ -559,13 +561,23 @@ async function processar(msg) {
     const t = text.trim();
     const pareceRecado = /\n/.test(text) || t.length > 40 || t.split(/\s+/).length >= 6;
     if (pareceRecado && flow.nodes.atendente) {
+      c.erros = 0;
       await handoff(jid, c, { dentro: flow.nodes.atendente.texto, fora: flow.mensagens.recebido, jaAckou: true });
+      return;
+    }
+    // Transbordo: se o cliente erra o menu 2x seguidas, passa pra um atendente em
+    // vez de repetir o menu pra sempre (evita frustracao de quem nao entende).
+    c.erros = (c.erros || 0) + 1;
+    if (c.erros >= 2 && flow.nodes.atendente) {
+      c.erros = 0;
+      await handoff(jid, c, { dentro: flow.mensagens.transbordo || flow.nodes.atendente.texto, fora: flow.mensagens.recebido, jaAckou: true });
       return;
     }
     await reply(jid, flow.mensagens.opcao_invalida);
     await enviarMenu(jid, c.node);
     return;
   }
+  c.erros = 0;
   await executarDestino(jid, c, opt.goto);
 }
 
