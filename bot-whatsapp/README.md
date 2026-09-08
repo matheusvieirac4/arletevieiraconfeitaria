@@ -2,7 +2,7 @@
 
 Bot que responde o **primeiro contato** no WhatsApp com um menu numerado e **sai de cena assim que voce entra** na conversa. Roda ao lado do seu WhatsApp Web/celular no mesmo numero, via Evolution API (dispositivo vinculado, igual WhatsApp Web).
 
-> **Escopo:** responde inbound, entrega info de categoria, se cala quando humano entra. Nao faz CRM, IA, disparo em massa nem dashboard — de proposito.
+> **Escopo:** responde inbound, entrega os cardapios (PDFs) e passa pro humano quando pedido. Nao faz CRM, IA, disparo em massa nem dashboard — de proposito.
 
 ## Arquitetura
 
@@ -12,121 +12,126 @@ Cliente ─▶ WhatsApp ─▶ Evolution API (Docker) ─webhook─▶ bot.js �
                             voce responde pelo celular/web (fromMe) ─┘  => bot se cala
 ```
 
-- **Evolution** mantem o WebSocket com o WhatsApp (por isso precisa de VPS, nao hospedagem compartilhada).
-- **bot.js**: 1 arquivo, estado em `Map` + espelho em disco so do flag "humano", textos em `flow.json`, sob PM2 ou no proprio compose.
+- **Evolution** mantem o WebSocket com o WhatsApp — por isso roda numa maquina que fica de pe 24h (o **PC de casa** ou uma VPS), **nunca** em hospedagem compartilhada (nao roda processo persistente nem Docker).
+- **bot.js**: 1 arquivo. Estado em `Map` na memoria + espelho em disco (`data/state.json`) dos estados que nao podem se perder num restart. Textos e menus em `flow.json`. Sobe no proprio `docker-compose`.
+- Imagem Evolution: **`evoapicloud/evolution-api:latest`** (testado na v2.3.7). Versoes v2.3+ mandam o webhook em `/webhook/<evento>` — o bot aceita tanto `/webhook` quanto `/webhook/<evento>`.
 
 ## Por que os detalhes importam (leia antes de mexer)
 
 1. **`fromMe` tambem vem das mensagens do proprio bot.** O bot registra o `id` de tudo que envia e ignora esses `fromMe` — so o `fromMe` que ele **nao** enviou (voce, no celular) marca a conversa como humana. Sem isso o bot se mataria ao mandar o proprio menu.
-2. **O flag "humano" expira** (`HUMAN_TTL_HOURS`, padrao 18h). Cliente antigo que volta semanas depois recebe o menu de novo, em vez de ficar mudo pra sempre.
-3. **O flag "humano" e persistido em `data/state.json`.** Se o container reinicia no meio de um atendimento, o bot nao volta a atropelar sua conversa ao vivo.
+2. **O flag humano expira** (`HUMAN_TTL_HOURS`, padrao 18h). Cliente antigo que volta semanas depois recebe o menu de novo, em vez de ficar mudo pra sempre.
+3. **Estados HUMANO e PARADO sao persistidos** em `data/state.json` (+ flush no desligamento). Se o container reinicia no meio de um atendimento, o bot **nao** volta a atropelar sua conversa ao vivo com o menu.
+4. **O horario NAO bloqueia o menu.** Fiel ao ManyChat: o menu abre a qualquer hora; so os nos de atendimento humano respeitam o horario (`flow.horario`) e, fora dele, mandam a mensagem de ausencia.
+5. **Menu e NUMERADO em texto.** A lista nativa do WhatsApp quebra no Baileys atual (`ListMessage.toObject`); fica atras do flag `USE_NATIVE_LIST=true` pra religar se um dia consertar.
 
 ---
 
-## Passo a passo — subir na VPS
+## Subir (PC ou VPS)
 
-### 1. VPS
-Ubuntu 22.04+, 1 vCPU / 2GB ja bastam. Aponte o firewall pra liberar a porta `8080` (Evolution) apenas pro seu IP, se possivel.
-
-### 2. Docker
+### 1. Docker
+No Windows: instale o **Docker Desktop** e deixe-o iniciar junto com o sistema. Em Linux/VPS:
 ```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER   # reloga depois
+curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER
 ```
 
-### 3. Clonar e configurar
+### 2. Configurar
 ```bash
-git clone <SEU_REPO> doceria-bot && cd doceria-bot/bot-whatsapp
+cd bot-whatsapp
 cp .env.example .env
-nano .env    # preencha EVOLUTION_API_KEY, SERVER_URL (http://SEU_IP:8080), POSTGRES_PASSWORD
+# edite .env: EVOLUTION_API_KEY, POSTGRES_PASSWORD, HEARTBEAT_URL/SECRET (opcional), TELEGRAM_* (opcional)
 ```
 
-### 4. Subir
+### 3. Subir
 ```bash
 docker compose up -d --build
-docker compose logs -f bot    # acompanhe
+docker compose logs -f bot
 ```
 
-### 5. Criar a instancia e parear o numero
-Crie a instancia (uma vez):
+### 4. Parear o numero (uma vez)
 ```bash
-curl -X POST http://SEU_IP:8080/instance/create \
-  -H "apikey: SUA_EVOLUTION_API_KEY" \
-  -H "Content-Type: application/json" \
+# cria a instancia
+curl -X POST http://localhost:8080/instance/create \
+  -H "apikey: SUA_EVOLUTION_API_KEY" -H "Content-Type: application/json" \
   -d '{"instanceName":"arlete","integration":"WHATSAPP-BAILEYS","qrcode":true}'
+# pega o QR (base64) — ou abra o Manager em http://localhost:8080/manager
+curl http://localhost:8080/instance/connect/arlete -H "apikey: SUA_EVOLUTION_API_KEY"
 ```
-Pegue o QR Code:
-```bash
-curl http://SEU_IP:8080/instance/connect/arlete -H "apikey: SUA_EVOLUTION_API_KEY"
-```
-Abra o Evolution Manager em `http://SEU_IP:8080/manager` (mais facil de ler o QR), e no celular:
-**WhatsApp ▸ Aparelhos conectados ▸ Conectar um aparelho ▸ escaneie o QR.**
+No celular: **WhatsApp ▸ Aparelhos conectados ▸ Conectar um aparelho ▸ escaneie o QR.** Ocupa 1 dos 4 slots; seu celular e o WhatsApp Web seguem funcionando no mesmo numero. Se der "tente mais tarde", e rate-limit por excesso de QR — espere ~10 min e gere **um** QR, escaneie na hora.
 
-> Isso ocupa 1 dos 4 slots de dispositivo. Seu celular e o WhatsApp Web continuam funcionando no mesmo numero.
-
-### 6. Confirmar
-- `docker compose logs -f bot` deve mostrar `Bot doceria ouvindo em :3000`.
-- Mande "oi" de outro numero pro seu WhatsApp: deve chegar o menu.
-- Responda pelo celular: o bot deve parar de responder aquela conversa.
+### 5. Confirmar
+- Log mostra `Bot doceria ouvindo em :3000` e `[flow] flow.json valido.`
+- Mande "oi" de outro numero: chega saudacao + menu.
+- Responda pelo celular: o bot para de responder aquela conversa.
 
 ---
 
-## Testar localmente SEM WhatsApp real
+## Editar textos e menus — `flow.json`
 
-Nao precisa de VPS nem Evolution pra validar a logica:
+Estrutura (arvore de menus + nos de conteudo):
+
+```jsonc
+{
+  "saudacao": "texto com {{nome}} (primeiro nome do cliente)",
+  "start": "menu_principal",
+  "menus": {
+    "menu_principal": {
+      "body": "cabecalho do menu",
+      "opcoes": [
+        { "label": "Nosso Cardapio", "goto": "menu_cardapio" },   // goto = outro menu
+        { "label": "Atendente", "goto": "atendente" }             // ou um node
+      ]
+    }
+  },
+  "nodes": {
+    "cat_cupcakes": { "tipo": "link", "texto": "...", "url": "https://.../av_cupcakes.pdf" },
+    "grupo_vip":    { "tipo": "texto", "texto": "..." },
+    "atendente":    { "tipo": "atendente", "texto": "..." }   // passa pra humano (checa horario)
+  },
+  "mensagens": { "opcao_invalida": "...", "midia_recebida": "...", "ausencia": "...", "encerramento": "...", "followup": "..." },
+  "horario": { "inicio": "13:00", "fim": "18:00", "dias": [1,2,3,4,5,6] }   // 0=dom .. 6=sab
+}
+```
+
+O bot valida o `flow.json` no boot (goto orfao, campos faltando, limites de tamanho do WhatsApp) e lista problemas no log. `flow.json` entra por volume — edite e rode `docker compose restart bot`.
+
+## Testar sem WhatsApp real
 
 ```bash
 npm install
-# Terminal 1 — bot em modo DRY_RUN (nao chama o Evolution, so loga o que enviaria)
+npm test           # smoke test: funcoes puras (flow valido, extrator, horario, filtros)
+npm run test:e2e   # e2e: sobe Evolution falso e verifica o caminho de envio real
+
+# cenarios manuais de webhook (bot em DRY_RUN noutro terminal):
 DRY_RUN=true node bot.js
-# PowerShell:  $env:DRY_RUN='true'; node bot.js
-
-# Terminal 2 — dispara cenarios de webhook falso
-node mock/send-webhook.js menu       # primeiro contato
-node mock/send-webhook.js fluxo      # menu -> submenu -> categoria
-node mock/send-webhook.js humano     # voce responde (fromMe) e o bot se cala
-node mock/send-webhook.js flood      # 5 msgs seguidas -> 1 menu so
-node mock/send-webhook.js grupo      # mensagem de grupo -> ignorada
+node mock/send-webhook.js menu|fluxo|humano|flood|grupo
 ```
-
-Assista o Terminal 1: cada `[DRY_RUN -> ...]` e uma mensagem que o bot mandaria.
-
----
-
-## Editar os textos
-So `flow.json`. As chaves em `opcoes` sao os numeros que o cliente digita. No compose ele entra por volume read-only — edite e rode `docker compose restart bot`.
-
-> **Dica do seu handoff:** antes de recriar os 7 ramos de categoria, olhe as tags do ManyChat. Se a maioria cai em 2 categorias ou vai direto pro atendente, comece com 3 opcoes. Mudar depois e so editar o JSON.
 
 ## Operacao
 - **Logs:** `docker compose logs -f bot`
-- **Reiniciar so o bot:** `docker compose restart bot`
-- **Health:** `curl http://localhost:3000/health`
-- **Alerta de queda:** o handler `notifyOwner()` em `bot.js` esta como stub — plugue um Telegram/e-mail pra ser avisado se o numero desconectar.
+- **Reiniciar:** `docker compose restart bot`  ·  **Parar (voltar ao manual):** `docker compose stop bot`
+- **Health:** `curl http://localhost:3000/health` → `{conexao, conversas, uptimeSec, horarioAberto, metricas}`
+- **Alertas de queda:** dois canais, ambos opcionais e redundantes —
+  - **E-mail** via o monitor na HostGator (ver abaixo).
+  - **Telegram** direto: preencha `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` no `.env` (avisa no celular quando o WhatsApp desconectar).
 
-## Monitor de queda (rodando no PC de casa)
+## Monitor de queda por e-mail (`bot-monitor/`, na HostGator)
 
-O PC de casa cai quando falta luz/internet. O monitor avisa por e-mail quando isso acontece — sem precisar abrir porta no roteador, porque o **bot empurra** um heartbeat pra HostGator e o cron de la so observa o silencio.
+O PC cai quando falta luz/internet. Como o bot fica atras do roteador, o modelo e **push**: o bot manda um heartbeat (com o status da conexao) a cada 2 min pra HostGator, e um cron de la avisa quando o sinal some ou o WhatsApp desconecta. Sem abrir porta no roteador.
 
 ```
 PC (bot) --heartbeat 2min--> HostGator/bot-monitor/heartbeat.php  (grava timestamp+status)
                                     ^
-              cron 5min: heartbeat-check.php -> sem sinal? WhatsApp deslogou? -> e-mail
+              cron 5min: heartbeat-check.php -> sem sinal? WhatsApp deslogou? -> e-mail (so na mudanca)
 ```
 
-**Passos:**
-1. Os arquivos PHP estao em `../bot-monitor/` (na raiz do repo) e sobem pra HostGator pelo auto-deploy.
-2. Edite `bot-monitor/config.php`: `HB_SECRET` (um segredo longo), `HB_ALERT_EMAIL`, `HB_FROM_EMAIL` (use um e-mail do seu dominio).
-3. No `.env` do bot, aponte `HEARTBEAT_URL=https://SEU_DOMINIO/bot-monitor/heartbeat.php` e `HEARTBEAT_SECRET=` (o MESMO valor do `HB_SECRET`).
-4. No painel da HostGator, crie um **Cron Job** a cada 5 min:
-   ```
-   */5 * * * * php /home/SEU_USUARIO/public_html/bot-monitor/heartbeat-check.php
-   ```
-   (o caminho exato do `php` e da pasta aparece no painel de cron da HostGator).
+1. Os PHP em `../bot-monitor/` sobem pra HostGator pelo auto-deploy (push na main → FTPS).
+2. `bot-monitor/config.php`: `HB_SECRET`, `HB_ALERT_EMAIL`, `HB_FROM_EMAIL`.
+3. `.env` do bot: `HEARTBEAT_URL=https://SEU_DOMINIO/bot-monitor/heartbeat.php` e `HEARTBEAT_SECRET` = mesmo `HB_SECRET`.
+4. Cron na HostGator: `*/5 * * * * php /home/SEU_USUARIO/public_html/bot-monitor/heartbeat-check.php`
 
-O e-mail chega so quando o estado MUDA (queda, WhatsApp desconectado, ou normalizou) — nao spamma.
+O bot semeia o status real da conexao no boot (consulta o Evolution), entao um restart nao dispara falso alarme.
 
 ## Riscos conhecidos
 - **Ban (Baileys e engenharia reversa).** Baixo neste desenho (so inbound, zero disparo). Plano B: `docker compose stop bot` e voltar ao manual.
-- **Payload do webhook muda entre versoes do Evolution.** A imagem esta pinada (`v2.1.1`). Se trocar, confirme o shape com o mock antes de por no ar. O extrator de texto em `bot.js` (`extrairTexto`) e o ponto a revisar.
-- **Feriado nao e tratado** — em feriado o bot dira que esta aberto no horario normal.
+- **Payload do webhook muda entre versoes do Evolution.** Imagem pinada em `latest` (v2.3.7). Se trocar, rode `npm run test:e2e` e confira o extrator (`extrairTexto`/`extrairRowId`) antes de por no ar.
+- **Feriado nao e tratado** — em feriado dentro do horario o atendimento sera oferecido normalmente.
