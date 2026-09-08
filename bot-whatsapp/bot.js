@@ -38,6 +38,10 @@ const HEARTBEAT_URL     = process.env.HEARTBEAT_URL || '';                   // 
 const HEARTBEAT_SECRET  = process.env.HEARTBEAT_SECRET || '';
 const HEARTBEAT_MIN     = parseFloat(process.env.HEARTBEAT_MIN || '2');
 
+// Alerta redundante por Telegram (opcional). Se vazio, notifyOwner so loga.
+const TELEGRAM_TOKEN    = process.env.TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_CHAT     = process.env.TELEGRAM_CHAT_ID || '';
+
 const STATE_FILE        = path.join(__dirname, 'data', 'state.json');
 const FLOW_FILE         = path.join(__dirname, 'flow.json');
 
@@ -56,8 +60,11 @@ function validarFlow() {
   for (const [id, menu] of Object.entries(flow.menus || {})) {
     if (!menu.body) probs.push(`menu "${id}" sem body`);
     if (!Array.isArray(menu.opcoes) || !menu.opcoes.length) probs.push(`menu "${id}" sem opcoes`);
+    // Limites do WhatsApp (importam se USE_NATIVE_LIST): max 10 linhas, titulo <=24 chars.
+    if ((menu.opcoes || []).length > 10) probs.push(`menu "${id}" tem ${menu.opcoes.length} opcoes (lista nativa suporta no maximo 10)`);
     (menu.opcoes || []).forEach((o, i) => {
       if (!o.label) probs.push(`menu "${id}" opcao ${i + 1} sem label`);
+      if (o.label && o.label.length > 24) probs.push(`menu "${id}" opcao "${o.label}" tem ${o.label.length} chars (lista nativa corta em 24)`);
       if (!alvos.has(o.goto)) probs.push(`menu "${id}" opcao "${o.label}" aponta pra goto inexistente: "${o.goto}"`);
     });
   }
@@ -420,11 +427,26 @@ function normalizar(data) {
 }
 
 // ----------------------------------------------------------------------------
-// Alerta de reconexao (plugue Telegram/e-mail aqui)
+// Alerta ao dono. Canal redundante ao monitor da HostGator: se TELEGRAM_BOT_TOKEN
+// e TELEGRAM_CHAT_ID estiverem no .env, manda no Telegram (chega instantaneo no
+// celular). Se nao, so loga. Dedupe simples pra nao repetir o mesmo alerta em loop.
 // ----------------------------------------------------------------------------
-function notifyOwner(texto) {
+let ultimoAlerta = { texto: null, em: 0 };
+async function notifyOwner(texto) {
   console.warn(`[ALERTA] ${texto}`);
-  // TODO: fetch pro Telegram Bot API / e-mail. Quero saber se o numero cair.
+  // Dedupe: nao repete o mesmo alerta dentro de 10 min.
+  if (texto === ultimoAlerta.texto && (Date.now() - ultimoAlerta.em) < hoursMs(1 / 6)) return;
+  ultimoAlerta = { texto, em: Date.now() };
+  if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT, text: `🤖 Bot Doceria: ${texto}` }),
+    });
+  } catch (e) {
+    console.error('[notifyOwner] falha no Telegram:', e.message);
+  }
 }
 
 // ----------------------------------------------------------------------------
