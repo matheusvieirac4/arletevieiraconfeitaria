@@ -47,7 +47,16 @@
 
     "atendente":        { "tipo": "atendente", "texto": "Seu atendimento já foi passado para um de nossos atendentes e em breve lhe responderemos." },
     "atendente_pedido": { "tipo": "atendente", "texto": "O que você gostaria referente ao seu pedido?\n\nFique tranquilo, já direcionei você para nosso atendimento. Se for urgente ligue para nosso número comercial: (48) 2013-3000." },
-    "encomenda_info":   { "tipo": "atendente", "texto": "Perfeito! Pra adiantar seu atendimento personalizado, me conta:\n\n📅 Qual seria a data do seu evento?\n👥 Seria para quantas pessoas?\n\nAssim que responder, um de nossos atendentes assume daqui. 💛" },
+    "encomenda_info": {
+      "tipo": "perguntas",
+      "intro": "Perfeito! Vou anotar rapidinho pra adiantar seu atendimento. 💛 (responda uma de cada vez)",
+      "perguntas": [
+        { "chave": "item", "rotulo": "O que deseja", "texto": "🎂 O que você gostaria? (bolo, docinhos, salgados, combo...)" },
+        { "chave": "data", "rotulo": "Data", "texto": "📅 Para qual *data*?" },
+        { "chave": "pessoas", "rotulo": "Quantidade / nº de pessoas", "texto": "👥 Para *quantas pessoas* (ou qual quantidade)?" }
+      ],
+      "final": "Anotado! ✅ Já passei suas informações pro nosso atendimento — em breve te respondemos com tudo certinho. 💛"
+    },
 
     "grupo_vip": { "tipo": "texto", "texto": "Entra no nosso grupo VIP e receba promoções em primeira mão! 💎\n\n👉 https://chat.whatsapp.com/BC8YCpquqGfJYLQV1JOqPk" }
   },

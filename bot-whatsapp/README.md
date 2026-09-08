@@ -85,7 +85,9 @@ Estrutura (arvore de menus + nos de conteudo):
   "nodes": {
     "cat_cupcakes": { "tipo": "link", "texto": "...", "url": "https://.../av_cupcakes.pdf" },
     "grupo_vip":    { "tipo": "texto", "texto": "..." },
-    "atendente":    { "tipo": "atendente", "texto": "..." }   // passa pra humano (checa horario)
+    "atendente":    { "tipo": "atendente", "texto": "..." },  // passa pra humano (checa horario)
+    "encomenda":    { "tipo": "perguntas", "intro": "...", "final": "...",  // captura guiada de pedido
+                      "perguntas": [ { "chave": "data", "rotulo": "Data", "texto": "Qual a data?" } ] }
   },
   "mensagens": { "opcao_invalida": "...", "midia_recebida": "...", "ausencia": "...", "encerramento": "...", "followup": "..." },
   "horario": { "inicio": "13:00", "fim": "18:00", "dias": [1,2,3,4,5,6] }   // 0=dom .. 6=sab

@@ -79,9 +79,14 @@ function validarFlow() {
     });
   }
   for (const [id, node] of Object.entries(flow.nodes || {})) {
-    if (!['link', 'texto', 'atendente'].includes(node.tipo)) probs.push(`node "${id}" tipo invalido: "${node.tipo}"`);
+    if (!['link', 'texto', 'atendente', 'perguntas'].includes(node.tipo)) probs.push(`node "${id}" tipo invalido: "${node.tipo}"`);
     if (node.tipo === 'link' && !node.url) probs.push(`node "${id}" (link) sem url`);
-    if (!node.texto && node.tipo !== 'link') probs.push(`node "${id}" sem texto`);
+    if (node.tipo === 'perguntas') {
+      if (!Array.isArray(node.perguntas) || !node.perguntas.length) probs.push(`node "${id}" (perguntas) sem lista de perguntas`);
+      (node.perguntas || []).forEach((p, i) => { if (!p.chave || !p.texto) probs.push(`node "${id}" pergunta ${i + 1} sem chave/texto`); });
+    } else if (!node.texto && node.tipo !== 'link') {
+      probs.push(`node "${id}" sem texto`);
+    }
   }
   for (const k of ['opcao_invalida', 'ausencia', 'encerramento']) {
     if (!flow.mensagens?.[k]) probs.push(`mensagens.${k} ausente`);
@@ -96,13 +101,14 @@ function validarFlow() {
 //   seenIds:   idempotencia — messageIds ja processados
 // ----------------------------------------------------------------------------
 // ACTIVE = navegando a arvore de menus; PARADO = passado pra humano (bot cala ate voce responder)
-const STATES = { ACTIVE: 'ACTIVE', PARADO: 'PARADO', HUMANO: 'HUMANO', ENCERRADO: 'ENCERRADO' };
+// COLETANDO = coletando respostas de um no 'perguntas' (captura guiada de pedido)
+const STATES = { ACTIVE: 'ACTIVE', COLETANDO: 'COLETANDO', PARADO: 'PARADO', HUMANO: 'HUMANO', ENCERRADO: 'ENCERRADO' };
 const conversas = new Map();
 const sentIds   = new Map();   // id -> timestamp (expira)
 const seenIds   = new Map();   // id -> timestamp (expira)
 const chatQueue = new Map();   // jid -> Promise (serializa mensagens do mesmo chat)
 let connState   = 'unknown';   // estado da conexao Evolution<->WhatsApp (vai no heartbeat)
-const metricas  = { desde: Date.now(), atendimentosIniciados: 0, handoffs: 0, foraDoHorario: 0 };  // contadores desde o boot
+const metricas  = { desde: Date.now(), atendimentosIniciados: 0, handoffs: 0, foraDoHorario: 0, pedidosCapturados: 0 };  // contadores desde o boot
 
 // --- Persistencia dos estados que NAO podem ser perdidos num restart --------
 // HUMANO (voce respondeu) e PARADO (menu passou pra humano): se sumirem num
@@ -288,7 +294,7 @@ function armarTimeout(jid, msgKey) {
   if (c.timer) clearTimeout(c.timer);
   c.timer = setTimeout(async () => {
     const cur = conversas.get(jid);
-    if (!cur || cur.state !== STATES.ACTIVE) return;
+    if (!cur || (cur.state !== STATES.ACTIVE && cur.state !== STATES.COLETANDO)) return;
     await reply(jid, flow.mensagens[msgKey] || flow.mensagens.encerramento);
     cur.state = STATES.ENCERRADO;
     cur.timer = null;
@@ -347,6 +353,14 @@ async function executarDestino(jid, c, target) {
     await reply(jid, node.texto);
     c.node = '__aguardando__';
     armarTimeout(jid, 'followup');
+  } else if (node.tipo === 'perguntas') {
+    // Captura guiada: pergunta uma por vez, junta as respostas e monta um resumo.
+    if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+    c.state = STATES.COLETANDO;
+    c.coleta = { nodeId: target, idx: 0, respostas: {} };
+    if (node.intro) await reply(jid, node.intro);
+    await reply(jid, node.perguntas[0].texto);
+    armarTimeout(jid, 'encerramento');   // se abandonar no meio, encerra
   } else if (node.tipo === 'atendente') {
     // AQUI e o unico ponto que checa horario (fiel ao ManyChat: o menu abre sempre,
     // so o atendimento humano respeita o horario). Fora do horario -> ausencia.
@@ -396,6 +410,37 @@ async function processar(msg) {
   if (c && c.state === STATES.PARADO) {
     if ((Date.now() - c.lastSeen) < hoursMs(MENU_RESET_HOURS)) { c.lastSeen = Date.now(); saveStateThrottled(); return; }
     conversas.delete(jid); c = null;        // PARADO velho: esquece, vira elegivel
+  }
+
+  // --- REGRA 2c: coletando respostas (captura guiada de pedido) ---------
+  if (c && c.state === STATES.COLETANDO && c.coleta) {
+    c.lastSeen = Date.now();
+    const node = flow.nodes[c.coleta.nodeId];
+    const pergunta = node.perguntas[c.coleta.idx];
+    const resposta = (text || '').trim();
+    if (!resposta) {                        // audio/imagem no meio da coleta -> re-pergunta
+      await reply(jid, flow.mensagens.midia_recebida || 'Me responde em texto, por favor. 🙂');
+      await reply(jid, pergunta.texto);
+      return;
+    }
+    c.coleta.respostas[pergunta.chave] = resposta;
+    c.coleta.idx++;
+    if (c.coleta.idx < node.perguntas.length) {   // proxima pergunta
+      await reply(jid, node.perguntas[c.coleta.idx].texto);
+      return;
+    }
+    // terminou: monta resumo, confirma e passa pro humano com tudo organizado
+    const r = c.coleta.respostas;
+    const resumo = node.perguntas.map(p => `• *${p.rotulo || p.chave}:* ${r[p.chave]}`).join('\n');
+    await reply(jid, `📋 *Seu pedido, resumido:*\n${resumo}`);
+    if (node.final) await reply(jid, node.final);
+    if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+    c.state = STATES.PARADO;
+    c.coleta = null;
+    metricas.handoffs++;
+    metricas.pedidosCapturados++;
+    saveStateThrottled();
+    return;
   }
 
   // OBS: o horario NAO bloqueia o menu (fiel ao ManyChat). A checagem de horario
