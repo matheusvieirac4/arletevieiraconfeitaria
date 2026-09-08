@@ -33,5 +33,12 @@ ok(bot.dentroDoHorario(new Date('2026-09-07T18:00:00Z')) === true, 'seg 15h SP =
 ok(bot.dentroDoHorario(new Date('2026-09-07T15:00:00Z')) === false, 'seg 12h SP = fechado (antes das 13h)');
 ok(bot.dentroDoHorario(new Date('2026-09-13T18:00:00Z')) === false, 'domingo = fechado');
 
+// 6) gcConversas remove expiradas e preserva as recentes
+bot.conversas.set('velha@s.whatsapp.net', { state: 'HUMANO', humanUntil: Date.now() - 1000, lastSeen: Date.now() - 99 * 3600e3, timer: null });
+bot.conversas.set('nova@s.whatsapp.net', { state: 'PARADO', lastSeen: Date.now(), timer: null });
+const removidos = bot.gcConversas();
+ok(removidos === 1, 'gcConversas remove 1 expirada');
+ok(bot.conversas.has('nova@s.whatsapp.net') && !bot.conversas.has('velha@s.whatsapp.net'), 'gcConversas preserva a recente e remove a velha');
+
 console.log(falhas ? `\n${falhas} teste(s) falharam.` : '\nTodos os testes passaram. ✅');
 process.exit(falhas ? 1 : 0);

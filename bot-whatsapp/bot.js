@@ -169,6 +169,26 @@ function gcIds() {
 }
 setInterval(gcIds, hoursMs(1));
 
+// Varredura de conversas expiradas: sem isso, flags HUMANO/PARADO ficam no Map
+// (e no state.json) ate um restart — vaza memoria com muitos clientes ao longo do
+// tempo. Remove HUMANO com TTL vencido e qualquer conversa inativa alem da janela.
+function gcConversas(now = Date.now()) {
+  const limiteInatividade = hoursMs(Math.max(HUMAN_TTL_HOURS, MENU_RESET_HOURS) + 1);
+  let removidos = 0;
+  for (const [jid, c] of conversas) {
+    const humanoVencido = c.state === STATES.HUMANO && c.humanUntil && c.humanUntil <= now;
+    const inativo = (now - (c.lastSeen || 0)) > limiteInatividade;
+    if (humanoVencido || inativo) {
+      if (c.timer) clearTimeout(c.timer);
+      conversas.delete(jid);
+      removidos++;
+    }
+  }
+  if (removidos) { console.log(`[gc] ${removidos} conversa(s) expirada(s) removida(s)`); saveStateThrottled(); }
+  return removidos;
+}
+setInterval(() => gcConversas(), hoursMs(1));
+
 // ----------------------------------------------------------------------------
 // Envio via Evolution API
 // ----------------------------------------------------------------------------
@@ -358,8 +378,13 @@ async function processar(msg) {
     conversas.delete(jid); c = null;        // TTL expirou: esquece, vira elegivel de novo
   }
 
-  // --- REGRA 2b: passado pra humano -> bot fica calado ate voce responder
-  if (c && c.state === STATES.PARADO) { c.lastSeen = Date.now(); saveStateThrottled(); return; }
+  // --- REGRA 2b: passado pra humano -> bot fica calado ate voce responder.
+  // Mas expira pela janela do reset de menu: cliente que volta dias depois
+  // recebe o menu de novo, em vez de ficar mudo pra sempre.
+  if (c && c.state === STATES.PARADO) {
+    if ((Date.now() - c.lastSeen) < hoursMs(MENU_RESET_HOURS)) { c.lastSeen = Date.now(); saveStateThrottled(); return; }
+    conversas.delete(jid); c = null;        // PARADO velho: esquece, vira elegivel
+  }
 
   // OBS: o horario NAO bloqueia o menu (fiel ao ManyChat). A checagem de horario
   // acontece so nos nos de atendimento humano (ver executarDestino).
@@ -594,4 +619,4 @@ function boot() {
 if (require.main === module) boot();
 
 // Exporta pra testes (mock/smoke-test.js)
-module.exports = { app, processar, normalizar, dentroDoHorario, extrairTexto, extrairRowId, validarFlow, conversas };
+module.exports = { app, processar, normalizar, dentroDoHorario, extrairTexto, extrairRowId, validarFlow, gcConversas, conversas };
