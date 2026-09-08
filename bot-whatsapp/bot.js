@@ -544,9 +544,24 @@ async function processar(msg) {
     await enviarMenu(jid, c.node);
     return;
   }
-  const escolha = parseInt(text.trim(), 10);
-  const opt = menu.opcoes[escolha - 1];
+  // So conta como escolha de menu se a mensagem for SO um numero de 1-2 digitos
+  // (aceita emoji keycap "1️⃣", ponto, parenteses). "1 bolo 30 fatias..." NAO e
+  // escolha — senao o parseInt agarra o "1" e manda pro cardapio (bug real).
+  const digs = text.replace(/\D/g, '');
+  const soNumero = digs.length >= 1 && digs.length <= 2 &&
+                   text.replace(/\d/g, '').replace(/[️⃣\s.)]/g, '') === '';
+  const opt = soNumero ? menu.opcoes[parseInt(digs, 10) - 1] : undefined;
   if (!opt) {
+    // Nao e numero valido. Se parece um RECADO/PEDIDO (texto longo ou multi-linha),
+    // o cliente esta escrevendo o pedido em vez de navegar — passa pro humano em vez
+    // de re-empurrar o menu (foi a frustracao real de clientes que mandaram o pedido
+    // inteiro). Heuristica de tamanho, nao NLP. Fora do horario, confirma "recebemos".
+    const t = text.trim();
+    const pareceRecado = /\n/.test(text) || t.length > 40 || t.split(/\s+/).length >= 6;
+    if (pareceRecado && flow.nodes.atendente) {
+      await handoff(jid, c, { dentro: flow.nodes.atendente.texto, fora: flow.mensagens.recebido, jaAckou: true });
+      return;
+    }
     await reply(jid, flow.mensagens.opcao_invalida);
     await enviarMenu(jid, c.node);
     return;
