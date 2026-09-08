@@ -18,7 +18,17 @@
     "encomenda": "encomenda_info",
     "encomendar": "encomenda_info",
     "pedido": "atendente_pedido",
-    "vip": "grupo_vip"
+    "vip": "grupo_vip",
+    "endereco": "faq_endereco",
+    "localizacao": "faq_endereco",
+    "chegar": "faq_endereco",
+    "horario": "faq_horario",
+    "entrega": "faq_horario",
+    "contato": "faq_contato",
+    "telefone": "faq_contato",
+    "duvida": "menu_faq",
+    "duvidas": "menu_faq",
+    "faq": "menu_faq"
   },
 
   "menus": {
@@ -30,7 +40,17 @@
         { "label": "Combo promocional 🎉", "goto": "cat_combos" },
         { "label": "Meu Pedido/Dúvidas 🚚", "goto": "atendente_pedido" },
         { "label": "Atendimento Humano 👤", "goto": "atendente" },
+        { "label": "Dúvidas frequentes ❓", "goto": "menu_faq" },
         { "label": "Grupo VIP 💎", "goto": "grupo_vip" }
+      ]
+    },
+    "menu_faq": {
+      "body": "Posso te ajudar com uma dessas? 👇",
+      "opcoes": [
+        { "label": "Endereço e como chegar", "goto": "faq_endereco" },
+        { "label": "Horário e entregas", "goto": "faq_horario" },
+        { "label": "Contato", "goto": "faq_contato" },
+        { "label": "Voltar", "goto": "menu_principal" }
       ]
     },
     "menu_cardapio": {
@@ -75,7 +95,10 @@
       "final": "Anotado! ✅ Já passei suas informações pro nosso atendimento — em breve te respondemos com tudo certinho. 💛"
     },
 
-    "grupo_vip": { "tipo": "texto", "texto": "Entra no nosso grupo VIP e receba promoções em primeira mão! 💎\n\n👉 https://chat.whatsapp.com/BC8YCpquqGfJYLQV1JOqPk" }
+    "grupo_vip": { "tipo": "texto", "texto": "Entra no nosso grupo VIP e receba promoções em primeira mão! 💎\n\n👉 https://chat.whatsapp.com/BC8YCpquqGfJYLQV1JOqPk" },
+    "faq_endereco": { "tipo": "texto", "texto": "📍 *Nossa loja (matriz):*\nRua José Francisco Cunha, 246 — Roçado, São José/SC.\n\n🗺️ Como chegar:\nhttps://maps.google.com/?q=Rua+Jos%C3%A9+Francisco+Cunha,+246,+Ro%C3%A7ado,+S%C3%A3o+Jos%C3%A9+-+SC" },
+    "faq_horario": { "tipo": "texto", "texto": "🕐 *Loja e entregas:* Seg a Sáb, das 09h às 17h30.\n\nEncomendas: peça com antecedência pra garantir a data. 💛" },
+    "faq_contato": { "tipo": "texto", "texto": "☎️ *Telefone:* (48) 2013-3000\n✉️ *E-mail:* contato@arletevieiraconfeitaria.com.br\n📸 *Instagram:* @arletevieiraconfeitaria" }
   },
 
   "mensagens": {

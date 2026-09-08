@@ -45,7 +45,8 @@ else { linhas.push(`  inicio --> ${flow.start}`); }
 
 // menus (hexagono)
 for (const [id, menu] of Object.entries(flow.menus || {})) {
-  linhas.push(`  ${id}{{"${esc(humanize(id))}"}}:::menu`);
+  const nome = id === flow.start ? 'Menu principal' : humanize(id.replace(/^menu_/, ''));
+  linhas.push(`  ${id}{{"${esc(nome)}"}}:::menu`);
 }
 // nodes de conteudo
 for (const [id, node] of Object.entries(flow.nodes || {})) {

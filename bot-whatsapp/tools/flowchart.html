@@ -59,8 +59,8 @@
     <h1>Fluxo do bot, do jeito que ele atende hoje</h1>
     <p class="sub">Mapa gerado direto do <code>flow.json</code> — cada menu, cada cardápio em PDF e o caminho até um humano assumir. Republica sempre que o fluxo muda.</p>
     <div class="meta">
-      <span class="chip"><b>3</b> menus</span>
-      <span class="chip"><b>10</b> destinos</span>
+      <span class="chip"><b>4</b> menus</span>
+      <span class="chip"><b>13</b> destinos</span>
       <span class="chip">Atendimento: <b>seg, ter, qua, qui, sex, sáb · 13:00–18:00</b></span>
     </div>
   </header>
@@ -72,8 +72,9 @@ flowchart TD
   saud["💬 Saudação"]:::texto
   inicio --> saud --> menu_principal
   menu_principal{{"Menu principal"}}:::menu
-  menu_cardapio{{"Menu cardapio"}}:::menu
-  menu_bolo{{"Menu bolo"}}:::menu
+  menu_faq{{"Faq"}}:::menu
+  menu_cardapio{{"Cardapio"}}:::menu
+  menu_bolo{{"Bolo"}}:::menu
   cat_festas[/"📄 Festas"/]:::pdf
   cat_combos[/"📄 Combos"/]:::pdf
   cat_bento[/"📄 Bentocake"/]:::pdf
@@ -84,13 +85,21 @@ flowchart TD
   atendente_pedido(["👤 Atendente pedido"]):::atendente
   encomenda_info[["📋 Encomenda info"]]:::perguntas
   grupo_vip["💬 Grupo vip"]:::texto
+  faq_endereco["💬 Faq endereco"]:::texto
+  faq_horario["💬 Faq horario"]:::texto
+  faq_contato["💬 Faq contato"]:::texto
   humano["🤫 Você assume<br/>bot silencia"]:::humano
   menu_principal -->|"Nosso Cardápio 📓"| menu_cardapio
   menu_principal -->|"Bolo Personalizado 🍰"| menu_bolo
   menu_principal -->|"Combo promocional 🎉"| cat_combos
   menu_principal -->|"Meu Pedido/Dúvidas 🚚"| atendente_pedido
   menu_principal -->|"Atendimento Humano 👤"| atendente
+  menu_principal -->|"Dúvidas frequentes ❓"| menu_faq
   menu_principal -->|"Grupo VIP 💎"| grupo_vip
+  menu_faq -->|"Endereço e como chegar"| faq_endereco
+  menu_faq -->|"Horário e entregas"| faq_horario
+  menu_faq -->|"Contato"| faq_contato
+  menu_faq -->|"Voltar"| menu_principal
   menu_cardapio -->|"Bolos, doces e salgados"| cat_festas
   menu_cardapio -->|"Combos"| cat_combos
   menu_cardapio -->|"Bento Cakes"| cat_bento
@@ -134,10 +143,10 @@ flowchart TD
         <li>Sem resposta por ~23h, o bot manda um lembrete e encerra.</li>
       </ul>
     </div>
-    <div class="card"><h3>Atalhos por palavra-chave</h3><p style="margin:0 0 10px;color:var(--muted);font-size:13px">O cliente pode digitar em vez de navegar:</p><div class="kw"><div class="kwrow"><span class="kws"><code>cardapio</code> <code>cardapios</code> <code>menu</code></span><span class="kwto">→ Menu cardapio</span></div><div class="kwrow"><span class="kws"><code>bolo</code></span><span class="kwto">→ Menu bolo</span></div><div class="kwrow"><span class="kws"><code>combo</code> <code>combos</code></span><span class="kwto">→ Cat combos</span></div><div class="kwrow"><span class="kws"><code>cupcake</code> <code>cupcakes</code></span><span class="kwto">→ Cat cupcakes</span></div><div class="kwrow"><span class="kws"><code>atendente</code> <code>humano</code></span><span class="kwto">→ Atendente</span></div><div class="kwrow"><span class="kws"><code>encomenda</code> <code>encomendar</code></span><span class="kwto">→ Encomenda info</span></div><div class="kwrow"><span class="kws"><code>pedido</code></span><span class="kwto">→ Atendente pedido</span></div><div class="kwrow"><span class="kws"><code>vip</code></span><span class="kwto">→ Grupo vip</span></div></div></div>
+    <div class="card"><h3>Atalhos por palavra-chave</h3><p style="margin:0 0 10px;color:var(--muted);font-size:13px">O cliente pode digitar em vez de navegar:</p><div class="kw"><div class="kwrow"><span class="kws"><code>cardapio</code> <code>cardapios</code> <code>menu</code></span><span class="kwto">→ Menu cardapio</span></div><div class="kwrow"><span class="kws"><code>bolo</code></span><span class="kwto">→ Menu bolo</span></div><div class="kwrow"><span class="kws"><code>combo</code> <code>combos</code></span><span class="kwto">→ Cat combos</span></div><div class="kwrow"><span class="kws"><code>cupcake</code> <code>cupcakes</code></span><span class="kwto">→ Cat cupcakes</span></div><div class="kwrow"><span class="kws"><code>atendente</code> <code>humano</code></span><span class="kwto">→ Atendente</span></div><div class="kwrow"><span class="kws"><code>encomenda</code> <code>encomendar</code></span><span class="kwto">→ Encomenda info</span></div><div class="kwrow"><span class="kws"><code>pedido</code></span><span class="kwto">→ Atendente pedido</span></div><div class="kwrow"><span class="kws"><code>vip</code></span><span class="kwto">→ Grupo vip</span></div><div class="kwrow"><span class="kws"><code>endereco</code> <code>localizacao</code> <code>chegar</code></span><span class="kwto">→ Faq endereco</span></div><div class="kwrow"><span class="kws"><code>horario</code> <code>entrega</code></span><span class="kwto">→ Faq horario</span></div><div class="kwrow"><span class="kws"><code>contato</code> <code>telefone</code></span><span class="kwto">→ Faq contato</span></div><div class="kwrow"><span class="kws"><code>duvida</code> <code>duvidas</code> <code>faq</code></span><span class="kwto">→ Menu faq</span></div></div></div>
   </div>
 
-  <footer>Gerado de flow.json em 08/09/2026, 06:09:51 (America/Sao_Paulo)</footer>
+  <footer>Gerado de flow.json em 08/09/2026, 06:29:39 (America/Sao_Paulo)</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
