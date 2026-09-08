@@ -428,6 +428,21 @@ app.post(['/webhook', '/webhook/:evento'], (req, res) => {
   }
 });
 
+// Semeia/atualiza o connState consultando o Evolution. Evita FALSO ALARME de
+// "WhatsApp desconectado" logo apos um restart (quando ainda nao chegou o evento
+// connection.update e o connState estaria 'unknown').
+async function fetchConnState() {
+  if (DRY_RUN) return;
+  try {
+    const res = await fetch(`${EVOLUTION_URL}/instance/connectionState/${INSTANCE}`, { headers: { apikey: EVOLUTION_KEY } });
+    const body = await res.json().catch(() => ({}));
+    const st = body?.instance?.state;
+    if (st) connState = st;
+  } catch (e) {
+    console.error('[connState] falha ao consultar Evolution:', e.message);
+  }
+}
+
 // ----------------------------------------------------------------------------
 // Heartbeat: empurra sinal de vida + status da conexao pra HostGator
 // ----------------------------------------------------------------------------
@@ -453,8 +468,11 @@ app.listen(PORT, () => {
   console.log(`Bot doceria ouvindo em :${PORT}  (DRY_RUN=${DRY_RUN}, TZ=${TZ})`);
   console.log(`Horario comercial agora? ${dentroDoHorario() ? 'ABERTO' : 'FECHADO'}`);
   if (HEARTBEAT_URL) {
-    sendHeartbeat();
+    // Semeia o connState real antes do 1o heartbeat (evita falso alarme pos-restart),
+    // e reconsulta periodicamente como rede de seguranca caso um evento se perca.
+    fetchConnState().then(sendHeartbeat);
     setInterval(sendHeartbeat, HEARTBEAT_MIN * 60 * 1000);
+    setInterval(fetchConnState, 5 * 60 * 1000);
     console.log(`[heartbeat] ativo -> ${HEARTBEAT_URL} a cada ${HEARTBEAT_MIN}min`);
   } else {
     console.log('[heartbeat] desativado (defina HEARTBEAT_URL no .env pra ativar)');
