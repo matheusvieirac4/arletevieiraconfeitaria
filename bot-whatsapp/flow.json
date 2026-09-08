@@ -3,6 +3,8 @@
 
   "saudacao": "👋 Olá, {{nome}}!\nQue bom te ver por aqui 💛\nSou o atendimento da Arlete Vieira Confeitaria e vou te ajudar rapidinho 😊\n\nMe conta: o que você procura hoje?",
   "start": "menu_principal",
+  "_ignorar_obs": "Numeros que o bot NUNCA atende (parceiros de festa, fornecedores). So digitos; tolera 9o digito e DDI 55. Ex: \"5548991689995\" ou \"48991689995\".",
+  "ignorar": [],
   "_atalhos_obs": "Palavra-chave -> destino (menu ou node existente). Cliente digita e pula direto. So palavras inteiras, mensagens curtas.",
   "atalhos": {
     "cardapio": "menu_cardapio",

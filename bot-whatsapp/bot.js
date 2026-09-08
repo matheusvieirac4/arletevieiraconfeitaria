@@ -180,6 +180,16 @@ const hoursMs = h => h * 60 * 60 * 1000;
 const sleep   = ms => new Promise(r => setTimeout(r, ms));
 const randDelay = () => 1000 + Math.floor(Math.random() * 2000); // 1-3s
 
+// Chave canonica de um numero BR: DDD + 8 digitos, ignorando DDI (55) e o 9o
+// digito de celular — pra casar "5548991689995", "554891689995", "(48) 99168-9995".
+function chaveNumero(s) {
+  let d = (s || '').split('@')[0].replace(/\D/g, '');
+  if (d.startsWith('55') && d.length > 11) d = d.slice(2);   // tira DDI
+  return d.slice(0, 2) + d.slice(-8);                        // DDD + assinante (8)
+}
+// Contatos que o bot NUNCA atende (parceiros/fornecedores) — de flow.ignorar.
+const ignorarSet = new Set((flow.ignorar || []).map(chaveNumero));
+
 // Normaliza texto pra casar atalho: minusculo, sem acento, sem pontuacao.
 const normalizarTexto = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
 // Atalho por palavra-chave: se a msg contem uma keyword (palavra inteira), roteia
@@ -420,6 +430,10 @@ async function processar(msg) {
   // Idempotencia: webhook pode duplicar
   if (id && seenIds.has(id)) return;
   if (id) seenIds.set(id, Date.now());
+
+  // Lista de "nunca atender": parceiros/fornecedores nao passam por triagem.
+  // O bot fica 100% mudo com esses contatos (nem responde, nem marca estado).
+  if (ignorarSet.has(chaveNumero(jid))) return;
 
   // --- REGRA 1: fromMe (so conta se NAO for envio do proprio bot) --------
   if (fromMe) {
@@ -730,4 +744,4 @@ function boot() {
 if (require.main === module) boot();
 
 // Exporta pra testes (mock/smoke-test.js)
-module.exports = { app, processar, normalizar, dentroDoHorario, extrairTexto, extrairRowId, validarFlow, gcConversas, conversas };
+module.exports = { app, processar, normalizar, dentroDoHorario, extrairTexto, extrairRowId, validarFlow, gcConversas, chaveNumero, conversas };

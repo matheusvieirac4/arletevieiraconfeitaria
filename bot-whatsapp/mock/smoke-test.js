@@ -43,5 +43,10 @@ ok(removidos === 1, 'gcConversas remove 1 expirada');
 ok(bot.conversas.has('nova@s.whatsapp.net') && !bot.conversas.has('velha@s.whatsapp.net'), 'gcConversas preserva a recente e remove a velha');
 ok(bot.conversas.has('followup@s.whatsapp.net'), 'gcConversas preserva conversa de 20h (follow-up de 23h ainda vai disparar)');
 
+// 7) chaveNumero canoniza (tolera 9o digito e DDI) — base da lista de ignorados
+const k = bot.chaveNumero('5548991689995');
+ok(k === bot.chaveNumero('554891689995'), 'chaveNumero tolera 9o digito (com/sem)');
+ok(k === bot.chaveNumero('(48) 99168-9995'), 'chaveNumero tolera formatacao e DDI');
+
 console.log(falhas ? `\n${falhas} teste(s) falharam.` : '\nTodos os testes passaram. ✅');
 process.exit(falhas ? 1 : 0);
