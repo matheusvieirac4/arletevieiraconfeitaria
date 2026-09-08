@@ -48,7 +48,17 @@ const FLOW_FILE         = path.join(__dirname, 'flow.json');
 // ----------------------------------------------------------------------------
 // Conteudo editavel (flow.json)
 // ----------------------------------------------------------------------------
-let flow = JSON.parse(fs.readFileSync(FLOW_FILE, 'utf8'));
+// Carrega o flow.json com erro CLARO se o JSON estiver invalido — voce vai editar
+// esse arquivo pra mudar precos/textos, e uma virgula a mais nao deve virar um
+// stack trace cru num loop de restart.
+let flow;
+try {
+  flow = JSON.parse(fs.readFileSync(FLOW_FILE, 'utf8'));
+} catch (e) {
+  console.error(`[flow] ERRO ao ler/parsear ${FLOW_FILE}: ${e.message}`);
+  console.error('[flow] Corrija o JSON (virgula/aspas/chave) e reinicie. O bot nao sobe com flow invalido.');
+  process.exit(1);
+}
 
 // Valida a integridade do flow.json: todo 'goto' aponta pra um menu/node existente,
 // o 'start' existe, e os textos das mensagens estao presentes. Loga problemas no boot
@@ -598,6 +608,11 @@ function boot() {
   if (problemasFlow.length) {
     console.error(`[flow] ${problemasFlow.length} problema(s) no flow.json:`);
     problemasFlow.forEach(p => console.error('  - ' + p));
+    // 'start' invalido quebra o menu inteiro -> fatal explicito (em vez de menu vazio silencioso).
+    if (!flow.start || !flow.menus?.[flow.start]) {
+      console.error('[flow] FATAL: "start" invalido — sem menu inicial o bot nao atende. Corrija e reinicie.');
+      process.exit(1);
+    }
   } else {
     console.log('[flow] flow.json valido.');
   }
