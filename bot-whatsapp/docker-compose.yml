@@ -1,10 +1,20 @@
 # Evolution API — conecta como dispositivo vinculado (igual WhatsApp Web).
 # Ocupa 1 dos 4 slots; seu celular e o WhatsApp Web continuam funcionando.
+
+# Rotacao de log: teto de 30MB por container (10MB x 3). Evita os logs encherem
+# o disco — foi a classe de problema que travou o Docker (disco cheio) em set/2026.
+x-logging: &logrot
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   evolution:
     image: evoapicloud/evolution-api:latest   # 'latest' traz Baileys atualizado; v2.1.1 travava no handshake do WhatsApp (set/2026)
     container_name: evolution_api
     restart: always
+    logging: *logrot
     ports:
       - "8080:8080"
     environment:
@@ -41,6 +51,7 @@ services:
     image: postgres:16-alpine
     container_name: evolution_postgres
     restart: always
+    logging: *logrot
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: evolution
@@ -53,6 +64,7 @@ services:
     build: .
     container_name: doceria_bot
     restart: always
+    logging: *logrot
     env_file: .env
     volumes:
       - ./flow.json:/app/flow.json:ro   # editar os textos sem rebuildar
