@@ -44,6 +44,14 @@ const ok = (cond, nome) => { orig((cond ? '  OK  ' : ' FALHA') + ' ' + nome); if
   const deuAusencia = enviados.some(s => s.includes('temporariamente'));
   ok(deuAusencia, 'atendente FORA do horario -> mensagem de ausencia');
 
+  // Anti-loop: depois da ausencia, a cliente segue mandando msgs (como no caso real).
+  // O bot NAO pode re-saudar/remandar menu — deve ficar calado (PARADO).
+  enviados.length = 0;
+  await bot.processar(msg('Bom dia!', 'H3'));
+  await bot.processar(msg('Ainda tem vaga sabado? 300 salgados...', 'H4'));
+  await sleep(4000);
+  ok(enviados.length === 0, 'apos ausencia, bot fica calado (nao re-sauda em loop)');
+
   console.log = orig;
   try { fs.unlinkSync(fixture); } catch {}
   orig(falhas ? `\n${falhas} teste(s) falharam.` : '\nRegra de horario OK. ✅');

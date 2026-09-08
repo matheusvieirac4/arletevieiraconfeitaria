@@ -391,9 +391,13 @@ async function executarDestino(jid, c, target) {
       metricas.handoffs++;
       saveStateThrottled();                // persiste: restart nao pode reengajar
     } else {
+      // Fora do horario a cliente PEDIU humano: manda ausencia UMA vez e se cala
+      // (PARADO). Antes marcava ENCERRADO, e ai toda msg seguinte re-saudava +
+      // remandava o menu = loop, soterrando o pedido real da cliente.
       await reply(jid, flow.mensagens.ausencia);
-      c.state = STATES.ENCERRADO;          // pode mandar de novo e reabrir o menu
+      c.state = STATES.PARADO;
       metricas.foraDoHorario++;
+      saveStateThrottled();
     }
   }
 }
