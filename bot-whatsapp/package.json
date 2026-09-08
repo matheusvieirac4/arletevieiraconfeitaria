@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node bot.js",
     "test": "node mock/smoke-test.js",
+    "test:all": "node mock/smoke-test.js && node mock/hours-test.js && node mock/recado-test.js && node mock/e2e-test.js",
     "test:e2e": "node mock/e2e-test.js",
     "test:hours": "node mock/hours-test.js",
     "test:recado": "node mock/recado-test.js",
