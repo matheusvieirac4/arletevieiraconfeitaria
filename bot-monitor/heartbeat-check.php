@@ -19,8 +19,10 @@ if (!file_exists(HB_STATE_FILE)) {
 
     if ($idade > HB_OFFLINE_SECONDS) {
         $problema = 'offline';          // PC/internet caiu: parou de mandar sinal
-    } elseif ($status !== 'open') {
-        $problema = 'whatsapp-desconectado';  // processo vivo, mas numero deslogou
+    } elseif ($status === 'close' || $status === 'closed') {
+        // So desconexao REAL (deslogou). 'connecting' e transitorio (Baileys
+        // reconecta sozinho de tempos em tempos) e nao deve gerar alarme falso.
+        $problema = 'whatsapp-desconectado';
     }
 }
 
