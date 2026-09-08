@@ -32,7 +32,11 @@
     "telefone": "faq_contato",
     "duvida": "menu_faq",
     "duvidas": "menu_faq",
-    "faq": "menu_faq"
+    "faq": "menu_faq",
+    "corporativo": "corporativos",
+    "corporativos": "corporativos",
+    "empresa": "corporativos",
+    "brinde": "corporativos"
   },
 
   "menus": {
@@ -44,6 +48,7 @@
         { "label": "Combo promocional 🎉", "goto": "cat_combos" },
         { "label": "Meu Pedido/Dúvidas 🚚", "goto": "atendente_pedido" },
         { "label": "Atendimento Humano 👤", "goto": "atendente" },
+        { "label": "Presentes Corporativos", "goto": "corporativos" },
         { "label": "Dúvidas frequentes ❓", "goto": "menu_faq" },
         { "label": "Grupo VIP 💎", "goto": "grupo_vip" }
       ]
@@ -102,7 +107,8 @@
     "grupo_vip": { "tipo": "texto", "texto": "Entra no nosso grupo VIP e receba promoções em primeira mão! 💎\n\n👉 https://chat.whatsapp.com/BC8YCpquqGfJYLQV1JOqPk" },
     "faq_endereco": { "tipo": "texto", "texto": "📍 *Nossa loja (matriz):*\nRua José Francisco Cunha, 246 — Roçado, São José/SC.\n\n🗺️ Como chegar:\nhttps://maps.google.com/?q=Rua+Jos%C3%A9+Francisco+Cunha,+246,+Ro%C3%A7ado,+S%C3%A3o+Jos%C3%A9+-+SC" },
     "faq_horario": { "tipo": "texto", "texto": "🕐 *Loja e entregas:* Seg a Sáb, das 09h às 17h30.\n\nEncomendas: peça com antecedência pra garantir a data. 💛" },
-    "faq_contato": { "tipo": "texto", "texto": "☎️ *Telefone:* (48) 2013-3000\n✉️ *E-mail:* contato@arletevieiraconfeitaria.com.br\n📸 *Instagram:* @arletevieiraconfeitaria" }
+    "faq_contato": { "tipo": "texto", "texto": "☎️ *Telefone:* (48) 2013-3000\n✉️ *E-mail:* contato@arletevieiraconfeitaria.com.br\n📸 *Instagram:* @arletevieiraconfeitaria" },
+    "corporativos": { "tipo": "link", "texto": "🎁 *Presentes Corporativos* — brindes, cestas e encomendas para empresas e eventos. Veja as opções e monte o seu:", "url": "https://www.arletevieiraconfeitaria.com.br/corporativos.php" }
   },
 
   "mensagens": {

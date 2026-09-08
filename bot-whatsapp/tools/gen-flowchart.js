@@ -17,7 +17,7 @@ const esc = s => String(s).replace(/"/g, "'");
 // Rotulo amigavel por tipo de node
 function labelNode(id, node) {
   if (node.tipo === 'link') {
-    const arq = (node.url || '').split('/').pop().replace(/^av_/, '').replace(/\.pdf$/i, '');
+    const arq = (node.url || '').split('/').pop().replace(/^av_/, '').replace(/\.(pdf|php|html?)$/i, '');
     return `📄 ${cap(arq || id)}`;
   }
   if (node.tipo === 'atendente') return `👤 ${humanize(id)}`;

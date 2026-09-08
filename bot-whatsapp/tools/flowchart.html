@@ -60,7 +60,7 @@
     <p class="sub">Mapa gerado direto do <code>flow.json</code> — cada menu, cada cardápio em PDF e o caminho até um humano assumir. Republica sempre que o fluxo muda.</p>
     <div class="meta">
       <span class="chip"><b>4</b> menus</span>
-      <span class="chip"><b>13</b> destinos</span>
+      <span class="chip"><b>14</b> destinos</span>
       <span class="chip">Atendimento: <b>seg, ter, qua, qui, sex, sáb · 13:00–18:00</b></span>
     </div>
   </header>
@@ -88,12 +88,14 @@ flowchart TD
   faq_endereco["💬 Faq endereco"]:::texto
   faq_horario["💬 Faq horario"]:::texto
   faq_contato["💬 Faq contato"]:::texto
+  corporativos[/"📄 Corporativos"/]:::pdf
   humano["🤫 Você assume<br/>bot silencia"]:::humano
   menu_principal -->|"Nosso Cardápio 📓"| menu_cardapio
   menu_principal -->|"Bolo Personalizado 🍰"| menu_bolo
   menu_principal -->|"Combo promocional 🎉"| cat_combos
   menu_principal -->|"Meu Pedido/Dúvidas 🚚"| atendente_pedido
   menu_principal -->|"Atendimento Humano 👤"| atendente
+  menu_principal -->|"Presentes Corporativos"| corporativos
   menu_principal -->|"Dúvidas frequentes ❓"| menu_faq
   menu_principal -->|"Grupo VIP 💎"| grupo_vip
   menu_faq -->|"Endereço e como chegar"| faq_endereco
@@ -143,10 +145,10 @@ flowchart TD
         <li>Sem resposta por ~23h, o bot manda um lembrete e encerra.</li>
       </ul>
     </div>
-    <div class="card"><h3>Atalhos por palavra-chave</h3><p style="margin:0 0 10px;color:var(--muted);font-size:13px">O cliente pode digitar em vez de navegar:</p><div class="kw"><div class="kwrow"><span class="kws"><code>cardapio</code> <code>cardapios</code></span><span class="kwto">→ Menu cardapio</span></div><div class="kwrow"><span class="kws"><code>menu</code> <code>inicio</code> <code>voltar</code> <code>recomecar</code> <code>comecar</code></span><span class="kwto">→ Menu principal</span></div><div class="kwrow"><span class="kws"><code>bolo</code></span><span class="kwto">→ Menu bolo</span></div><div class="kwrow"><span class="kws"><code>combo</code> <code>combos</code></span><span class="kwto">→ Cat combos</span></div><div class="kwrow"><span class="kws"><code>cupcake</code> <code>cupcakes</code></span><span class="kwto">→ Cat cupcakes</span></div><div class="kwrow"><span class="kws"><code>atendente</code> <code>humano</code></span><span class="kwto">→ Atendente</span></div><div class="kwrow"><span class="kws"><code>encomenda</code> <code>encomendar</code></span><span class="kwto">→ Encomenda info</span></div><div class="kwrow"><span class="kws"><code>pedido</code></span><span class="kwto">→ Atendente pedido</span></div><div class="kwrow"><span class="kws"><code>vip</code></span><span class="kwto">→ Grupo vip</span></div><div class="kwrow"><span class="kws"><code>endereco</code> <code>localizacao</code> <code>chegar</code></span><span class="kwto">→ Faq endereco</span></div><div class="kwrow"><span class="kws"><code>horario</code> <code>entrega</code></span><span class="kwto">→ Faq horario</span></div><div class="kwrow"><span class="kws"><code>contato</code> <code>telefone</code></span><span class="kwto">→ Faq contato</span></div><div class="kwrow"><span class="kws"><code>duvida</code> <code>duvidas</code> <code>faq</code></span><span class="kwto">→ Menu faq</span></div></div></div>
+    <div class="card"><h3>Atalhos por palavra-chave</h3><p style="margin:0 0 10px;color:var(--muted);font-size:13px">O cliente pode digitar em vez de navegar:</p><div class="kw"><div class="kwrow"><span class="kws"><code>cardapio</code> <code>cardapios</code></span><span class="kwto">→ Menu cardapio</span></div><div class="kwrow"><span class="kws"><code>menu</code> <code>inicio</code> <code>voltar</code> <code>recomecar</code> <code>comecar</code></span><span class="kwto">→ Menu principal</span></div><div class="kwrow"><span class="kws"><code>bolo</code></span><span class="kwto">→ Menu bolo</span></div><div class="kwrow"><span class="kws"><code>combo</code> <code>combos</code></span><span class="kwto">→ Cat combos</span></div><div class="kwrow"><span class="kws"><code>cupcake</code> <code>cupcakes</code></span><span class="kwto">→ Cat cupcakes</span></div><div class="kwrow"><span class="kws"><code>atendente</code> <code>humano</code></span><span class="kwto">→ Atendente</span></div><div class="kwrow"><span class="kws"><code>encomenda</code> <code>encomendar</code></span><span class="kwto">→ Encomenda info</span></div><div class="kwrow"><span class="kws"><code>pedido</code></span><span class="kwto">→ Atendente pedido</span></div><div class="kwrow"><span class="kws"><code>vip</code></span><span class="kwto">→ Grupo vip</span></div><div class="kwrow"><span class="kws"><code>endereco</code> <code>localizacao</code> <code>chegar</code></span><span class="kwto">→ Faq endereco</span></div><div class="kwrow"><span class="kws"><code>horario</code> <code>entrega</code></span><span class="kwto">→ Faq horario</span></div><div class="kwrow"><span class="kws"><code>contato</code> <code>telefone</code></span><span class="kwto">→ Faq contato</span></div><div class="kwrow"><span class="kws"><code>duvida</code> <code>duvidas</code> <code>faq</code></span><span class="kwto">→ Menu faq</span></div><div class="kwrow"><span class="kws"><code>corporativo</code> <code>corporativos</code> <code>empresa</code> <code>brinde</code></span><span class="kwto">→ Corporativos</span></div></div></div>
   </div>
 
-  <footer>Gerado de flow.json em 08/09/2026, 06:47:38 (America/Sao_Paulo)</footer>
+  <footer>Gerado de flow.json em 08/09/2026, 07:08:04 (America/Sao_Paulo)</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
