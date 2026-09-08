@@ -7,7 +7,11 @@
   "atalhos": {
     "cardapio": "menu_cardapio",
     "cardapios": "menu_cardapio",
-    "menu": "menu_cardapio",
+    "menu": "menu_principal",
+    "inicio": "menu_principal",
+    "voltar": "menu_principal",
+    "recomecar": "menu_principal",
+    "comecar": "menu_principal",
     "bolo": "menu_bolo",
     "combo": "cat_combos",
     "combos": "cat_combos",
@@ -33,7 +37,7 @@
 
   "menus": {
     "menu_principal": {
-      "body": "Por favor, selecione a opção desejada:",
+      "body": "Por favor, selecione a opção desejada:\n\n💡 Dica: você também pode *escrever* o que quer — ex.: _cardápio_, _endereço_, _atendente_.",
       "opcoes": [
         { "label": "Nosso Cardápio 📓", "goto": "menu_cardapio" },
         { "label": "Bolo Personalizado 🍰", "goto": "menu_bolo" },
