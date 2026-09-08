@@ -93,7 +93,10 @@ const seenIds   = new Map();   // id -> timestamp (expira)
 const chatQueue = new Map();   // jid -> Promise (serializa mensagens do mesmo chat)
 let connState   = 'unknown';   // estado da conexao Evolution<->WhatsApp (vai no heartbeat)
 
-// --- Persistencia so do flag HUMANO -----------------------------------------
+// --- Persistencia dos estados que NAO podem ser perdidos num restart --------
+// HUMANO (voce respondeu) e PARADO (menu passou pra humano): se sumirem num
+// restart, o bot volta a atropelar sua conversa ao vivo com o menu. Salvamos os
+// dois. Menu em navegacao (ACTIVE) pode se perder sem dano (cliente reve o menu).
 function loadState() {
   try {
     const raw = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
@@ -101,7 +104,11 @@ function loadState() {
     for (const [jid, humanUntil] of Object.entries(raw.humanos || {})) {
       if (humanUntil > now) conversas.set(jid, { state: STATES.HUMANO, lastSeen: now, humanUntil, timer: null });
     }
-    console.log(`[state] ${conversas.size} conversa(s) humana(s) restauradas do disco`);
+    // PARADO expira pela mesma janela do reset de menu (fica elegivel de novo depois).
+    for (const [jid, lastSeen] of Object.entries(raw.parados || {})) {
+      if ((now - lastSeen) < hoursMs(MENU_RESET_HOURS)) conversas.set(jid, { state: STATES.PARADO, lastSeen, timer: null });
+    }
+    console.log(`[state] restauradas do disco: ${Object.keys(raw.humanos || {}).length} humana(s), ${Object.keys(raw.parados || {}).length} parada(s)`);
   } catch { /* primeiro boot: arquivo nao existe, tudo bem */ }
 }
 let saveTimer = null;
@@ -109,11 +116,14 @@ function saveStateThrottled() {
   if (saveTimer) return;
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    const humanos = {};
-    for (const [jid, c] of conversas) if (c.state === STATES.HUMANO && c.humanUntil) humanos[jid] = c.humanUntil;
+    const humanos = {}, parados = {};
+    for (const [jid, c] of conversas) {
+      if (c.state === STATES.HUMANO && c.humanUntil) humanos[jid] = c.humanUntil;
+      else if (c.state === STATES.PARADO) parados[jid] = c.lastSeen;
+    }
     try {
       fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-      fs.writeFileSync(STATE_FILE, JSON.stringify({ humanos }, null, 0));
+      fs.writeFileSync(STATE_FILE, JSON.stringify({ humanos, parados }, null, 0));
     } catch (e) { console.error('[state] falha ao salvar:', e.message); }
   }, 2000);
 }
@@ -304,7 +314,8 @@ async function executarDestino(jid, c, target) {
     if (c.timer) { clearTimeout(c.timer); c.timer = null; }
     if (dentroDoHorario()) {
       await reply(jid, node.texto);
-      c.state = STATES.PARADO;              // bot cala; espera voce responder (fromMe)
+      c.state = STATES.PARADO;             // bot cala; espera voce responder (fromMe)
+      saveStateThrottled();                // persiste: restart nao pode reengajar
     } else {
       await reply(jid, flow.mensagens.ausencia);
       c.state = STATES.ENCERRADO;          // pode mandar de novo e reabrir o menu
@@ -339,7 +350,7 @@ async function processar(msg) {
   }
 
   // --- REGRA 2b: passado pra humano -> bot fica calado ate voce responder
-  if (c && c.state === STATES.PARADO) { c.lastSeen = Date.now(); return; }
+  if (c && c.state === STATES.PARADO) { c.lastSeen = Date.now(); saveStateThrottled(); return; }
 
   // OBS: o horario NAO bloqueia o menu (fiel ao ManyChat). A checagem de horario
   // acontece so nos nos de atendimento humano (ver executarDestino).
@@ -371,7 +382,14 @@ async function processar(msg) {
     armarTimeout(jid, 'encerramento');
     return;
   }
-  const escolha = parseInt((text || '').trim(), 10);
+  // Mensagem sem texto (audio/imagem/figurinha) e sem toque: nao da pra parsear
+  // numero. Responde gentil e reabre o menu, em vez do seco "opcao invalida".
+  if (!text || !text.trim()) {
+    await reply(jid, flow.mensagens.midia_recebida || flow.mensagens.opcao_invalida);
+    await enviarMenu(jid, c.node);
+    return;
+  }
+  const escolha = parseInt(text.trim(), 10);
   const opt = menu.opcoes[escolha - 1];
   if (!opt) {
     await reply(jid, flow.mensagens.opcao_invalida);
