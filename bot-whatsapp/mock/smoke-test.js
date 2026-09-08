@@ -1,0 +1,37 @@
+'use strict';
+/**
+ * Teste de fumaca — valida as funcoes puras do bot sem subir o WhatsApp.
+ * Rode: npm test  (ou: node mock/smoke-test.js)
+ * Sai com codigo 0 se tudo passar, 1 se algo falhar.
+ */
+process.env.DRY_RUN = 'true';
+const bot = require('../bot.js');
+
+let falhas = 0;
+function ok(cond, nome) {
+  console.log((cond ? '  OK  ' : ' FALHA') + ' ' + nome);
+  if (!cond) falhas++;
+}
+
+// 1) flow.json integro (nenhum goto/no orfao)
+const probs = bot.validarFlow();
+ok(probs.length === 0, 'flow.json valido' + (probs.length ? ' -> ' + probs.join('; ') : ''));
+
+// 2) extrator de texto cobre os dois formatos
+ok(bot.normalizar({ key: { remoteJid: 'x@s.whatsapp.net' }, message: { conversation: 'oi' } }).text === 'oi', 'extrai conversation');
+ok(bot.normalizar({ key: { remoteJid: 'x@s.whatsapp.net' }, message: { extendedTextMessage: { text: '1' } } }).text === '1', 'extrai extendedTextMessage');
+
+// 3) rowId de lista nativa
+ok(bot.normalizar({ key: { remoteJid: 'x@s.whatsapp.net' }, message: { listResponseMessage: { singleSelectReply: { selectedRowId: 'menu_cardapio' } } } }).rowId === 'menu_cardapio', 'extrai rowId da lista');
+
+// 4) filtro de grupo/broadcast
+ok(bot.normalizar({ key: { remoteJid: '123@g.us' }, message: { conversation: 'x' } }).isGroup === true, 'detecta grupo (@g.us)');
+ok(bot.normalizar({ key: { remoteJid: 'status@broadcast' }, message: {} }).isGroup === true, 'detecta status@broadcast');
+
+// 5) horario comercial (SP = UTC-3): seg 15h aberto, dom fechado, seg 12h fechado
+ok(bot.dentroDoHorario(new Date('2026-09-07T18:00:00Z')) === true, 'seg 15h SP = aberto');
+ok(bot.dentroDoHorario(new Date('2026-09-07T15:00:00Z')) === false, 'seg 12h SP = fechado (antes das 13h)');
+ok(bot.dentroDoHorario(new Date('2026-09-13T18:00:00Z')) === false, 'domingo = fechado');
+
+console.log(falhas ? `\n${falhas} teste(s) falharam.` : '\nTodos os testes passaram. ✅');
+process.exit(falhas ? 1 : 0);

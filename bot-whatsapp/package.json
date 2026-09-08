@@ -6,6 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node bot.js",
+    "test": "node mock/smoke-test.js",
     "mock": "node mock/send-webhook.js"
   },
   "dependencies": {

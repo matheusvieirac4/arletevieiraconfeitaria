@@ -46,6 +46,32 @@ const FLOW_FILE         = path.join(__dirname, 'flow.json');
 // ----------------------------------------------------------------------------
 let flow = JSON.parse(fs.readFileSync(FLOW_FILE, 'utf8'));
 
+// Valida a integridade do flow.json: todo 'goto' aponta pra um menu/node existente,
+// o 'start' existe, e os textos das mensagens estao presentes. Loga problemas no boot
+// (falha cedo, em vez de quebrar na frente do cliente). Retorna lista de problemas.
+function validarFlow() {
+  const probs = [];
+  const alvos = new Set([...Object.keys(flow.menus || {}), ...Object.keys(flow.nodes || {})]);
+  if (!flow.start || !flow.menus?.[flow.start]) probs.push(`start invalido: "${flow.start}"`);
+  for (const [id, menu] of Object.entries(flow.menus || {})) {
+    if (!menu.body) probs.push(`menu "${id}" sem body`);
+    if (!Array.isArray(menu.opcoes) || !menu.opcoes.length) probs.push(`menu "${id}" sem opcoes`);
+    (menu.opcoes || []).forEach((o, i) => {
+      if (!o.label) probs.push(`menu "${id}" opcao ${i + 1} sem label`);
+      if (!alvos.has(o.goto)) probs.push(`menu "${id}" opcao "${o.label}" aponta pra goto inexistente: "${o.goto}"`);
+    });
+  }
+  for (const [id, node] of Object.entries(flow.nodes || {})) {
+    if (!['link', 'texto', 'atendente'].includes(node.tipo)) probs.push(`node "${id}" tipo invalido: "${node.tipo}"`);
+    if (node.tipo === 'link' && !node.url) probs.push(`node "${id}" (link) sem url`);
+    if (!node.texto && node.tipo !== 'link') probs.push(`node "${id}" sem texto`);
+  }
+  for (const k of ['opcao_invalida', 'ausencia', 'encerramento']) {
+    if (!flow.mensagens?.[k]) probs.push(`mensagens.${k} ausente`);
+  }
+  return probs;
+}
+
 // ----------------------------------------------------------------------------
 // Estado em memoria
 //   conversas: jid -> { state, lastSeen, timer, humanUntil }
@@ -125,19 +151,28 @@ setInterval(gcIds, hoursMs(1));
 async function sendText(jid, text) {
   const numero = jid.split('@')[0];
   if (DRY_RUN) { console.log(`[DRY_RUN -> ${numero}] ${text.slice(0, 60)}...`); return; }
-  try {
-    const res = await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: EVOLUTION_KEY },
-      body: JSON.stringify({ number: numero, text }),
-    });
-    const body = await res.json().catch(() => ({}));
-    // Guarda o id da mensagem que o BOT enviou, pra ignorar quando voltar como fromMe.
-    const id = body?.key?.id;
-    if (id) sentIds.set(id, Date.now());
-    if (!res.ok) console.error(`[send] Evolution respondeu ${res.status}:`, JSON.stringify(body).slice(0, 200));
-  } catch (e) {
-    console.error('[send] erro ao falar com Evolution:', e.message);
+  // Retenta em falha de rede ou erro 5xx (blip transitorio). NAO retenta 4xx
+  // (ex.: numero inexistente) — retentar nao ajuda e so atrasa.
+  for (let tentativa = 1; tentativa <= 3; tentativa++) {
+    try {
+      const res = await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: EVOLUTION_KEY },
+        body: JSON.stringify({ number: numero, text }),
+      });
+      const body = await res.json().catch(() => ({}));
+      const id = body?.key?.id;
+      if (id) sentIds.set(id, Date.now());   // pra ignorar quando voltar como fromMe
+      if (res.ok) return;
+      if (res.status < 500) {                 // erro do cliente: nao adianta retentar
+        console.error(`[send] Evolution respondeu ${res.status}:`, JSON.stringify(body).slice(0, 200));
+        return;
+      }
+      console.error(`[send] ${res.status} (tentativa ${tentativa}/3), retentando...`);
+    } catch (e) {
+      console.error(`[send] erro de rede (tentativa ${tentativa}/3): ${e.message}`);
+    }
+    if (tentativa < 3) await sleep(1000 * tentativa);   // backoff 1s, 2s
   }
 }
 
@@ -398,7 +433,13 @@ function notifyOwner(texto) {
 const app = express();
 app.use(express.json({ limit: '25mb' })); // Evolution v2.3.7 manda payloads grandes; 1mb dava 413 e ele retentava
 
-app.get('/health', (_req, res) => res.json({ ok: true, conversas: conversas.size }));
+app.get('/health', (_req, res) => res.json({
+  ok: true,
+  conexao: connState,
+  conversas: conversas.size,
+  uptimeSec: Math.round(process.uptime()),
+  horarioAberto: dentroDoHorario(),
+}));
 
 // Aceita /webhook E /webhook/<evento> — versoes novas do Evolution (v2.3+) anexam
 // o nome do evento no caminho (ex: /webhook/messages-upsert). Cobrimos os dois.
@@ -412,7 +453,10 @@ app.post(['/webhook', '/webhook/:evento'], (req, res) => {
     const st = evt.data?.state || evt.data?.connection;
     connState = st || connState;   // vai no proximo heartbeat pra HostGator saber
     console.log(`[conexao] ${st}`);
-    if (st === 'close' || st === 'closed') notifyOwner('Evolution desconectou do WhatsApp — reparear pode ser necessario.');
+    if (st === 'close' || st === 'closed') {
+      notifyOwner('Evolution desconectou do WhatsApp — reparear pode ser necessario.');
+      sendHeartbeat();   // empurra o estado 'close' JA, pra HostGator alertar sem esperar o ciclo
+    }
     return;
   }
 
@@ -461,23 +505,34 @@ async function sendHeartbeat() {
 }
 
 // ----------------------------------------------------------------------------
-// Boot
+// Boot — so quando executado direto (node bot.js). Se for importado (testes),
+// nao sobe o servidor nem os timers, so expoe as funcoes.
 // ----------------------------------------------------------------------------
-loadState();
-app.listen(PORT, () => {
-  console.log(`Bot doceria ouvindo em :${PORT}  (DRY_RUN=${DRY_RUN}, TZ=${TZ})`);
-  console.log(`Horario comercial agora? ${dentroDoHorario() ? 'ABERTO' : 'FECHADO'}`);
-  if (HEARTBEAT_URL) {
-    // Semeia o connState real antes do 1o heartbeat (evita falso alarme pos-restart),
-    // e reconsulta periodicamente como rede de seguranca caso um evento se perca.
-    fetchConnState().then(sendHeartbeat);
-    setInterval(sendHeartbeat, HEARTBEAT_MIN * 60 * 1000);
-    setInterval(fetchConnState, 5 * 60 * 1000);
-    console.log(`[heartbeat] ativo -> ${HEARTBEAT_URL} a cada ${HEARTBEAT_MIN}min`);
+function boot() {
+  loadState();
+  const problemasFlow = validarFlow();
+  if (problemasFlow.length) {
+    console.error(`[flow] ${problemasFlow.length} problema(s) no flow.json:`);
+    problemasFlow.forEach(p => console.error('  - ' + p));
   } else {
-    console.log('[heartbeat] desativado (defina HEARTBEAT_URL no .env pra ativar)');
+    console.log('[flow] flow.json valido.');
   }
-});
+  app.listen(PORT, () => {
+    console.log(`Bot doceria ouvindo em :${PORT}  (DRY_RUN=${DRY_RUN}, TZ=${TZ})`);
+    console.log(`Horario comercial agora? ${dentroDoHorario() ? 'ABERTO' : 'FECHADO'}`);
+    if (HEARTBEAT_URL) {
+      // Semeia o connState real antes do 1o heartbeat (evita falso alarme pos-restart),
+      // e reconsulta periodicamente como rede de seguranca caso um evento se perca.
+      fetchConnState().then(sendHeartbeat);
+      setInterval(sendHeartbeat, HEARTBEAT_MIN * 60 * 1000);
+      setInterval(fetchConnState, 5 * 60 * 1000);
+      console.log(`[heartbeat] ativo -> ${HEARTBEAT_URL} a cada ${HEARTBEAT_MIN}min`);
+    } else {
+      console.log('[heartbeat] desativado (defina HEARTBEAT_URL no .env pra ativar)');
+    }
+  });
+}
+if (require.main === module) boot();
 
-// Exporta pra testes (mock)
-module.exports = { app, processar, normalizar, dentroDoHorario, conversas };
+// Exporta pra testes (mock/smoke-test.js)
+module.exports = { app, processar, normalizar, dentroDoHorario, extrairTexto, extrairRowId, validarFlow, conversas };
