@@ -9,6 +9,7 @@
     "test": "node mock/smoke-test.js",
     "test:e2e": "node mock/e2e-test.js",
     "test:hours": "node mock/hours-test.js",
+    "test:recado": "node mock/recado-test.js",
     "mock": "node mock/send-webhook.js"
   },
   "dependencies": {
