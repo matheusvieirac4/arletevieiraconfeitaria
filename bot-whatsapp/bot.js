@@ -91,6 +91,9 @@ function validarFlow() {
   for (const k of ['opcao_invalida', 'ausencia', 'encerramento']) {
     if (!flow.mensagens?.[k]) probs.push(`mensagens.${k} ausente`);
   }
+  for (const [kw, alvo] of Object.entries(flow.atalhos || {})) {
+    if (!alvos.has(alvo)) probs.push(`atalho "${kw}" aponta pra destino inexistente: "${alvo}"`);
+  }
   return probs;
 }
 
@@ -176,6 +179,23 @@ function dentroDoHorario(date = new Date()) {
 const hoursMs = h => h * 60 * 60 * 1000;
 const sleep   = ms => new Promise(r => setTimeout(r, ms));
 const randDelay = () => 1000 + Math.floor(Math.random() * 2000); // 1-3s
+
+// Normaliza texto pra casar atalho: minusculo, sem acento, sem pontuacao.
+const normalizarTexto = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+// Atalho por palavra-chave: se a msg contem uma keyword (palavra inteira), roteia
+// direto pro destino. So pra mensagens curtas (evita falso positivo em frases).
+function matchAtalho(text) {
+  if (!flow.atalhos || !text) return null;
+  const t = normalizarTexto(text);
+  if (!t || /^\d+$/.test(t)) return null;               // numero e escolha de menu, nao atalho
+  const palavras = new Set(t.split(/\s+/));
+  if (palavras.size > 4) return null;                   // frase longa: nao chuta atalho
+  for (const [kw, alvo] of Object.entries(flow.atalhos)) {
+    const k = normalizarTexto(kw);
+    if (t === k || palavras.has(k)) return alvo;
+  }
+  return null;
+}
 
 // Limpeza periodica dos Sets de ids (evita crescer pra sempre)
 function gcIds() {
@@ -453,8 +473,10 @@ async function processar(msg) {
     conversas.set(jid, c);
     metricas.atendimentosIniciados++;
     if (flow.saudacao) await reply(jid, flow.saudacao.replace('{{nome}}', (msg.pushName || '').split(' ')[0] || 'tudo bem?'));
-    await enviarMenu(jid, flow.start);
-    armarTimeout(jid, 'encerramento');
+    // Se o 1o contato ja for uma palavra-chave ("cardapio", "atendente"...), pula direto.
+    const alvoInicial = matchAtalho(text);
+    if (alvoInicial) { await executarDestino(jid, c, alvoInicial); }
+    else { await enviarMenu(jid, flow.start); armarTimeout(jid, 'encerramento'); }
     return;
   }
 
@@ -464,6 +486,13 @@ async function processar(msg) {
   // Toque numa lista nativa: o rowId ja carrega o destino.
   if (rowId && (flow.menus[rowId] || flow.nodes[rowId])) {
     await executarDestino(jid, c, rowId);
+    return;
+  }
+
+  // Atalho por palavra-chave (funciona em qualquer sub-estado ativo).
+  const alvoAtalho = matchAtalho(text);
+  if (alvoAtalho) {
+    await executarDestino(jid, c, alvoAtalho);
     return;
   }
 

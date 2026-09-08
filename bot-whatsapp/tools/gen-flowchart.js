@@ -83,6 +83,16 @@ const h = flow.horario || {};
 const diasTxt = (h.dias || []).map(d => dias[d]).join(', ');
 const horarioTxt = h.inicio ? `${diasTxt} · ${h.inicio}–${h.fim}` : '—';
 const gerado = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+// atalhos agrupados por destino (palavra-chave -> destino)
+const porAlvo = {};
+for (const [kw, alvo] of Object.entries(flow.atalhos || {})) { (porAlvo[alvo] ||= []).push(kw); }
+const atalhosHtml = Object.keys(porAlvo).length
+  ? `<div class="card"><h3>Atalhos por palavra-chave</h3><p style="margin:0 0 10px;color:var(--muted);font-size:13px">O cliente pode digitar em vez de navegar:</p><div class="kw">`
+    + Object.entries(porAlvo).map(([alvo, kws]) =>
+        `<div class="kwrow"><span class="kws">${kws.map(k => `<code>${esc(k)}</code>`).join(' ')}</span><span class="kwto">→ ${esc(humanize(alvo))}</span></div>`).join('')
+    + `</div></div>`
+  : '';
 const nMenus = Object.keys(flow.menus || {}).length;
 const nNodes = Object.keys(flow.nodes || {}).length;
 
@@ -134,6 +144,11 @@ const html = `<title>Fluxo do Bot da Doceria</title>
   .rules{font-size:14px;color:var(--ink);margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:8px}
   .rules li{padding-left:20px;position:relative}
   .rules li::before{content:"→";position:absolute;left:0;color:var(--accent)}
+  .kw{display:flex;flex-direction:column;gap:8px;font-size:13.5px}
+  .kwrow{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .kw code{font-family:"IBM Plex Mono",monospace;font-size:12px;background:var(--ground);
+    border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+  .kwto{color:var(--muted);white-space:nowrap}
   footer{margin-top:26px;color:var(--muted);font-family:"IBM Plex Mono",monospace;font-size:12px}
 </style>
 
@@ -176,6 +191,7 @@ ${mermaidDef}
         <li>Sem resposta por ~23h, o bot manda um lembrete e encerra.</li>
       </ul>
     </div>
+    ${atalhosHtml}
   </div>
 
   <footer>Gerado de flow.json em ${esc(gerado)} (America/Sao_Paulo)</footer>
