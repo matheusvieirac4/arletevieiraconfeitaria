@@ -353,6 +353,26 @@ async function enviarMenu(jid, menuId) {
   await sendText(jid, `${menu.body}\n\n${linhas.join('\n')}`);
 }
 
+// Handoff pra humano — UNICO ponto que decide a mensagem por horario, usado por
+// TODOS os fluxos que passam pra atendente (atendente, meu pedido, captura).
+// Dentro do horario: manda opts.dentro. Fora: manda opts.fora (padrao: ausencia)
+// e marca foraHorario, pra confirmar "recebemos" na proxima msg da cliente.
+async function handoff(jid, c, opts = {}) {
+  if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+  c.state = STATES.PARADO;
+  if (dentroDoHorario()) {
+    if (opts.dentro) await reply(jid, opts.dentro);
+    c.foraHorario = false;
+    metricas.handoffs++;
+  } else {
+    await reply(jid, opts.fora || flow.mensagens.ausencia);
+    c.foraHorario = true;
+    c.ackDado = !!opts.jaAckou;           // true se a msg 'fora' ja confirma o recebimento
+    metricas.foraDoHorario++;
+  }
+  saveStateThrottled();
+}
+
 // Executa o destino de uma opcao: outro menu, link de PDF, texto, ou atendente.
 async function executarDestino(jid, c, target) {
   if (flow.menus[target]) {                 // vai pra outro menu
@@ -382,23 +402,11 @@ async function executarDestino(jid, c, target) {
     await reply(jid, node.perguntas[0].texto);
     armarTimeout(jid, 'encerramento');   // se abandonar no meio, encerra
   } else if (node.tipo === 'atendente') {
-    // AQUI e o unico ponto que checa horario (fiel ao ManyChat: o menu abre sempre,
-    // so o atendimento humano respeita o horario). Fora do horario -> ausencia.
-    if (c.timer) { clearTimeout(c.timer); c.timer = null; }
-    if (dentroDoHorario()) {
-      await reply(jid, node.texto);
-      c.state = STATES.PARADO;             // bot cala; espera voce responder (fromMe)
-      metricas.handoffs++;
-      saveStateThrottled();                // persiste: restart nao pode reengajar
-    } else {
-      // Fora do horario a cliente PEDIU humano: manda ausencia UMA vez e se cala
-      // (PARADO). Antes marcava ENCERRADO, e ai toda msg seguinte re-saudava +
-      // remandava o menu = loop, soterrando o pedido real da cliente.
-      await reply(jid, flow.mensagens.ausencia);
-      c.state = STATES.PARADO;
-      metricas.foraDoHorario++;
-      saveStateThrottled();
-    }
+    // Passa pra humano. O horario e tratado no handoff (menu abre sempre; so o
+    // atendimento respeita o horario). Fora do horario manda a ausencia e fica
+    // PARADO (nao ENCERRADO — senao re-saudava em loop); a confirmacao de
+    // "recebemos" vai na proxima mensagem da cliente (ver Regra 2b).
+    await handoff(jid, c, { dentro: node.texto });
   }
 }
 
@@ -432,7 +440,17 @@ async function processar(msg) {
   // Mas expira pela janela do reset de menu: cliente que volta dias depois
   // recebe o menu de novo, em vez de ficar mudo pra sempre.
   if (c && c.state === STATES.PARADO) {
-    if ((Date.now() - c.lastSeen) < hoursMs(MENU_RESET_HOURS)) { c.lastSeen = Date.now(); saveStateThrottled(); return; }
+    if ((Date.now() - c.lastSeen) < hoursMs(MENU_RESET_HOURS)) {
+      c.lastSeen = Date.now();
+      // Passada pra humano FORA do horario: confirma UMA vez que recebemos a
+      // mensagem dela (ManyChat fazia isso). Depois, silencio ate voce responder.
+      if (c.foraHorario && !c.ackDado && (text || '').trim()) {
+        c.ackDado = true;
+        await reply(jid, flow.mensagens.recebido || flow.mensagens.ausencia);
+      }
+      saveStateThrottled();
+      return;
+    }
     conversas.delete(jid); c = null;        // PARADO velho: esquece, vira elegivel
   }
 
@@ -457,13 +475,11 @@ async function processar(msg) {
     const r = c.coleta.respostas;
     const resumo = node.perguntas.map(p => `• *${p.rotulo || p.chave}:* ${r[p.chave]}`).join('\n');
     await reply(jid, `📋 *Seu pedido, resumido:*\n${resumo}`);
-    if (node.final) await reply(jid, node.final);
-    if (c.timer) { clearTimeout(c.timer); c.timer = null; }
-    c.state = STATES.PARADO;
     c.coleta = null;
-    metricas.handoffs++;
     metricas.pedidosCapturados++;
-    saveStateThrottled();
+    // Fecho por horario: dentro -> node.final ("em breve respondemos"); fora ->
+    // confirma o recebimento ("recebemos, respondemos quando retomarmos").
+    await handoff(jid, c, { dentro: node.final, fora: flow.mensagens.recebido, jaAckou: true });
     return;
   }
 

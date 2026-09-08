@@ -188,7 +188,7 @@ ${mermaidDef}
       <ul class="rules">
         <li>Você responde pelo celular → o bot se cala naquela conversa (kill-switch <code>fromMe</code>).</li>
         <li>O menu abre a qualquer hora; só o atendimento humano respeita o horário.</li>
-        <li>Fora do horário, o pedido de atendente recebe a mensagem de ausência.</li>
+        <li>Fora do horário: manda a ausência, confirma o recebimento da mensagem (uma vez) e fica quieto até você responder.</li>
         <li>Sem resposta por ~23h, o bot manda um lembrete e encerra.</li>
       </ul>
     </div>
