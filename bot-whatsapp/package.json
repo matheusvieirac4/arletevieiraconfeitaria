@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node bot.js",
     "test": "node mock/smoke-test.js",
+    "test:e2e": "node mock/e2e-test.js",
     "mock": "node mock/send-webhook.js"
   },
   "dependencies": {
