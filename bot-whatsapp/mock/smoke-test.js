@@ -36,9 +36,12 @@ ok(bot.dentroDoHorario(new Date('2026-09-13T18:00:00Z')) === false, 'domingo = f
 // 6) gcConversas remove expiradas e preserva as recentes
 bot.conversas.set('velha@s.whatsapp.net', { state: 'HUMANO', humanUntil: Date.now() - 1000, lastSeen: Date.now() - 99 * 3600e3, timer: null });
 bot.conversas.set('nova@s.whatsapp.net', { state: 'PARADO', lastSeen: Date.now(), timer: null });
+// conversa de 20h com follow-up pendente (23h) NAO pode ser removida antes do nudge
+bot.conversas.set('followup@s.whatsapp.net', { state: 'ACTIVE', node: '__aguardando__', lastSeen: Date.now() - 20 * 3600e3, timer: null });
 const removidos = bot.gcConversas();
 ok(removidos === 1, 'gcConversas remove 1 expirada');
 ok(bot.conversas.has('nova@s.whatsapp.net') && !bot.conversas.has('velha@s.whatsapp.net'), 'gcConversas preserva a recente e remove a velha');
+ok(bot.conversas.has('followup@s.whatsapp.net'), 'gcConversas preserva conversa de 20h (follow-up de 23h ainda vai disparar)');
 
 console.log(falhas ? `\n${falhas} teste(s) falharam.` : '\nTodos os testes passaram. ✅');
 process.exit(falhas ? 1 : 0);

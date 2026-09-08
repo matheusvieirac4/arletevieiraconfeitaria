@@ -183,7 +183,9 @@ setInterval(gcIds, hoursMs(1));
 // (e no state.json) ate um restart — vaza memoria com muitos clientes ao longo do
 // tempo. Remove HUMANO com TTL vencido e qualquer conversa inativa alem da janela.
 function gcConversas(now = Date.now()) {
-  const limiteInatividade = hoursMs(Math.max(HUMAN_TTL_HOURS, MENU_RESET_HOURS) + 1);
+  // Inclui FOLLOWUP_HOURS: senao o gc removeria a conversa (e o timer) ANTES do
+  // follow-up de 23h disparar, deixando o nudge como codigo morto.
+  const limiteInatividade = hoursMs(Math.max(HUMAN_TTL_HOURS, MENU_RESET_HOURS, FOLLOWUP_HOURS) + 1);
   let removidos = 0;
   for (const [jid, c] of conversas) {
     const humanoVencido = c.state === STATES.HUMANO && c.humanUntil && c.humanUntil <= now;
