@@ -31,6 +31,7 @@ const HUMAN_TTL_HOURS   = parseFloat(process.env.HUMAN_TTL_HOURS || '18');   // 
 const MENU_RESET_HOURS  = parseFloat(process.env.MENU_RESET_HOURS || '12');  // sem interacao > isso => menu de novo
 const FOLLOWUP_HOURS    = parseFloat(process.env.FOLLOWUP_HOURS || '23');    // ManyChat usava 23h; espera antes do follow-up/encerramento
 const USE_NATIVE_LIST   = process.env.USE_NATIVE_LIST === 'true';            // lista nativa do WhatsApp (quebra no Baileys atual; padrao false = menu numerado)
+const STALE_SECONDS     = parseFloat(process.env.STALE_SECONDS || '120');   // ignora msgs mais antigas que isso (backlog/history-sync no reconnect)
 const DRY_RUN           = process.env.DRY_RUN === 'true';                    // true = nao chama Evolution, so loga
 
 // Heartbeat: o bot empurra um sinal de vida pra HostGator; o cron de la avisa se sumir.
@@ -435,6 +436,15 @@ async function processar(msg) {
   // O bot fica 100% mudo com esses contatos (nem responde, nem marca estado).
   if (ignorarSet.has(chaveNumero(jid))) return;
 
+  // --- REGRA 0: ignora mensagens ANTIGAS -------------------------------------
+  // No reconnect (ex.: apos reparear), o Evolution RE-ENTREGA o historico do chat.
+  // Sem isto, o bot "acordava" e saudava conversas velhas por cima de um
+  // atendimento humano ja em andamento. So agimos em mensagens frescas.
+  if (msg.ts && (Date.now() / 1000 - msg.ts) > STALE_SECONDS) {
+    console.log(`[stale] ignorada msg de ${jid} (${Math.round(Date.now()/1000 - msg.ts)}s atras)`);
+    return;
+  }
+
   // --- REGRA 1: fromMe (so conta se NAO for envio do proprio bot) --------
   if (fromMe) {
     if (id && sentIds.has(id)) return;      // foi o bot; ignora
@@ -623,6 +633,7 @@ function normalizar(data) {
     pushName: data?.pushName || '',
     text: extrairTexto(data),
     rowId: extrairRowId(data),
+    ts: Number(data?.messageTimestamp) || 0,   // unix seg (WhatsApp) — p/ ignorar backlog
   };
 }
 

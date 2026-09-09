@@ -43,6 +43,9 @@ ok(removidos === 1, 'gcConversas remove 1 expirada');
 ok(bot.conversas.has('nova@s.whatsapp.net') && !bot.conversas.has('velha@s.whatsapp.net'), 'gcConversas preserva a recente e remove a velha');
 ok(bot.conversas.has('followup@s.whatsapp.net'), 'gcConversas preserva conversa de 20h (follow-up de 23h ainda vai disparar)');
 
+// 6b) normalizar expoe ts (timestamp) — base do guard anti-backlog
+ok(bot.normalizar({ key: { remoteJid: 'x@s.whatsapp.net' }, message: { conversation: 'oi' }, messageTimestamp: 1788800000 }).ts === 1788800000, 'normalizar expoe messageTimestamp (ts)');
+
 // 7) chaveNumero canoniza (tolera 9o digito e DDI) — base da lista de ignorados
 const k = bot.chaveNumero('5548991689995');
 ok(k === bot.chaveNumero('554891689995'), 'chaveNumero tolera 9o digito (com/sem)');
