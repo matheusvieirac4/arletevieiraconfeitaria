@@ -34,6 +34,7 @@ jobs:
             **/.git*/**
             **/.github/**
             bot-whatsapp/**
+            wa-funil-extension/**
             bot-monitor/hb-*.json
             includes/banco.php
             admin/config_financeiro.php

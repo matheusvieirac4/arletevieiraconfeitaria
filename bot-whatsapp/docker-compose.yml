@@ -66,6 +66,8 @@ services:
     restart: always
     logging: *logrot
     env_file: .env
+    ports:
+      - "127.0.0.1:3000:3000"   # /health e /funil p/ a extensao do WhatsApp Web (so localhost)
     volumes:
       - ./flow.json:/app/flow.json:ro   # editar os textos sem rebuildar
       - bot_state:/app/data             # state.json (flag HUMANO persistido)

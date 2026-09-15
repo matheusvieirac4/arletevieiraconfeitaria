@@ -453,6 +453,7 @@ async function processar(msg) {
   }
 
   let c = conversas.get(jid);
+  if (c && !fromMe && msg.pushName) c.nome = msg.pushName;   // nome p/ o funil
 
   // --- REGRA 2: conversa ja humana (dentro do TTL) -> ignora tudo --------
   if (c && c.state === STATES.HUMANO) {
@@ -513,7 +514,7 @@ async function processar(msg) {
   // --- REGRA 4: sem estado OU inativo > MENU_RESET_HOURS -> saudacao+menu
   const expirou = c && (Date.now() - c.lastSeen) > hoursMs(MENU_RESET_HOURS);
   if (!c || expirou || c.state === STATES.ENCERRADO) {
-    c = { state: STATES.ACTIVE, node: flow.start, lastSeen: Date.now(), timer: null };
+    c = { state: STATES.ACTIVE, node: flow.start, lastSeen: Date.now(), timer: null, nome: msg.pushName || '' };
     conversas.set(jid, c);
     metricas.atendimentosIniciados++;
     if (flow.saudacao) await reply(jid, flow.saudacao.replace('{{nome}}', (msg.pushName || '').split(' ')[0] || 'tudo bem?'));
@@ -674,6 +675,33 @@ app.get('/health', (_req, res) => res.json({
   horarioAberto: dentroDoHorario(),
   metricas,
 }));
+
+// CORS liberado (extensao do WhatsApp Web consome via background do navegador).
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
+
+// Funil: quantos clientes em cada etapa + a lista de cada. Fonte = estado das
+// conversas que o bot conhece. Consumido pela extensao do WhatsApp Web.
+app.get('/funil', (_req, res) => {
+  const etapas = {
+    ACTIVE:    { rotulo: 'No menu',            cor: '#E5A93C', clientes: [] },
+    COLETANDO: { rotulo: 'Preenchendo pedido', cor: '#8A6FC0', clientes: [] },
+    PARADO:    { rotulo: 'Aguardando você',    cor: '#C2557A', clientes: [] },
+    HUMANO:    { rotulo: 'Em atendimento',     cor: '#5E8C8F', clientes: [] },
+    ENCERRADO: { rotulo: 'Encerrados',         cor: '#8A7A80', clientes: [] },
+  };
+  for (const [jid, c] of conversas) {
+    const e = etapas[c.state];
+    if (!e) continue;
+    e.clientes.push({ numero: jid.split('@')[0], nome: c.nome || '', desde: c.lastSeen || null });
+  }
+  // mais recentes primeiro em cada etapa
+  for (const e of Object.values(etapas)) e.clientes.sort((a, b) => (b.desde || 0) - (a.desde || 0));
+  res.json({ conexao: connState, horarioAberto: dentroDoHorario(), etapas });
+});
 
 // Aceita /webhook E /webhook/<evento> — versoes novas do Evolution (v2.3+) anexam
 // o nome do evento no caminho (ex: /webhook/messages-upsert). Cobrimos os dois.

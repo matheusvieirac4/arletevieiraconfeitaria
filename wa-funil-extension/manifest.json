@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Funil Doceria — WhatsApp",
+  "version": "1.0.0",
+  "description": "Painel de funil do bot dentro do WhatsApp Web: quantos clientes em cada etapa e abrir a conversa em um clique.",
+  "host_permissions": ["http://localhost:3000/*", "http://127.0.0.1:3000/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
