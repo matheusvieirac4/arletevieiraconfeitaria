@@ -93,8 +93,9 @@ require __DIR__ . '/_header.php';
                 <?php endforeach; ?>
             </div>
             <?php if ($itens): ?>
-                <div class="mt-3">
+                <div class="mt-3 d-flex gap-2 flex-wrap">
                     <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modal-auditoria">Salvar contagem</button>
+                    <button type="button" class="btn btn-outline-danger" id="btn-limpar-auditoria">Limpar auditoria</button>
                 </div>
             <?php endif; ?>
         </form>
@@ -163,6 +164,18 @@ require __DIR__ . '/_header.php';
                     }
                 });
             });
+
+            // Botão "Limpar auditoria": apaga TODAS as contagens guardadas (de todos os
+            // fornecedores) e esvazia os campos visíveis. Pede confirmação, pois é irreversível.
+            const btnLimpar = document.getElementById('btn-limpar-auditoria');
+            if (btnLimpar) {
+                btnLimpar.addEventListener('click', function () {
+                    if (!confirm('Limpar todas as contagens anotadas (inclusive de outros fornecedores)? Isso não pode ser desfeito.')) { return; }
+                    try { localStorage.removeItem(KEY); } catch (e) {}
+                    inputs.forEach(function (inp) { inp.value = ''; });
+                    atualizarAviso();
+                });
+            }
 
             // Ao salvar: injeta campos ocultos para as contagens guardadas de itens que
             // NÃO estão na tela agora (outros fornecedores), pra gravar tudo de uma vez.
